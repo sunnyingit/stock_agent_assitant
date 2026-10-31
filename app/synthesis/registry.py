@@ -44,6 +44,7 @@ _ROLE = _enum(
     ("leader", "领涨"), ("resilient", "抗跌"), ("core", "中军"),
     ("follower", "跟风"), ("independent", "独立走势"),
 )
+_DRIVER = _enum(("dual", "两个板块共同驱动"), ("single", "单一板块驱动"), ("independent", "走势独立于板块"))
 _PHASE = _enum(("active", "财报披露期"), ("upcoming", "即将披露"), ("quiet", "无新财报"))
 _FIN_GROWTH = _enum(("up", "增长向上"), ("down", "增长向下"), ("mixed", "营收和利润分化"), ("loss", "亏损"), ("na", "暂无法比较"))
 _FIN_QUALITY = _enum(("good", "含金量较好"), ("ok", "含金量一般"), ("poor", "含金量偏弱"), ("na", "暂无法判断"))
@@ -75,6 +76,9 @@ _DEFS = (
     FactDef("sector.vs_index", "sector", "板块 20 日涨幅减大盘", "pct"),
     FactDef("sector.stock_vs_sector", "sector", "本股 20 日涨幅减板块", "pct"),
     FactDef("sector.warn", "sector", "板块是否出现高潮或持续过久的提示", "bool"),
+    FactDef("sector.driver", "sector", "两个板块对本股走势的驱动方式", "enum", _DRIVER),
+    FactDef("sector.secondary_stage", "sector", "次板块当前阶段（没有次板块则不出）", "enum", _STAGE),
+    FactDef("sector.divergent", "sector", "主、次板块阶段是否对立", "bool"),
     # 财报
     FactDef("fin.view", "finance", f"财报：{_VIEW_NOTE}", "text"),
     FactDef("fin.phase", "finance", "财报阶段", "enum", _PHASE),

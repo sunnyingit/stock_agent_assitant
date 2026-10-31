@@ -1,22 +1,31 @@
-"""取行业和概念成分，用等权日收益做板块走势。
+"""板块快照：先判断本股属于哪两个板块（discover.py / affiliation.py），再只为选中的板块取完整成分走势。
 
 成分是当前名单（is_new），没有进出日期。概念板块因此不能当成已经回测过。
-个股所在板块的曲线用成分股等权，不用发布的指数点位。
-行业板块的涨幅排名对照申万一级发布指数。概念板块沿用相关性最高的行业排名。
+板块的曲线用成分股等权，不用发布的指数点位；归属判断用的是发布的指数日线。
+行业板块的涨幅排名对照申万同级发布指数。概念板块沿用本股所属申万行业的排名。
 宽度是站上 20 日线的比例，当日上涨家数另记。
 """
 
 from __future__ import annotations
 
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 
 from app import config
+from app.services.sector_detail import affiliation as aff
+from app.services.sector_detail import discover
+from app.services.sector_detail.rules import compound, pearson
+from app.services.sector_detail.tsutil import call as _call
+from app.services.sector_detail.tsutil import iso as _iso
+from app.services.sector_detail.tsutil import num as _num
+from app.services.sector_detail.tsutil import records as _records
+from app.services.sector_detail.tsutil import ret as _ret
+from app.services.sector_detail.tsutil import si as _si
 from app.tools import cache
 from app.tools.stock import Stock
-from app.services.sector_detail.rules import compound, pearson
 
-_MEMBER_CAP = 80
-_CONCEPT_CAP = 5
+_MEMBER_CAP = 100
 _L1 = (
     "801010.SI", "801030.SI", "801040.SI", "801050.SI", "801080.SI",
     "801110.SI", "801120.SI", "801130.SI", "801140.SI", "801150.SI",
@@ -38,44 +47,126 @@ def load_snapshot(stock: Stock, today: date) -> dict:
         raise RuntimeError(f"没有取到 {stock.ts_code} 的行情")
     dates = sorted(stock_bars)[-260:]
     listed_days = _listed_days(stock_bars, today)
-    boards = _boards(pro, stock)
-    if not dates or not boards:
-        return {
-            "as_of": dates[-1] if dates else None,
-            "listed_days": listed_days,
-            "sectors": [],
-            "source_text": _source(False, False),
-        }
+    empty = {"as_of": dates[-1] if dates else None, "listed_days": listed_days, "sectors": [], "affiliation": None, "source_text": _source(False)}
+    if not dates or listed_days < 20:
+        return empty
+    stock_rets = {day: bar["ret"] for day, bar in stock_bars.items() if bar.get("ret") is not None}
+    side = ThreadPoolExecutor(max_workers=2)   # 同级排名要的全行业走势最慢，和归属判断同时取
+    try:
+        sw_ahead, l1_ahead = side.submit(_sw_returns, pro, dates), side.submit(_l1_bars, pro, start, end)
+        return _snapshot(pro, stock, stock_bars, dates, listed_days, stock_rets, start, end, sw_ahead, l1_ahead, empty)
+    finally:
+        side.shutdown(wait=False)
+
+
+def _snapshot(pro, stock, stock_bars, dates, listed_days, stock_rets, start, end, sw_ahead, l1_ahead, empty) -> dict:
+    found = discover.gather(pro, stock, stock_rets, dates, start, end)
     index_map = _index_bars(pro, start, end)
-    l1 = _l1_bars(pro, start, end)
+    chosen = [(role, cand) for role, cand in (("primary", found["primary"]), ("secondary", found["secondary"])) if cand is not None]
+    affiliation = {
+        "version": aff.VERSION,
+        "primary": found["primary"]["code"] if found["primary"] else None,
+        "secondary": found["secondary"]["code"] if found["secondary"] else None,
+        "driver": found["driver"],
+        "merged": found["merged"],
+        "business_lines": found["lines"],
+        "candidates": [
+            discover.public_candidate(cand, next((role for role, picked in chosen if picked is cand), None))
+            for cand in sorted(found["candidates"], key=lambda item: item["score"], reverse=True)
+        ],
+        "stock_vs_index": _gap(stock_rets, index_map, dates),
+    }
+    if not chosen:
+        return {**empty, "affiliation": affiliation, "source_text": _source(False)}
+    boards = [_board(role, cand, found["roster"][cand["code"]], found["caps"], stock.ts_code, found["industry"]) for role, cand in chosen]
+    panel = _panel(pro, boards, stock.ts_code, stock_bars, start, end)
     levels = _sw_levels(pro)
-    sw_panel = _sw_returns(pro, dates)
     market = _market_amounts(pro, start, end)
-    codes = _collect_codes(boards, stock.ts_code)
-    panel = {stock.ts_code: stock_bars}
-    for code in codes:
-        if code == stock.ts_code:
-            continue
-        panel[code] = _bars(pro, code, start, end, required=False)
     sectors = []
-    truncated = False
-    concepts = False
     for board in boards:
-        if board.get("truncated"):
-            truncated = True
-        if board.get("type") != "industry":
-            concepts = True
         built = _sector_row(board, panel, dates, index_map, stock.ts_code, market)
         if built is not None:
+            built["role_in_stock"] = board["role"]
+            built["evidence"] = next(item for item in affiliation["candidates"] if item["code"] == board["code"])
             sectors.append(built)
+    sw_panel, l1 = sw_ahead.result(), l1_ahead.result()
     _rank_same_level(sectors, levels, sw_panel, l1)
-    _copy_industry_rank(sectors)
+    _copy_industry_rank(sectors, found["industry"], dates, levels, sw_panel, l1)
     return {
         "as_of": dates[-1],
         "listed_days": listed_days,
         "sectors": sectors,
-        "source_text": _source(concepts, truncated),
+        "affiliation": affiliation,
+        "source_text": _source(any(item["type"] != "industry" for item in sectors), any(item.get("truncated") for item in sectors)),
     }
+
+
+def _gap(stock_rets: dict, index_map: dict, dates: list[str]) -> float | None:
+    window = dates[-20:]
+    mine = compound([stock_rets.get(day) for day in window])
+    base = compound([index_map.get(day) for day in window])
+    return None if mine is None or base is None else mine - base
+
+
+def _board(role: str, cand: dict, members: list[dict], caps: dict, ts_code: str, row: dict) -> dict:
+    """选中的板块 → 取走势用的成分名单。成分超过上限时留市值最大的，本股一定在里面。"""
+    ordered = sorted(members, key=lambda item: caps.get(item["ts_code"], 0.0), reverse=True)
+    kept = ordered[:_MEMBER_CAP]
+    if ts_code not in {item["ts_code"] for item in kept}:
+        mine = next((item for item in members if item["ts_code"] == ts_code), None)
+        if mine is not None:
+            kept = kept[:-1] + [mine]
+    board = {"code": cand["code"], "name": cand["name"], "type": cand["type"], "role": role, "members": kept, "truncated": len(members) > len(kept)}
+    if cand["kind"] == "sw":
+        board.update({"sw_level": cand["level"], "l1_code": cand.get("l1_code") or _si(row.get("l1_code")), "l1_name": cand.get("l1_name") or ""})
+    return board
+
+
+def _panel(pro, boards: list[dict], ts_code: str, stock_bars: dict, start: str, end: str) -> dict:
+    codes = sorted({item["ts_code"] for board in boards for item in board["members"]} - {ts_code})
+    panel = {ts_code: stock_bars}
+    with ThreadPoolExecutor(max_workers=discover.WORKERS) as pool:
+        for code, bars in zip(codes, pool.map(lambda item: _bars(pro, item, start, end, required=False), codes)):
+            panel[code] = bars
+    return panel
+
+
+def _copy_industry_rank(sectors: list[dict], row: dict, dates: list[str], levels: dict, sw_panel: dict, l1_bars: dict) -> None:
+    """概念板块没有同级发布指数可排，沿用本股所属申万行业的排名。选中的板块里有行业就用它，否则单独算一份。"""
+    donor = next((item for item in sectors if item.get("type") == "industry"), None)
+    if donor is None:
+        code = _si(row.get("l3_code")) or _si(row.get("l2_code"))
+        if not code:
+            return
+        donor = {
+            "code": code, "sw_level": "l3" if row.get("l3_code") else "l2", "l1_code": _si(row.get("l1_code")),
+            "l1_name": str(row.get("l1_name") or ""), "name": str(row.get("l3_name") or row.get("l2_name") or code),
+            "days": [{"date": day} for day in dates[-260:]],
+        }
+        _rank_one(donor, levels, sw_panel, l1_bars)
+    fields = ("rank", "rank_total", "rank_level", "rank_level_text", "rank_basis_name", "rank_basis_text")
+    ranks = {day.get("date"): {field: day.get(field) for field in fields} for day in donor.get("days") or []}
+    for sector in sectors:
+        if sector.get("type") == "industry":
+            continue
+        for day in sector.get("days") or []:
+            copied = ranks.get(day.get("date"))
+            if copied:
+                day.update(copied)
+
+
+def _source(concepts: bool, truncated: bool = False) -> str:
+    text = (
+        "先按业务占比、交易联动、板块内地位判断本股属于哪两个板块，只挂名的不算。"
+        "板块走势按当前成分股等权计算，不用发布的指数点位；成分没有历史进出记录，概念板块的结论没有回测依据。"
+        "行业板块在同级申万发布指数里排名，三级不和一级混比。"
+    )
+    if concepts:
+        text += "概念板块沿用本股所属申万行业在同级里的排名。"
+    text += "板块资金流这次没有取到。"
+    if truncated:
+        text += "成分过多的板块只保留了市值最大的部分。"
+    return text
 
 
 def _window(today: date) -> tuple[str, str]:
@@ -92,189 +183,22 @@ def _listed_days(bars: dict, today: date) -> int:
     return len(bars)
 
 
-def _boards(pro, stock: Stock) -> list[dict]:
-    boards = _industry_boards(pro, stock)
-    concepts, _truncated = _concept_boards(pro, stock)
-    boards.extend(concepts)
-    _fit_budget(boards, stock.ts_code)
-    return [board for board in boards if len(board.get("members") or []) >= 3]
 
 
-def _fit_budget(boards: list[dict], ts_code: str, budget: int = 160) -> None:
-    seen = {ts_code}
-    for board in boards:
-        needed = [item["ts_code"] for item in board["members"] if item["ts_code"] not in seen]
-        room = budget - len(seen)
-        if len(needed) > room:
-            if board.get("type") != "industry":
-                board["members"] = []
-                continue
-            board["truncated"] = True
-            kept = []
-            for item in board["members"]:
-                code = item["ts_code"]
-                if code not in seen and len(seen) >= budget:
-                    continue
-                seen.add(code)
-                kept.append(item)
-            board["members"] = kept
-            continue
-        for code in needed:
-            seen.add(code)
-        seen.add(ts_code)
 
 
-def _industry_boards(pro, stock: Stock) -> list[dict]:
-    frame = _call(lambda: pro.index_member_all(ts_code=stock.ts_code, is_new="Y"))
-    row = _first(frame)
-    if not row:
-        return []
-    found = []
-    for level, code_key, name_key in (
-        ("l3", "l3_code", "l3_name"),
-        ("l2", "l2_code", "l2_name"),
-    ):
-        code = str(row.get(code_key) or "")
-        name = str(row.get(name_key) or "")
-        if not code:
-            continue
-        members, truncated = _sw_members(pro, code, level)
-        if len(members) < 3:
-            continue
-        found.append({
-            "code": code if code.endswith(".SI") else f"{code}.SI",
-            "name": name or code,
-            "type": "industry",
-            "sw_level": level,
-            "l1_code": _si(row.get("l1_code")),
-            "l1_name": str(row.get("l1_name") or ""),
-            "members": members,
-            "truncated": truncated,
-        })
-    return found
 
 
-def _sw_members(pro, code: str, level: str) -> tuple[list[dict], bool]:
-    bare = code[:-3] if str(code).endswith(".SI") else str(code)
-    attempts = []
-    for value in (code, bare, f"{bare}.SI"):
-        if value and value not in attempts:
-            attempts.append(value)
-    members: list[dict] = []
-    for attempt in attempts:
-        frame = _call(lambda value=attempt: pro.index_member_all(**{f"{level}_code": value, "is_new": "Y"}))
-        members = _member_rows(frame)
-        if members:
-            break
-    if not members:
-        frame = _call(lambda: pro.index_member(index_code=f"{bare}.SI", is_new="Y"))
-        members = _member_rows(frame)
-    truncated = len(members) > _MEMBER_CAP
-    return members[:_MEMBER_CAP], truncated
 
 
-def _concept_boards(pro, stock: Stock) -> tuple[list[dict], bool]:
-    grouped = _concept_groups(pro, stock.ts_code)
-    boards = []
-    truncated = False
-    for item in grouped[:_CONCEPT_CAP]:
-        code, name, members = item[0], item[1], item[2]
-        sector_type = item[3] if len(item) > 3 else "concept"
-        if len(members) < 3:
-            continue
-        cut = len(members) > _MEMBER_CAP
-        truncated = truncated or cut
-        boards.append({
-            "code": code,
-            "name": name,
-            "type": sector_type,
-            "members": members[:_MEMBER_CAP],
-            "truncated": cut,
-        })
-    return boards, truncated
 
 
-def _concept_groups(pro, ts_code: str) -> list[tuple]:
-    chosen = _ths_concepts(pro, ts_code)
-    if chosen:
-        return chosen
-    frame = _call(lambda: pro.concept_detail(ts_code=ts_code))
-    groups = _groups_from_frame(frame, "id", "concept_name")
-    detailed = []
-    for code, name, _members in groups[:_CONCEPT_CAP]:
-        member_frame = _call(lambda cid=code: pro.concept_detail(id=cid))
-        members = _member_rows(member_frame)
-        if len(members) >= 3:
-            detailed.append((f"cpt_{code}", name, members, "concept"))
-    return detailed
 
 
-def _ths_concepts(pro, ts_code: str) -> list[tuple]:
-    frame = _call(lambda: pro.ths_member(con_code=ts_code))
-    codes = []
-    for row in _records(frame):
-        code = str(row.get("ts_code") or "")
-        if code and code not in codes:
-            codes.append(code)
-    if not codes:
-        return []
-    catalog = _ths_catalog(pro)
-    if not catalog:
-        return []
-    chosen = []
-    for kind, sector_type, limit in (("N", "concept", 3), ("R", "region", 1)):
-        rows = []
-        for code in codes:
-            meta = catalog.get(code)
-            if not meta or meta.get("type") != kind:
-                continue
-            count = meta.get("count") or 0
-            if count < 8 or count > _MEMBER_CAP:
-                continue
-            rows.append((count, code, meta.get("name") or code))
-        rows.sort()
-        for _count, code, name in rows[:limit]:
-            member_frame = _call(lambda cid=code: pro.ths_member(ts_code=cid))
-            members = _member_rows(member_frame)
-            if len(members) >= 3:
-                chosen.append((code, name, members, sector_type))
-    return chosen
 
 
-def _ths_catalog(pro) -> dict:
-    key = "sector_ths_index"
-    cached = cache.get(key)
-    if cached is not None:
-        return cached
-    frame = _call(lambda: pro.ths_index(exchange="A"))
-    catalog = {}
-    for row in _records(frame):
-        code = str(row.get("ts_code") or "")
-        if not code:
-            continue
-        catalog[code] = {
-            "name": str(row.get("name") or code),
-            "type": str(row.get("type") or ""),
-            "count": _num(row.get("count")) or 0,
-        }
-    if catalog:
-        cache.set(key, catalog, config.CACHE_TTL["sector_detail"])
-    return catalog
 
 
-def _groups_from_frame(frame, code_key: str, name_key: str) -> list[tuple[str, str, list[dict]]]:
-    rows = _records(frame)
-    grouped: dict[str, dict] = {}
-    for row in rows:
-        code = _clean_id(row.get(code_key) or row.get("id"))
-        name = str(row.get(name_key) or row.get("name") or code)
-        if not code:
-            continue
-        bucket = grouped.setdefault(code, {"name": name, "members": []})
-        member = _one_member(row)
-        if member is not None:
-            bucket["members"].append(member)
-    return [(code, item["name"], item["members"]) for code, item in grouped.items()]
 
 
 def _sector_row(board: dict, panel: dict, dates: list[str], index_map: dict, ts_code: str, market: dict) -> dict | None:
@@ -369,27 +293,6 @@ def _sector_row(board: dict, panel: dict, dates: list[str], index_map: dict, ts_
     }
 
 
-def _copy_industry_rank(sectors: list[dict]) -> None:
-    industries = [
-        item for item in sectors
-        if item.get("type") == "industry" and item.get("corr_20d") is not None
-    ]
-    if not industries:
-        return
-    donor = max(industries, key=lambda item: float(item["corr_20d"]))
-    fields = ("rank", "rank_total", "rank_level", "rank_level_text", "rank_basis_name", "rank_basis_text")
-    ranks = {
-        day.get("date"): {field: day.get(field) for field in fields}
-        for day in donor.get("days") or []
-    }
-    for sector in sectors:
-        if sector.get("type") == "industry":
-            continue
-        for day in sector.get("days") or []:
-            copied = ranks.get(day.get("date"))
-            if not copied:
-                continue
-            day.update(copied)
 
 
 def _above_ma20(panel: dict, code: str, dates: list[str], index: int) -> bool | None:
@@ -427,11 +330,6 @@ def _fill_streaks(days: list[dict], flags: dict[str, list[bool]]) -> None:
         day["max_streak"] = best
 
 
-def _si(value) -> str:
-    text = str(value or "").strip()
-    if not text:
-        return ""
-    return text if text.endswith(".SI") else f"{text}.SI"
 
 
 _LEVEL_TEXT = {"l1": "申万一级", "l2": "申万二级", "l3": "申万三级"}
@@ -462,25 +360,38 @@ def _sw_returns(pro, dates: list[str]) -> dict[str, dict[str, float]]:
     cached = cache.get(key)
     if cached is not None:
         return cached
-    panel: dict[str, dict[str, float]] = {}
+    spans = []
     cursor = date.fromisoformat(window[0])
     last = date.fromisoformat(window[-1])
     while cursor <= last:
         chunk_end = min(last, cursor + timedelta(days=12))
-        frame = _call(lambda start=cursor, stop=chunk_end: pro.sw_daily(
-            start_date=start.strftime("%Y%m%d"),
-            end_date=stop.strftime("%Y%m%d"),
-        ))
+        spans.append((cursor, chunk_end))
+        cursor = chunk_end + timedelta(days=1)
+    with ThreadPoolExecutor(max_workers=discover.WORKERS) as pool:
+        frames = list(pool.map(lambda span: _retry(lambda: pro.sw_daily(
+            start_date=span[0].strftime("%Y%m%d"), end_date=span[1].strftime("%Y%m%d"),
+        )), spans))
+    panel: dict[str, dict[str, float]] = {}
+    for frame in frames:
         for row in _records(frame):
             day = _iso(row.get("trade_date"))
             code = _si(row.get("ts_code"))
             value = _ret(row.get("pct_change"))
             if day and code and value is not None:
                 panel.setdefault(code, {})[day] = value
-        cursor = chunk_end + timedelta(days=1)
-    if panel:
+    if panel and all(frame is not None for frame in frames):   # 有一段没取到时不缓存：缺一段会让滚动 20 日排名整段为空
         cache.set(key, panel, config.CACHE_TTL["sector_detail"])
     return panel
+
+
+def _retry(fn, tries: int = 3):
+    """接口限流时偶尔整段失败：隔一会儿重试。空表是真没有数据（休市），不重试；全部失败返回 None。"""
+    for attempt in range(tries):
+        frame = _call(fn)
+        if frame is not None:
+            return frame
+        time.sleep(1.0 + attempt)
+    return None
 
 
 def _market_amounts(pro, start: str, end: str) -> dict[str, float]:
@@ -608,12 +519,6 @@ def _share_block(shares: list[float | None]) -> dict:
     return {"value": round(latest, 4), "vs_last_week": versus, "pctile_1y": pctile, "basis_text": "成分股成交额占沪深两市"}
 
 
-def _collect_codes(boards: list[dict], ts_code: str) -> list[str]:
-    seen = {ts_code}
-    for board in boards:
-        for item in board["members"]:
-            seen.add(item["ts_code"])
-    return list(seen)
 
 
 def _bars(pro, ts_code: str, start: str, end: str, required: bool) -> dict:
@@ -657,38 +562,32 @@ def _index_bars(pro, start: str, end: str) -> dict:
     return parsed
 
 
-def _l1_bars(pro, start: str, end: str) -> dict:
+def _l1_one(pro, code: str, start: str, end: str) -> dict:
+    key = f"sector_l1:{code}:{end}"
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+    frame = _call(lambda: pro.index_daily(ts_code=code, start_date=start, end_date=end, fields="trade_date,pct_chg"))
+    if not _records(frame):
+        frame = _call(lambda: pro.sw_daily(ts_code=code, start_date=start, end_date=end))
     found = {}
-    for code in _L1:
-        key = f"sector_l1:{code}:{end}"
-        cached = cache.get(key)
-        if cached is None:
-            frame = _call(lambda index_code=code: pro.index_daily(
-                ts_code=index_code,
-                start_date=start,
-                end_date=end,
-                fields="trade_date,pct_chg",
-            ))
-            if not _records(frame):
-                frame = _call(lambda index_code=code: pro.sw_daily(
-                    ts_code=index_code,
-                    start_date=start,
-                    end_date=end,
-                ))
-            cached = {}
-            for row in _records(frame):
-                day = _iso(row.get("trade_date"))
-                raw = row.get("pct_chg")
-                if raw is None:
-                    raw = row.get("pct_change")
-                value = _ret(raw)
-                if day and value is not None:
-                    cached[day] = value
-            if cached:
-                cache.set(key, cached, config.CACHE_TTL["sector_detail"])
-        if cached:
-            found[code] = cached
+    for row in _records(frame):
+        day = _iso(row.get("trade_date"))
+        raw = row.get("pct_chg")
+        if raw is None:
+            raw = row.get("pct_change")
+        value = _ret(raw)
+        if day and value is not None:
+            found[day] = value
+    if found:
+        cache.set(key, found, config.CACHE_TTL["sector_detail"])
     return found
+
+
+def _l1_bars(pro, start: str, end: str) -> dict:
+    with ThreadPoolExecutor(max_workers=discover.WORKERS) as pool:
+        series = list(pool.map(lambda code: _l1_one(pro, code, start, end), _L1))
+    return {code: found for code, found in zip(_L1, series) if found}
 
 
 def _parse_bars(frame) -> dict:
@@ -706,54 +605,14 @@ def _parse_bars(frame) -> dict:
     return parsed
 
 
-def _member_rows(frame) -> list[dict]:
-    rows = []
-    seen = set()
-    for row in _records(frame):
-        item = _one_member(row)
-        if item is None or item["ts_code"] in seen:
-            continue
-        seen.add(item["ts_code"])
-        rows.append(item)
-    return rows
 
 
-def _one_member(row: dict) -> dict | None:
-    code = ""
-    for key in ("con_code", "ts_code"):
-        text = str(row.get(key) or "")
-        if text.endswith((".SH", ".SZ", ".BJ")):
-            code = text
-            break
-    if not code:
-        return None
-    name = str(row.get("con_name") or row.get("name") or code)
-    return {"ts_code": code, "name": name}
 
 
-def _clean_id(value) -> str:
-    text = str(value or "").strip()
-    if text.endswith(".0"):
-        text = text[:-2]
-    if text.lower() == "nan":
-        return ""
-    return text
 
 
-def _records(frame) -> list[dict]:
-    if frame is None:
-        return []
-    empty = getattr(frame, "empty", None)
-    if empty is True:
-        return []
-    if hasattr(frame, "to_dict"):
-        return frame.to_dict("records")
-    return []
 
 
-def _first(frame) -> dict:
-    rows = _records(frame)
-    return rows[0] if rows else {}
 
 
 def _limit(ts_code: str, name: str | None, ret: float | None) -> bool:
@@ -780,56 +639,11 @@ def _threshold(ts_code: str, name: str | None) -> float:
     return 0.098
 
 
-def _source(concepts: bool, truncated: bool) -> str:
-    text = (
-        "板块走势按当前成分股等权计算，不用发布的指数点位。"
-        "成分没有历史进出记录，概念板块的结论没有回测依据。"
-        "行业板块在同级申万发布指数里排名，三级不和一级混比。"
-        "相关性相差不到 0.05 时，优先用行业板块。"
-    )
-    if concepts:
-        text += "概念板块沿用相关性最高的行业板块在同级里的排名。"
-    else:
-        text += "这次没有取到概念板块。"
-    text += "板块资金流这次没有取到。"
-    if truncated:
-        text += "成分过多的板块只保留了部分股票。"
-    return text
 
 
-def _call(fn, required: bool = False):
-    try:
-        return fn()
-    except Exception:
-        if required:
-            raise
-        return None
 
 
-def _iso(value) -> str | None:
-    text = str(value or "")
-    if len(text) < 8:
-        return None
-    text = text[:8]
-    if not text.isdigit():
-        return None
-    return f"{text[:4]}-{text[4:6]}-{text[6:8]}"
 
 
-def _ret(value):
-    number = _num(value)
-    if number is None:
-        return None
-    return number / 100.0
 
 
-def _num(value):
-    if value is None:
-        return None
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return None
-    if number != number:
-        return None
-    return number

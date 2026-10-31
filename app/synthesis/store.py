@@ -77,6 +77,16 @@ CREATE TABLE IF NOT EXISTS finance_signals (
   ret_5 REAL, excess_5 REAL, ret_20 REAL, excess_20 REAL,
   PRIMARY KEY (ts_code, report_end, version)
 );
+CREATE TABLE IF NOT EXISTS sector_affiliations (
+  ts_code TEXT NOT NULL,
+  as_of TEXT NOT NULL,
+  version TEXT NOT NULL,
+  recorded_at REAL NOT NULL,
+  primary_code TEXT, primary_name TEXT, secondary_code TEXT, secondary_name TEXT,
+  driver TEXT NOT NULL DEFAULT '',
+  belongs TEXT NOT NULL DEFAULT '[]',
+  PRIMARY KEY (ts_code, as_of, version)
+);
 CREATE TABLE IF NOT EXISTS outcomes (
   run_id INTEGER NOT NULL,
   horizon INTEGER NOT NULL,
@@ -316,6 +326,28 @@ class Store:
                 f"UPDATE finance_signals SET ret_{horizon}=?, excess_{horizon}=? WHERE ts_code=? AND report_end=? AND version=?",
                 (ret, excess, ts_code, report_end, version),
             )
+
+    # ------------------------------------------------------------ 板块归属（回测用）
+    def save_sector_affiliation(self, ts_code: str, as_of: str, version: str, primary: dict | None, secondary: dict | None, driver: str, belongs: list[str]) -> bool:
+        """每只股票、每个数据日、每个判定版本只记第一次。返回是否新记。"""
+        with self._conn() as conn:
+            cursor = conn.execute(
+                """INSERT OR IGNORE INTO sector_affiliations
+                   (ts_code, as_of, version, recorded_at, primary_code, primary_name, secondary_code, secondary_name, driver, belongs)
+                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    ts_code, as_of, version, time.time(),
+                    (primary or {}).get("code"), (primary or {}).get("name"), (secondary or {}).get("code"), (secondary or {}).get("name"),
+                    driver or "", json.dumps(belongs, ensure_ascii=False),
+                ),
+            )
+            return cursor.rowcount > 0
+
+    def sector_affiliations(self, ts_code: str | None = None) -> list[dict]:
+        sql = "SELECT * FROM sector_affiliations" + (" WHERE ts_code=?" if ts_code else "") + " ORDER BY ts_code, as_of"
+        with self._conn() as conn:
+            rows = conn.execute(sql, (ts_code,) if ts_code else ()).fetchall()
+        return [{**dict(row), "belongs": json.loads(row["belongs"] or "[]")} for row in rows]
 
     # ------------------------------------------------------------ 战绩
     def unsettled(self, horizon: int, limit: int = 500) -> list[dict]:

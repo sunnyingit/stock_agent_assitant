@@ -1,4 +1,8 @@
-"""组装板块详情。方向只看主板块，指定 sector_code 时其余块改看该板块。"""
+"""组装板块详情：本股属于哪两个板块、各自处在什么阶段、两个板块各驱动本股多少，合成一个方向。
+
+方向由规则算出（给综合判断用）；AI 解读在 app/sector_review，由路由并进返回。
+完整结果带 inputs（两个板块各自的 lean / level / certainty）和 verdict 里的内部字段，public() 把它们去掉。
+"""
 
 from __future__ import annotations
 
@@ -7,37 +11,26 @@ from threading import Lock
 from zoneinfo import ZoneInfo
 
 from app import config
+from app.services.sector_detail.copy import write_text
+from app.services.sector_detail.rules import DISCLAIMER, RULE_VERSION, combine, evaluate, relative_verdict
+from app.services.verdict_view import rule_fields, slim
 from app.tools import cache
 from app.tools.stock import Stock, is_hk
-from app.services.sector_detail.copy import finish_text
-from app.services.sector_detail.rules import (
-    DISCLAIMER,
-    RULE_VERSION,
-    arrange,
-    evaluate,
-    pearson,
-    relative_verdict,
-)
 
 _ZONE = ZoneInfo("Asia/Shanghai")
 _inflight: set[str] = set()
 _inflight_lock = Lock()
+INTERNAL_FIELDS = ("inputs",)
+DRIVER_TEXT = {"dual": "双驱动", "single": "单驱动", "independent": "走势独立", "unknown": "暂无法判断"}
+ROLE_TEXT = {"primary": "主板块", "secondary": "次板块"}
 
 
-def build_detail(
-    stock: Stock,
-    sector_code: str | None = None,
-    snapshot: dict | None = None,
-    model=None,
-    today: date | None = None,
-) -> dict:
+def build_detail(stock: Stock, snapshot: dict | None = None, today: date | None = None) -> dict:
     today = today or datetime.now(_ZONE).date()
-    sector_code = (sector_code or "").strip() or None
     if snapshot is None and is_hk(stock):
         return _insufficient(stock, today, "港股暂不按这套板块口径比较")
-    live = snapshot is None
-    snap_key = f"sector_snap:{stock.ts_code}:{today.isoformat()}"
-    if live:
+    if snapshot is None:
+        snap_key = f"sector_snap:{stock.ts_code}:{today.isoformat()}"
         snapshot = cache.get(snap_key)
         if snapshot is None:
             if not _claim(snap_key):
@@ -52,7 +45,7 @@ def build_detail(
                     cache.set(snap_key, snapshot, 120)
             finally:
                 _release(snap_key)
-    return _assemble(stock, snapshot or {}, sector_code, model, today)
+    return _assemble(stock, snapshot or {}, today)
 
 
 def failed_payload(stock: Stock, message: str, today: date | None = None) -> dict:
@@ -65,120 +58,145 @@ def failed_payload(stock: Stock, message: str, today: date | None = None) -> dic
     return payload
 
 
-def _assemble(stock: Stock, data: dict, sector_code: str | None, model, today: date) -> dict:
+def public(payload: dict) -> dict:
+    """对外响应：verdict 只留和 headline 同一套的四个字段，中间量不对外。"""
+    body = {key: value for key, value in payload.items() if key not in INTERNAL_FIELDS}
+    verdict = payload.get("verdict")
+    return {**body, "verdict": None if verdict is None else slim(verdict)}
+
+
+def _assemble(stock: Stock, data: dict, today: date) -> dict:
     if int(data.get("listed_days") or 0) < 20:
         return _insufficient(stock, today, "上市不足 20 个交易日")
-    sectors = list(data.get("sectors") or [])
-    if not sectors:
+    affiliation = data.get("affiliation")
+    if affiliation is None or not affiliation.get("candidates"):
         return _insufficient(stock, today, "没有可比的行业或概念板块")
-    _ensure_corr(sectors)
-    main, top, independent = arrange(sectors)
-    by_code = {item.get("code"): item for item in sectors}
-    unknown = bool(sector_code and sector_code not in by_code)
-    if sector_code and sector_code in by_code:
-        viewed = by_code[sector_code]
-    elif main is not None:
-        viewed = main
-    else:
-        viewed = top[0]
-    viewing_main = main is not None and viewed.get("code") == main.get("code")
-    if independent:
-        viewing_main = False
-    body = evaluate(viewed, stock.ts_code)
-    headline = body if main is None or viewed is main else evaluate(main, stock.ts_code)
-    if independent:
-        warns = [item["text"] for item in body["sustain_items"] if item["status"] == "warn"]
-        verdict_bits = relative_verdict(body.get("gaps", {}).get("stock_vs_index"), warns)
-    else:
-        verdict_bits = headline
-    text, ai_status = finish_text(
-        verdict_bits["tag_text"],
-        verdict_bits.get("gaps"),
-        verdict_bits.get("counter_text") or "还没有看到反向信号",
-        independent,
-        model,
-    )
-    as_of = data.get("as_of") or (body["lines"]["dates"][-1] if body["lines"]["dates"] else None)
+    by_code = {item["code"]: item for item in data.get("sectors") or []}
+    primary = by_code.get(affiliation.get("primary"))
+    secondary = by_code.get(affiliation.get("secondary"))
+    driver = affiliation.get("driver") or {}
+    as_of = data.get("as_of")
     state, status = _state(data, as_of, today)
-    source = data.get("source_text") or _default_source(sectors)
-    if body.get("flow_rate") is None and "资金流" not in source:
-        source += "板块资金流这次没有取到。"
-    if unknown:
-        source = f"{source}未找到指定板块，仍显示主板块。"
     payload = _shell(state, status, as_of)
-    payload["meta"]["viewing_main"] = viewing_main
-    payload["meta"]["source_text"] = source
+    payload["meta"]["source_text"] = data.get("source_text")
+    payload["meta"]["affiliation_version"] = affiliation.get("version")
+    bodies = {}
+    for role, sector in (("primary", primary), ("secondary", secondary)):
+        if sector is not None:
+            bodies[role] = evaluate(sector, stock.ts_code)
+    weights = driver.get("weights") if secondary is not None else None
+    independent = primary is None or driver.get("type") == "independent"
+    if independent:
+        gap = affiliation.get("stock_vs_index") if primary is None else bodies["primary"]["gaps"].get("stock_vs_index")
+        warns = [] if primary is None else [item["text"] for item in bodies["primary"]["sustain_items"] if item["status"] == "warn"]
+        bits = relative_verdict(gap, warns)
+        text = write_text(bits["tag_text"], bits["gaps"], bits["counter_text"], True)
+        merged = {"lean": bits["lean"], "level": bits["level"], "certainty": bits["certainty"], "certainty_reasons": bits["certainty_reasons"], "divergent": False}
+    else:
+        merged = combine(bodies["primary"], bodies.get("secondary"), weights)
+        text = _text(sector_names={"primary": primary["name"], "secondary": None if secondary is None else secondary["name"]}, bodies=bodies, driver=driver, divergent=merged["divergent"])
     payload["verdict"] = {
-        "lean": verdict_bits["lean"],
-        "level": verdict_bits["level"],
-        "certainty": verdict_bits["certainty"],
-        "certainty_reasons": list(verdict_bits["certainty_reasons"]),
-        "tag_text": verdict_bits["tag_text"],
-        "ai_text": text,
-        "ai_status": ai_status,
+        **rule_fields(merged["lean"], text),
+        "lean": merged["lean"], "level": merged["level"], "certainty": merged["certainty"],
+        "certainty_reasons": list(merged["certainty_reasons"]),
     }
     payload["sectors"] = {
-        "main": None if main is None else _brief(main),
-        "candidates": [
-            {
-                **_brief(item),
-                "is_main": main is not None and item.get("code") == main.get("code"),
-                "is_viewing": item.get("code") == viewed.get("code"),
-            }
-            for item in top
-        ],
+        "primary": None if primary is None else _sector_block("primary", primary, bodies["primary"], driver),
+        "secondary": None if secondary is None else _sector_block("secondary", secondary, bodies["secondary"], driver),
+        "driver": _driver_block(driver, secondary is not None),
         "independent": independent,
+        "divergence": _divergence(bodies, merged["divergent"]),
+        "candidates": affiliation.get("candidates") or [],
+        "merged": affiliation.get("merged") or [],
+        "business_lines": affiliation.get("business_lines") or [],
     }
-    payload["strength"] = {
-        "lines": body["lines"],
-        "round_start": body["round_start"],
-        "rank": body["rank"],
-        "flow_rate": body["flow_rate"],
-        "turnover_share": body["turnover_share"],
-        "chart_alt_text": _chart_alt(viewed.get("name") or "板块", body["lines"]),
+    payload["inputs"] = {
+        role: {"lean": body["lean"], "level": body["level"], "certainty": body["certainty"], "stage": body["stage"], "role": body["role"]}
+        for role, body in bodies.items()
     }
-    payload["stage"] = {
-        "current": body["stage"],
-        "confirmed_days": body["confirmed_days"],
-        "days_in_round": body["days_in_round"],
-        "signals": body["signals"],
-        "why_text": body["why_text"],
-        "next_text": body["next_text"],
-    }
-    payload["role"] = {
-        "value": body["role"],
-        "reason_text": body["reason_text"],
-        "role_text": body["role_text"],
-        "self_rank": body["self_rank"],
-        "member_count": body["member_count"],
-        "top": body["top"],
-    }
-    payload["sustain"] = {"items": body["sustain_items"]}
-    payload["watch_next"] = body["watch_next"]
-    payload["position_hint"] = body["position_hint"]
     payload["disclaimer_text"] = DISCLAIMER
     return payload
 
 
-def _ensure_corr(sectors: list[dict]) -> None:
-    for item in sectors:
-        if item.get("corr_20d") is not None:
-            continue
-        days = item.get("days") or []
-        item["corr_20d"] = pearson(
-            [day.get("stock") for day in days],
-            [day.get("sector") for day in days],
-        )
+def _text(sector_names: dict, bodies: dict, driver: dict, divergent: bool) -> str:
+    """规则版的一句话。单板块沿用「阶段，角色；差距。不过……」；两个板块各说阶段，再说驱动占比，分歧时点明。"""
+    primary = bodies["primary"]
+    if "secondary" not in bodies:
+        return write_text(primary["tag_text"], primary["gaps"], primary["counter_text"], False)
+    weights = driver.get("weights") or {}
+    head = f"{sector_names['primary']}{_short(primary)}，{sector_names['secondary']}{_short(bodies['secondary'])}"
+    share = f"两者对本股走势的解释约 {weights.get('primary', 0) * 100:.0f}% 和 {weights.get('secondary', 0) * 100:.0f}%"
+    tail = "两个板块阶段对立，方向不取平均" if divergent else (primary["counter_text"] or "还没有看到反向信号")
+    return f"{head}；{share}。不过{tail}。"
 
 
-def _brief(sector: dict) -> dict:
+def _short(body: dict) -> str:
+    return body["tag_text"].split("，")[0].replace("板块", "")
+
+
+def _sector_block(role: str, sector: dict, body: dict, driver: dict) -> dict:
+    weight = (driver.get("weights") or {}).get(role)
     corr = sector.get("corr_20d")
     return {
         "code": sector.get("code"),
         "name": sector.get("name"),
         "type": sector.get("type"),
+        "role_in_stock": role,
+        "role_text": ROLE_TEXT[role],
+        "driver_weight": weight,
         "corr_20d": None if corr is None else round(float(corr), 2),
+        "evidence": sector.get("evidence"),
+        "tag_text": body["tag_text"],
+        "strength": {
+            "lines": body["lines"],
+            "round_start": body["round_start"],
+            "rank": body["rank"],
+            "flow_rate": body["flow_rate"],
+            "turnover_share": body["turnover_share"],
+            "gaps": body["gaps"],
+        },
+        "stage": {
+            "current": body["stage"],
+            "confirmed_days": body["confirmed_days"],
+            "days_in_round": body["days_in_round"],
+            "signals": body["signals"],
+            "why_text": body["why_text"],
+            "next_text": body["next_text"],
+        },
+        "role": {
+            "value": body["role"],
+            "reason_text": body["reason_text"],
+            "role_text": body["role_text"],
+            "self_rank": body["self_rank"],
+            "member_count": body["member_count"],
+            "top": body["top"],
+        },
+        "sustain": {"items": body["sustain_items"]},
+        "watch_next": body["watch_next"],
+        "position_hint": body["position_hint"],
     }
+
+
+def _driver_block(driver: dict, two: bool) -> dict:
+    kind = driver.get("type") or "unknown"
+    return {
+        "type": kind,
+        "type_text": DRIVER_TEXT.get(kind, DRIVER_TEXT["unknown"]),
+        "r2": driver.get("r2"),
+        "primary_share": driver.get("primary_share"),
+        "secondary_share": driver.get("secondary_share") if two else None,
+        "weights": driver.get("weights"),
+        "days": driver.get("days"),
+        "note": "两个板块指数对本股近 60 日收益的解释程度（R²），共同解释的部分平分",
+    }
+
+
+def _divergence(bodies: dict, active: bool) -> dict:
+    if "secondary" not in bodies:
+        return {"active": False, "text": ""}
+    stages = {role: body["stage"] for role, body in bodies.items()}
+    text = "两个板块处在对立的阶段，方向不取平均，请分别看" if active else ""
+    return {"active": active, "stages": stages, "text": text}
 
 
 def _state(data: dict, as_of: str | None, today: date) -> tuple[str, str]:
@@ -220,35 +238,7 @@ def _parse(value: str | None) -> date | None:
         return None
 
 
-def _chart_alt(name: str, lines: dict) -> str:
-    return (
-        f"{name}近 20 日累计：板块 {_signed(lines.get('sector'))}，"
-        f"个股 {_signed(lines.get('stock'))}，沪深300 {_signed(lines.get('index'))}"
-    )
 
-
-def _signed(series) -> str:
-    if not series:
-        return "—"
-    value = series[-1]
-    if value is None:
-        return "—"
-    return f"{float(value) * 100:.1f}%"
-
-
-def _default_source(sectors: list[dict]) -> str:
-    concepts = any(item.get("type") == "concept" for item in sectors)
-    text = (
-        "板块走势按当前成分股等权计算，不用发布的指数点位。"
-        "成分没有历史进出记录，概念板块的结论没有回测依据。"
-        "行业板块在同级申万发布指数里排名，三级不和一级混比。相关性相差不到 0.05 时，优先用行业板块。"
-    )
-    if concepts:
-        text += "概念板块沿用相关性最高的行业板块在同级里的排名。"
-    else:
-        text += "这次没有取到概念板块。"
-    text += "板块资金流这次没有取到。"
-    return text
 
 
 def _shell(state: str, status: str, as_of: str | None) -> dict:
@@ -259,18 +249,12 @@ def _shell(state: str, status: str, as_of: str | None) -> dict:
             "updated_at": datetime.now(_ZONE).isoformat(timespec="seconds"),
             "rule_version": RULE_VERSION,
             "status_text": status,
-            "viewing_main": None,
+            "affiliation_version": None,
             "source_text": None,
             "error": None,
         },
         "verdict": None,
         "sectors": None,
-        "strength": None,
-        "stage": None,
-        "role": None,
-        "sustain": None,
-        "watch_next": None,
-        "position_hint": None,
         "disclaimer_text": None,
     }
 

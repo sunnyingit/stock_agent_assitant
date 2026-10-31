@@ -9,6 +9,7 @@ from app.api.v1 import bp as v1_bp
 from app.flow_review.api import bp as flow_review_bp
 from app.finance_review.api import bp as finance_review_bp
 from app.fundamental_review.api import bp as fundamental_review_bp
+from app.sector_review.api import bp as sector_review_bp
 from app.synthesis.api import bp as synthesis_bp
 
 _ROUTES = (
@@ -39,6 +40,7 @@ _ROUTES = (
     ("资金面体检", "/api/v1/stocks/{ts_code}/dimensions/volume_flow/review", ""),
     ("基本面体检", "/api/v1/stocks/{ts_code}/dimensions/fundamental/review", ""),
     ("财报解读", "/api/v1/stocks/{ts_code}/dimensions/finance/review", ""),
+    ("板块解读", "/api/v1/stocks/{ts_code}/dimensions/sector/review", ""),
 )
 
 
@@ -57,6 +59,7 @@ def create_app() -> Flask:
     app.register_blueprint(flow_review_bp)
     app.register_blueprint(fundamental_review_bp)
     app.register_blueprint(finance_review_bp)
+    app.register_blueprint(sector_review_bp)
     return app
 
 

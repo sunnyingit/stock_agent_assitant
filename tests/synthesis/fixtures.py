@@ -84,10 +84,17 @@ def sector_payload(stage="main", lean="bullish", level=2, state="ok") -> dict:
     return {
         "meta": {"state": state, "as_of": TODAY.isoformat(), "rule_version": "sector-2"},
         "verdict": {"lean": lean, "level": level, "certainty": "medium"},
-        "stage": {"current": stage, "days_in_round": 6},
-        "role": {"value": "leader"},
-        "strength": {"lines": {"dates": [], "stock": [0.05, 0.12], "sector": [0.03, 0.08], "index": [0.01, 0.02]}},
-        "position_hint": {"climax": False, "overdue": False},
+        "sectors": {
+            "primary": {
+                "stage": {"current": stage, "days_in_round": 6},
+                "role": {"value": "leader"},
+                "strength": {"lines": {"dates": [], "stock": [0.05, 0.12], "sector": [0.03, 0.08], "index": [0.01, 0.02]}},
+                "position_hint": {"climax": False, "overdue": False},
+            },
+            "secondary": None,
+            "driver": {"type": "single"},
+            "divergence": {"active": False},
+        },
     }
 
 

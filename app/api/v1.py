@@ -165,11 +165,20 @@ def sector_detail(ts_code: str):
     if stock is None:
         return jsonify({"error": f"未找到股票: {ts_code}"}), 404
     from app.services.sector_detail import build_detail, failed_payload
+    from app.services.sector_detail.detail import public
+    from app.services.verdict_view import summary_headline
 
     try:
-        payload = build_detail(stock, sector_code=request.args.get("sector_code"))
+        payload = build_detail(stock)
         _notify(stock, "sector")
-        return jsonify(payload)
+        state = (payload.get("meta") or {}).get("state")
+        if state in ("ok", "intraday", "stale"):
+            extra = _review_of(stock, payload, kind="sector")
+        elif state == "computing":
+            extra = {"review": None, "review_state": "computing", "review_error": ""}
+        else:   # 港股、上市不足 20 个交易日、没有可比板块：不做解读
+            extra = {"review": None, "review_state": "unavailable", "review_error": (payload.get("meta") or {}).get("status_text") or ""}
+        return jsonify({**public(payload), **extra, "headline": summary_headline(extra.get("review"), "q8")})
     except Exception as exc:
         log.exception("%s detail failed: %s", "sector", stock.ts_code)
         return jsonify(failed_payload(stock, str(exc))), 500

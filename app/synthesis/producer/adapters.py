@@ -176,19 +176,23 @@ def sector(payload: dict | None, error: str = "") -> Snapshot:
     snap = _base("sector", payload, error)
     if payload is None or snap.status != STATUS_OK:
         return snap
-    stage = _get(payload, "stage", "current")
-    lines = _get(payload, "strength", "lines", default={}) or {}
+    primary = _get(payload, "sectors", "primary", default={}) or {}
+    stage = _get(primary, "stage", "current")
+    lines = _get(primary, "strength", "lines", default={}) or {}
     stock_line, sector_line, index_line = (lines.get(name) or [] for name in ("stock", "sector", "index"))
     _put(snap, "sector.view", view_text(snap))
     _put(snap, "sector.stage", stage)
-    _put(snap, "sector.days", _number(_get(payload, "stage", "days_in_round")))
-    _put(snap, "sector.role", _get(payload, "role", "value"))
+    _put(snap, "sector.days", _number(_get(primary, "stage", "days_in_round")))
+    _put(snap, "sector.role", _get(primary, "role", "value"))
     if sector_line and index_line:
         _put(snap, "sector.vs_index", round(sector_line[-1] - index_line[-1], 4))
     if stock_line and sector_line:
         _put(snap, "sector.stock_vs_sector", round(stock_line[-1] - sector_line[-1], 4))
-    hint = payload.get("position_hint") or {}
+    hint = primary.get("position_hint") or {}
     _put(snap, "sector.warn", bool(hint.get("climax") or hint.get("overdue")))
+    _put(snap, "sector.driver", _get(payload, "sectors", "driver", "type"))
+    _put(snap, "sector.secondary_stage", _get(payload, "sectors", "secondary", "stage", "current"))
+    _put(snap, "sector.divergent", bool(_get(payload, "sectors", "divergence", "active", default=False)))
     snap.flags["stage"] = stage
     snap.flags["index_ret"] = _number(index_line[-1]) if len(index_line) >= 10 else None
     if stage in _SECTOR_EVENT:

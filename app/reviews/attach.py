@@ -25,6 +25,7 @@ KINDS = {
     "flow": {"prefix": "flow_review:latest4:", "module": "app.flow_review.review", "prompt": "app.flow_review.prompt", "thread": "flow-review"},
     "fund": {"prefix": "fund_review:latest1:", "module": "app.fundamental_review.review", "prompt": "app.fundamental_review.prompt", "thread": "fund-review"},
     "fin": {"prefix": "fin_review:latest1:", "module": "app.finance_review.review", "prompt": "app.finance_review.prompt", "thread": "fin-review"},
+    "sector": {"prefix": "sector_review:latest1:", "module": "app.sector_review.review", "prompt": "app.sector_review.prompt", "thread": "sector-review"},
 }
 FAILED_PREFIX = "体检生成失败"
 

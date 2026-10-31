@@ -63,6 +63,19 @@ class AdapterTest(unittest.TestCase):
         self.assertAlmostEqual(sector.facts["sector.vs_index"], 0.06)
         self.assertAlmostEqual(sector.facts["sector.stock_vs_sector"], 0.04)
         self.assertEqual(sector.events[0]["kind"], "sector_stage")
+        self.assertEqual(sector.facts["sector.driver"], "single")
+        self.assertFalse(sector.facts["sector.divergent"])
+        self.assertNotIn("sector.secondary_stage", sector.facts)
+
+    def test_sector_adapter_reads_the_secondary_and_the_divergence(self):
+        payload = sector_payload()
+        payload["sectors"]["secondary"] = {"stage": {"current": "weak"}}
+        payload["sectors"]["driver"] = {"type": "dual"}
+        payload["sectors"]["divergence"] = {"active": True}
+        sector = adapters.adapt("sector", payload)
+        self.assertEqual(sector.facts["sector.secondary_stage"], "weak")
+        self.assertEqual(sector.facts["sector.driver"], "dual")
+        self.assertTrue(sector.facts["sector.divergent"])
         finance = adapters.adapt("finance", finance_payload(red=True))
         self.assertTrue(finance.facts["fin.red_line"])
         self.assertTrue(finance.flags["red_line"])
