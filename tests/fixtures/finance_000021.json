@@ -1,0 +1,6364 @@
+{
+ "ts_code": "000021.SZ",
+ "stock_name": "深科技",
+ "industry": "元器件",
+ "list_date": "19940202",
+ "as_of": "2026-10-31",
+ "income_q": [
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20261030",
+   "f_ann_date": "20261030",
+   "end_date": "20260930",
+   "report_type": "2",
+   "update_flag": "0",
+   "revenue": 4623169275.65,
+   "total_revenue": 4623169275.65,
+   "oper_cost": 3797608752.78,
+   "sell_exp": 38552908.76,
+   "admin_exp": 161254798.69,
+   "rd_exp": 117995795.97,
+   "fin_exp": 135028550.36,
+   "invest_income": 24071491.12,
+   "fv_value_chg_gain": -2260902.58,
+   "forex_gain": null,
+   "assets_impair_loss": 8335484.6,
+   "oth_b_income": null,
+   "non_oper_income": 726798.63,
+   "nca_disploss": null,
+   "total_profit": 416229031.94,
+   "income_tax": 26494155.29,
+   "n_income": 389734876.65,
+   "n_income_attr_p": 304093773.67,
+   "minority_gain": 85641102.98
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20260826",
+   "f_ann_date": "20260826",
+   "end_date": "20260630",
+   "report_type": "2",
+   "update_flag": "0",
+   "revenue": 4554681950.0,
+   "total_revenue": 4554681950.0,
+   "oper_cost": 3627105568.08,
+   "sell_exp": 46488478.88,
+   "admin_exp": 133899218.69,
+   "rd_exp": 147383887.35,
+   "fin_exp": 161874691.79,
+   "invest_income": 36171718.13,
+   "fv_value_chg_gain": -38019949.65,
+   "forex_gain": null,
+   "assets_impair_loss": -4448190.88,
+   "oth_b_income": null,
+   "non_oper_income": 5728280.33,
+   "nca_disploss": null,
+   "total_profit": 420202527.53,
+   "income_tax": 42891827.35,
+   "n_income": 377310700.18,
+   "n_income_attr_p": 301275524.8,
+   "minority_gain": 76035175.38
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20260429",
+   "f_ann_date": "20260429",
+   "end_date": "20260331",
+   "report_type": "2",
+   "update_flag": "0",
+   "revenue": 3723775220.39,
+   "total_revenue": 3723775220.39,
+   "oper_cost": 3088269027.27,
+   "sell_exp": 48564955.44,
+   "admin_exp": 159772917.88,
+   "rd_exp": 89587298.93,
+   "fin_exp": 116014190.82,
+   "invest_income": 3007201.72,
+   "fv_value_chg_gain": 133131763.24,
+   "forex_gain": null,
+   "assets_impair_loss": -629303.07,
+   "oth_b_income": null,
+   "non_oper_income": 514550.5,
+   "nca_disploss": null,
+   "total_profit": 353242290.01,
+   "income_tax": 65244718.85,
+   "n_income": 287997571.16,
+   "n_income_attr_p": 242178267.01,
+   "minority_gain": 45819304.15
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20260429",
+   "f_ann_date": "20260429",
+   "end_date": "20251231",
+   "report_type": "2",
+   "update_flag": "0",
+   "revenue": 4469549284.67,
+   "total_revenue": 4469549284.67,
+   "oper_cost": 3491301381.18,
+   "sell_exp": 52497776.51,
+   "admin_exp": 149514913.16,
+   "rd_exp": 166488921.11,
+   "fin_exp": -40883120.46,
+   "invest_income": -21080227.86,
+   "fv_value_chg_gain": -53570040.28,
+   "forex_gain": null,
+   "assets_impair_loss": -41410284.59,
+   "oth_b_income": null,
+   "non_oper_income": 5759942.68,
+   "nca_disploss": null,
+   "total_profit": 542781586.04,
+   "income_tax": 83379504.75,
+   "n_income": 459402081.29,
+   "n_income_attr_p": 379949731.96,
+   "minority_gain": 79452349.33
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20251030",
+   "f_ann_date": "20251030",
+   "end_date": "20250930",
+   "report_type": "2",
+   "update_flag": "0",
+   "revenue": 3538191171.29,
+   "total_revenue": 3538191171.29,
+   "oper_cost": 2849766525.7,
+   "sell_exp": 44049803.43,
+   "admin_exp": 177088791.69,
+   "rd_exp": 96473935.2,
+   "fin_exp": -41628278.43,
+   "invest_income": 19687040.82,
+   "fv_value_chg_gain": 13662309.84,
+   "forex_gain": null,
+   "assets_impair_loss": 64760.14,
+   "oth_b_income": null,
+   "non_oper_income": 217990.48,
+   "nca_disploss": null,
+   "total_profit": 439792682.71,
+   "income_tax": 51479015.48,
+   "n_income": 388313667.23,
+   "n_income_attr_p": 303911865.33,
+   "minority_gain": 84401801.9
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20250828",
+   "f_ann_date": "20250828",
+   "end_date": "20250630",
+   "report_type": "2",
+   "update_flag": "0",
+   "revenue": 4375014416.4,
+   "total_revenue": 4375014416.4,
+   "oper_cost": 3702504695.33,
+   "sell_exp": 49453176.01,
+   "admin_exp": 153407146.78,
+   "rd_exp": 96963442.08,
+   "fin_exp": -225525465.2,
+   "invest_income": 14991868.63,
+   "fv_value_chg_gain": -144707600.57,
+   "forex_gain": null,
+   "assets_impair_loss": -581612.32,
+   "oth_b_income": null,
+   "non_oper_income": 1256850.45,
+   "nca_disploss": null,
+   "total_profit": 453302558.21,
+   "income_tax": 80975866.39,
+   "n_income": 372326691.82,
+   "n_income_attr_p": 272888240.27,
+   "minority_gain": 99438451.55
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20250430",
+   "f_ann_date": "20250430",
+   "end_date": "20250331",
+   "report_type": "2",
+   "update_flag": "0",
+   "revenue": 3364638220.14,
+   "total_revenue": 3364638220.14,
+   "oper_cost": 2818295704.77,
+   "sell_exp": 37991263.32,
+   "admin_exp": 158349464.54,
+   "rd_exp": 99874815.31,
+   "fin_exp": -109567365.51,
+   "invest_income": 13961972.27,
+   "fv_value_chg_gain": -79971505.24,
+   "forex_gain": null,
+   "assets_impair_loss": 670325.98,
+   "oth_b_income": null,
+   "non_oper_income": 581859.28,
+   "nca_disploss": null,
+   "total_profit": 280920055.37,
+   "income_tax": 53016070.71,
+   "n_income": 227903984.66,
+   "n_income_attr_p": 178929169.49,
+   "minority_gain": 48974815.17
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20250425",
+   "f_ann_date": "20250425",
+   "end_date": "20241231",
+   "report_type": "2",
+   "update_flag": "0",
+   "revenue": 3975480893.35,
+   "total_revenue": 3975480893.35,
+   "oper_cost": 3259446112.33,
+   "sell_exp": 64630754.04,
+   "admin_exp": 137602513.21,
+   "rd_exp": 167655574.51,
+   "fin_exp": -85537257.68,
+   "invest_income": 30386206.75,
+   "fv_value_chg_gain": -71928452.16,
+   "forex_gain": null,
+   "assets_impair_loss": -66602321.57,
+   "oth_b_income": null,
+   "non_oper_income": 35136804.58,
+   "nca_disploss": null,
+   "total_profit": 316891162.75,
+   "income_tax": 41506588.21,
+   "n_income": 275384574.54,
+   "n_income_attr_p": 268967570.95,
+   "minority_gain": 6417003.59
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20241030",
+   "f_ann_date": "20241030",
+   "end_date": "20240930",
+   "report_type": "2",
+   "update_flag": "0",
+   "revenue": 3797121474.22,
+   "total_revenue": 3797121474.22,
+   "oper_cost": 3173640234.72,
+   "sell_exp": 45241353.18,
+   "admin_exp": 153910336.02,
+   "rd_exp": 78110060.06,
+   "fin_exp": -81440032.91,
+   "invest_income": 3444788.12,
+   "fv_value_chg_gain": -14382162.31,
+   "forex_gain": null,
+   "assets_impair_loss": -16848612.08,
+   "oth_b_income": null,
+   "non_oper_income": 5054529.81,
+   "nca_disploss": null,
+   "total_profit": 395813818.3,
+   "income_tax": 52144468.34,
+   "n_income": 343669349.96,
+   "n_income_attr_p": 301061097.8,
+   "minority_gain": 42608252.16
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20240830",
+   "f_ann_date": "20240830",
+   "end_date": "20240630",
+   "report_type": "2",
+   "update_flag": "0",
+   "revenue": 3928185123.29,
+   "total_revenue": 3928185123.29,
+   "oper_cost": 3269108002.64,
+   "sell_exp": 33421894.64,
+   "admin_exp": 159446806.05,
+   "rd_exp": 88691954.13,
+   "fin_exp": 22276781.67,
+   "invest_income": 13052096.19,
+   "fv_value_chg_gain": 33340305.96,
+   "forex_gain": null,
+   "assets_impair_loss": -554398.98,
+   "oth_b_income": null,
+   "non_oper_income": 10976993.11,
+   "nca_disploss": null,
+   "total_profit": 353936213.77,
+   "income_tax": 59035863.95,
+   "n_income": 294900349.82,
+   "n_income_attr_p": 238523081.84,
+   "minority_gain": 56377267.98
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20240430",
+   "f_ann_date": "20240430",
+   "end_date": "20240331",
+   "report_type": "2",
+   "update_flag": "0",
+   "revenue": 3126379017.67,
+   "total_revenue": 3126379017.67,
+   "oper_cost": 2607401369.02,
+   "sell_exp": 27373345.78,
+   "admin_exp": 144929111.22,
+   "rd_exp": 88784638.0,
+   "fin_exp": 31395698.22,
+   "invest_income": -3034773.02,
+   "fv_value_chg_gain": 8085710.89,
+   "forex_gain": null,
+   "assets_impair_loss": -1452528.96,
+   "oth_b_income": null,
+   "non_oper_income": 1367088.74,
+   "nca_disploss": null,
+   "total_profit": 218284380.94,
+   "income_tax": 44734269.05,
+   "n_income": 173550111.89,
+   "n_income_attr_p": 121793821.59,
+   "minority_gain": 51756290.3
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20240411",
+   "f_ann_date": "20240411",
+   "end_date": "20231231",
+   "report_type": "2",
+   "update_flag": "0",
+   "revenue": 3293245836.69,
+   "total_revenue": 3293245836.69,
+   "oper_cost": 2530873897.93,
+   "sell_exp": 42846906.74,
+   "admin_exp": 106537226.86,
+   "rd_exp": 117438027.69,
+   "fin_exp": -59709839.02,
+   "invest_income": 19088466.21,
+   "fv_value_chg_gain": 17158521.52,
+   "forex_gain": null,
+   "assets_impair_loss": -216447070.03,
+   "oth_b_income": null,
+   "non_oper_income": 21989308.09,
+   "nca_disploss": null,
+   "total_profit": 286830506.11,
+   "income_tax": 26557030.3,
+   "n_income": 260273475.81,
+   "n_income_attr_p": 198080423.36,
+   "minority_gain": 62193052.45
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20231027",
+   "f_ann_date": "20231027",
+   "end_date": "20230930",
+   "report_type": "2",
+   "update_flag": "0",
+   "revenue": 3230833596.33,
+   "total_revenue": 3230833596.33,
+   "oper_cost": 2700569083.17,
+   "sell_exp": 27863569.63,
+   "admin_exp": 165950763.23,
+   "rd_exp": 71376809.16,
+   "fin_exp": 70591790.71,
+   "invest_income": 22597112.02,
+   "fv_value_chg_gain": 30741646.28,
+   "forex_gain": null,
+   "assets_impair_loss": -11683231.89,
+   "oth_b_income": null,
+   "non_oper_income": 8756263.4,
+   "nca_disploss": null,
+   "total_profit": 240911273.5,
+   "income_tax": 43079023.35,
+   "n_income": 197832250.15,
+   "n_income_attr_p": 149682473.89,
+   "minority_gain": 48149776.26
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20230830",
+   "f_ann_date": "20230830",
+   "end_date": "20230630",
+   "report_type": "2",
+   "update_flag": "0",
+   "revenue": 3806793414.66,
+   "total_revenue": 3806793414.66,
+   "oper_cost": 3147725507.73,
+   "sell_exp": 36818636.38,
+   "admin_exp": 169980800.9,
+   "rd_exp": 85222692.34,
+   "fin_exp": 13941965.8,
+   "invest_income": 9748537.24,
+   "fv_value_chg_gain": -48171762.24,
+   "forex_gain": null,
+   "assets_impair_loss": -3604487.11,
+   "oth_b_income": null,
+   "non_oper_income": 253114.84,
+   "nca_disploss": null,
+   "total_profit": 314286175.82,
+   "income_tax": 70835493.46,
+   "n_income": 243450682.36,
+   "n_income_attr_p": 195825356.27,
+   "minority_gain": 47625326.09
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20230429",
+   "f_ann_date": "20230429",
+   "end_date": "20230331",
+   "report_type": "2",
+   "update_flag": "0",
+   "revenue": 3933775539.21,
+   "total_revenue": 3933775539.21,
+   "oper_cost": 3511012486.14,
+   "sell_exp": 23437149.77,
+   "admin_exp": 129587702.66,
+   "rd_exp": 87981677.84,
+   "fin_exp": -4828131.77,
+   "invest_income": -13515150.47,
+   "fv_value_chg_gain": -16036206.49,
+   "forex_gain": null,
+   "assets_impair_loss": -1139.75,
+   "oth_b_income": null,
+   "non_oper_income": 870182.45,
+   "nca_disploss": null,
+   "total_profit": 149100330.35,
+   "income_tax": 26247890.81,
+   "n_income": 122852439.54,
+   "n_income_attr_p": 101012991.01,
+   "minority_gain": 21839448.53
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20230421",
+   "f_ann_date": "20230421",
+   "end_date": "20221231",
+   "report_type": "2",
+   "update_flag": "0",
+   "revenue": 4106348272.69,
+   "total_revenue": 4106348272.69,
+   "oper_cost": 3520363635.35,
+   "sell_exp": 3279593.42,
+   "admin_exp": 195248485.23,
+   "rd_exp": 88231915.65,
+   "fin_exp": 71338548.58,
+   "invest_income": -4287192.68,
+   "fv_value_chg_gain": 33980809.68,
+   "forex_gain": null,
+   "assets_impair_loss": -124730809.58,
+   "oth_b_income": null,
+   "non_oper_income": 264852.66,
+   "nca_disploss": null,
+   "total_profit": 107239966.82,
+   "income_tax": -555807.72,
+   "n_income": 107795774.54,
+   "n_income_attr_p": 83680453.49,
+   "minority_gain": 24115321.05
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20221028",
+   "f_ann_date": "20221028",
+   "end_date": "20220930",
+   "report_type": "2",
+   "update_flag": "0",
+   "revenue": 4460397906.88,
+   "total_revenue": 4460397906.88,
+   "oper_cost": 3841647540.71,
+   "sell_exp": 39933674.42,
+   "admin_exp": 88992025.38,
+   "rd_exp": 57871139.59,
+   "fin_exp": -7009756.79,
+   "invest_income": 16628602.34,
+   "fv_value_chg_gain": -302151840.57,
+   "forex_gain": null,
+   "assets_impair_loss": -927449.57,
+   "oth_b_income": null,
+   "non_oper_income": 945775.41,
+   "nca_disploss": null,
+   "total_profit": 148147645.92,
+   "income_tax": 27695652.05,
+   "n_income": 120451993.87,
+   "n_income_attr_p": 119711047.83,
+   "minority_gain": 740946.04
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20220826",
+   "f_ann_date": "20220826",
+   "end_date": "20220630",
+   "report_type": "2",
+   "update_flag": "0",
+   "revenue": 3900838825.14,
+   "total_revenue": 3900838825.14,
+   "oper_cost": 3468815092.43,
+   "sell_exp": 6340100.6,
+   "admin_exp": 159390726.01,
+   "rd_exp": 84039655.93,
+   "fin_exp": -279628444.0,
+   "invest_income": 127932842.8,
+   "fv_value_chg_gain": -348892238.31,
+   "forex_gain": null,
+   "assets_impair_loss": -466627.02,
+   "oth_b_income": null,
+   "non_oper_income": 629458.14,
+   "nca_disploss": null,
+   "total_profit": 247558396.29,
+   "income_tax": 35879598.49,
+   "n_income": 211678797.8,
+   "n_income_attr_p": 213451845.61,
+   "minority_gain": -1773047.81
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20220430",
+   "f_ann_date": "20220430",
+   "end_date": "20220331",
+   "report_type": "2",
+   "update_flag": "0",
+   "revenue": 3650790157.67,
+   "total_revenue": 3650790157.67,
+   "oper_cost": 3350817100.61,
+   "sell_exp": 31779243.66,
+   "admin_exp": 125307856.99,
+   "rd_exp": 82805157.92,
+   "fin_exp": -211503166.25,
+   "invest_income": 890686.9,
+   "fv_value_chg_gain": 28523537.45,
+   "forex_gain": null,
+   "assets_impair_loss": null,
+   "oth_b_income": null,
+   "non_oper_income": 310379.72,
+   "nca_disploss": null,
+   "total_profit": 304872885.3,
+   "income_tax": 56012168.14,
+   "n_income": 248860717.16,
+   "n_income_attr_p": 242209458.98,
+   "minority_gain": 6651258.18
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20220421",
+   "f_ann_date": "20220421",
+   "end_date": "20211231",
+   "report_type": "2",
+   "update_flag": "0",
+   "revenue": 4220583752.0,
+   "total_revenue": 4220583752.0,
+   "oper_cost": 3689940163.11,
+   "sell_exp": -12093548.18,
+   "admin_exp": 217090302.9,
+   "rd_exp": 105150370.07,
+   "fin_exp": -59296418.11,
+   "invest_income": -25232961.55,
+   "fv_value_chg_gain": -13866936.63,
+   "forex_gain": null,
+   "assets_impair_loss": -28934896.97,
+   "oth_b_income": null,
+   "non_oper_income": -46001.6,
+   "nca_disploss": null,
+   "total_profit": 285797417.83,
+   "income_tax": 29373722.45,
+   "n_income": 256423695.38,
+   "n_income_attr_p": 258519573.19,
+   "minority_gain": -2095877.81
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20211028",
+   "f_ann_date": "20211028",
+   "end_date": "20210930",
+   "report_type": "2",
+   "update_flag": "0",
+   "revenue": 4312649469.76,
+   "total_revenue": 4312649469.76,
+   "oper_cost": 3996840489.16,
+   "sell_exp": 24392845.07,
+   "admin_exp": 93783028.73,
+   "rd_exp": 53739848.6,
+   "fin_exp": -19518247.93,
+   "invest_income": 14312651.51,
+   "fv_value_chg_gain": 109933661.34,
+   "forex_gain": null,
+   "assets_impair_loss": -3734.0,
+   "oth_b_income": null,
+   "non_oper_income": 1382017.8,
+   "nca_disploss": null,
+   "total_profit": 312363069.19,
+   "income_tax": 55482731.28,
+   "n_income": 256880337.91,
+   "n_income_attr_p": 243787426.85,
+   "minority_gain": 13092911.06
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20210826",
+   "f_ann_date": "20210826",
+   "end_date": "20210630",
+   "report_type": "2",
+   "update_flag": "0",
+   "revenue": 4128324983.74,
+   "total_revenue": 4128324983.74,
+   "oper_cost": 3682589337.89,
+   "sell_exp": 29655746.13,
+   "admin_exp": 218539349.82,
+   "rd_exp": 87284560.48,
+   "fin_exp": -172697153.36,
+   "invest_income": 3694707.65,
+   "fv_value_chg_gain": -174229437.53,
+   "forex_gain": null,
+   "assets_impair_loss": 2971505.46,
+   "oth_b_income": null,
+   "non_oper_income": 1942986.62,
+   "nca_disploss": null,
+   "total_profit": 136660921.58,
+   "income_tax": 46456189.61,
+   "n_income": 90204731.97,
+   "n_income_attr_p": 72974793.44,
+   "minority_gain": 17229938.53
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20210430",
+   "f_ann_date": "20210430",
+   "end_date": "20210331",
+   "report_type": "2",
+   "update_flag": "0",
+   "revenue": 3826694970.47,
+   "total_revenue": 3826694970.47,
+   "oper_cost": 3528965365.63,
+   "sell_exp": 27830652.87,
+   "admin_exp": 98728235.27,
+   "rd_exp": 64151767.91,
+   "fin_exp": 222274062.79,
+   "invest_income": 2090991.06,
+   "fv_value_chg_gain": 392797736.29,
+   "forex_gain": null,
+   "assets_impair_loss": null,
+   "oth_b_income": null,
+   "non_oper_income": 831981.54,
+   "nca_disploss": null,
+   "total_profit": 288545999.3,
+   "income_tax": 57991639.54,
+   "n_income": 230554359.76,
+   "n_income_attr_p": 200112361.34,
+   "minority_gain": 30441998.42
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20210430",
+   "f_ann_date": "20210430",
+   "end_date": "20201231",
+   "report_type": "2",
+   "update_flag": "0",
+   "revenue": 4395713268.89,
+   "total_revenue": 4395713268.89,
+   "oper_cost": 3964504946.2,
+   "sell_exp": 28803365.15,
+   "admin_exp": 136856611.52,
+   "rd_exp": 68902782.35,
+   "fin_exp": 249220686.29,
+   "invest_income": 233258293.77,
+   "fv_value_chg_gain": 313637672.28,
+   "forex_gain": null,
+   "assets_impair_loss": -30445301.1,
+   "oth_b_income": null,
+   "non_oper_income": 363626.13,
+   "nca_disploss": null,
+   "total_profit": 473178297.0,
+   "income_tax": 51754843.33,
+   "n_income": 421423453.67,
+   "n_income_attr_p": 411225214.79,
+   "minority_gain": 10198238.88
+  }
+ ],
+ "income_c": [
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20261030",
+   "f_ann_date": "20261030",
+   "end_date": "20260930",
+   "report_type": "1",
+   "update_flag": "1",
+   "revenue": 12901626446.04,
+   "total_revenue": 12901626446.04,
+   "oper_cost": 10512983348.13,
+   "sell_exp": 133606343.08,
+   "admin_exp": 454926935.26,
+   "rd_exp": 354966982.25,
+   "fin_exp": 412917432.97,
+   "invest_income": 63250410.97,
+   "fv_value_chg_gain": 92850911.01,
+   "forex_gain": null,
+   "assets_impair_loss": 3257990.65,
+   "oth_b_income": null,
+   "non_oper_income": 6969629.46,
+   "nca_disploss": null,
+   "total_profit": 1189673849.48,
+   "income_tax": 134630701.49,
+   "n_income": 1055043147.99,
+   "n_income_attr_p": 847547565.48,
+   "minority_gain": 207495582.51
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20261030",
+   "f_ann_date": "20261030",
+   "end_date": "20260930",
+   "report_type": "1",
+   "update_flag": "0",
+   "revenue": 12901626446.04,
+   "total_revenue": 12901626446.04,
+   "oper_cost": 10512983348.13,
+   "sell_exp": 133606343.08,
+   "admin_exp": 454926935.26,
+   "rd_exp": 354966982.25,
+   "fin_exp": 412917432.97,
+   "invest_income": 63250410.97,
+   "fv_value_chg_gain": 92850911.01,
+   "forex_gain": null,
+   "assets_impair_loss": 3257990.65,
+   "oth_b_income": null,
+   "non_oper_income": 6969629.46,
+   "nca_disploss": null,
+   "total_profit": 1189673849.48,
+   "income_tax": 134630701.49,
+   "n_income": 1055043147.99,
+   "n_income_attr_p": 847547565.48,
+   "minority_gain": 207495582.51
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20260826",
+   "f_ann_date": "20260826",
+   "end_date": "20260630",
+   "report_type": "1",
+   "update_flag": "1",
+   "revenue": 8278457170.39,
+   "total_revenue": 8278457170.39,
+   "oper_cost": 6715374595.35,
+   "sell_exp": 95053434.32,
+   "admin_exp": 293672136.57,
+   "rd_exp": 236971186.28,
+   "fin_exp": 277888882.61,
+   "invest_income": 39178919.85,
+   "fv_value_chg_gain": 95111813.59,
+   "forex_gain": null,
+   "assets_impair_loss": -5077493.95,
+   "oth_b_income": null,
+   "non_oper_income": 6242830.83,
+   "nca_disploss": null,
+   "total_profit": 773444817.54,
+   "income_tax": 108136546.2,
+   "n_income": 665308271.34,
+   "n_income_attr_p": 543453791.81,
+   "minority_gain": 121854479.53
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20260826",
+   "f_ann_date": "20260826",
+   "end_date": "20260630",
+   "report_type": "1",
+   "update_flag": "0",
+   "revenue": 8278457170.39,
+   "total_revenue": 8278457170.39,
+   "oper_cost": 6715374595.35,
+   "sell_exp": 95053434.32,
+   "admin_exp": 293672136.57,
+   "rd_exp": 236971186.28,
+   "fin_exp": 277888882.61,
+   "invest_income": 39178919.85,
+   "fv_value_chg_gain": 95111813.59,
+   "forex_gain": null,
+   "assets_impair_loss": -5077493.95,
+   "oth_b_income": null,
+   "non_oper_income": 6242830.83,
+   "nca_disploss": null,
+   "total_profit": 773444817.54,
+   "income_tax": 108136546.2,
+   "n_income": 665308271.34,
+   "n_income_attr_p": 543453791.81,
+   "minority_gain": 121854479.53
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20260429",
+   "f_ann_date": "20260429",
+   "end_date": "20260331",
+   "report_type": "1",
+   "update_flag": "1",
+   "revenue": 3723775220.39,
+   "total_revenue": 3723775220.39,
+   "oper_cost": 3088269027.27,
+   "sell_exp": 48564955.44,
+   "admin_exp": 159772917.88,
+   "rd_exp": 89587298.93,
+   "fin_exp": 116014190.82,
+   "invest_income": 3007201.72,
+   "fv_value_chg_gain": 133131763.24,
+   "forex_gain": null,
+   "assets_impair_loss": -629303.07,
+   "oth_b_income": null,
+   "non_oper_income": 514550.5,
+   "nca_disploss": null,
+   "total_profit": 353242290.01,
+   "income_tax": 65244718.85,
+   "n_income": 287997571.16,
+   "n_income_attr_p": 242178267.01,
+   "minority_gain": 45819304.15
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20260429",
+   "f_ann_date": "20260429",
+   "end_date": "20251231",
+   "report_type": "1",
+   "update_flag": "1",
+   "revenue": 15747393092.5,
+   "total_revenue": 15747393092.5,
+   "oper_cost": 12861868306.98,
+   "sell_exp": 183992019.27,
+   "admin_exp": 638360316.17,
+   "rd_exp": 459801113.7,
+   "fin_exp": -417604229.6,
+   "invest_income": 27560653.86,
+   "fv_value_chg_gain": -264586836.25,
+   "forex_gain": null,
+   "assets_impair_loss": -41256810.79,
+   "oth_b_income": null,
+   "non_oper_income": 7816642.89,
+   "nca_disploss": null,
+   "total_profit": 1716796882.33,
+   "income_tax": 268850457.33,
+   "n_income": 1447946425.0,
+   "n_income_attr_p": 1135679007.05,
+   "minority_gain": 312267417.95
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20251030",
+   "f_ann_date": "20251030",
+   "end_date": "20250930",
+   "report_type": "1",
+   "update_flag": "1",
+   "revenue": 11277843807.83,
+   "total_revenue": 11277843807.83,
+   "oper_cost": 9370566925.8,
+   "sell_exp": 131494242.76,
+   "admin_exp": 488845403.01,
+   "rd_exp": 293312192.59,
+   "fin_exp": -376721109.14,
+   "invest_income": 48640881.72,
+   "fv_value_chg_gain": -211016795.97,
+   "forex_gain": null,
+   "assets_impair_loss": 153473.8,
+   "oth_b_income": null,
+   "non_oper_income": 2056700.21,
+   "nca_disploss": null,
+   "total_profit": 1174015296.29,
+   "income_tax": 185470952.58,
+   "n_income": 988544343.71,
+   "n_income_attr_p": 755729275.09,
+   "minority_gain": 232815068.62
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20250828",
+   "f_ann_date": "20250828",
+   "end_date": "20250630",
+   "report_type": "1",
+   "update_flag": "1",
+   "revenue": 7739652636.54,
+   "total_revenue": 7739652636.54,
+   "oper_cost": 6520800400.1,
+   "sell_exp": 87444439.33,
+   "admin_exp": 311756611.32,
+   "rd_exp": 196838257.39,
+   "fin_exp": -335092830.71,
+   "invest_income": 28953840.9,
+   "fv_value_chg_gain": -224679105.81,
+   "forex_gain": null,
+   "assets_impair_loss": 88713.66,
+   "oth_b_income": null,
+   "non_oper_income": 1838709.73,
+   "nca_disploss": null,
+   "total_profit": 734222613.58,
+   "income_tax": 133991937.1,
+   "n_income": 600230676.48,
+   "n_income_attr_p": 451817409.76,
+   "minority_gain": 148413266.72
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20250430",
+   "f_ann_date": "20250430",
+   "end_date": "20250331",
+   "report_type": "1",
+   "update_flag": "1",
+   "revenue": 3364638220.14,
+   "total_revenue": 3364638220.14,
+   "oper_cost": 2818295704.77,
+   "sell_exp": 37991263.32,
+   "admin_exp": 158349464.54,
+   "rd_exp": 99874815.31,
+   "fin_exp": -109567365.51,
+   "invest_income": 13961972.27,
+   "fv_value_chg_gain": -79971505.24,
+   "forex_gain": null,
+   "assets_impair_loss": 670325.98,
+   "oth_b_income": null,
+   "non_oper_income": 581859.28,
+   "nca_disploss": null,
+   "total_profit": 280920055.37,
+   "income_tax": 53016070.71,
+   "n_income": 227903984.66,
+   "n_income_attr_p": 178929169.49,
+   "minority_gain": 48974815.17
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20250425",
+   "f_ann_date": "20250425",
+   "end_date": "20241231",
+   "report_type": "1",
+   "update_flag": "1",
+   "revenue": 14827166508.53,
+   "total_revenue": 14827166508.53,
+   "oper_cost": 12309595718.71,
+   "sell_exp": 170667347.64,
+   "admin_exp": 595888766.5,
+   "rd_exp": 423242226.7,
+   "fin_exp": -113304810.7,
+   "invest_income": 43848318.04,
+   "fv_value_chg_gain": -44884597.62,
+   "forex_gain": null,
+   "assets_impair_loss": -85457861.59,
+   "oth_b_income": null,
+   "non_oper_income": 52535416.24,
+   "nca_disploss": null,
+   "total_profit": 1284925575.76,
+   "income_tax": 197421189.55,
+   "n_income": 1087504386.21,
+   "n_income_attr_p": 930345572.18,
+   "minority_gain": 157158814.03
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20241030",
+   "f_ann_date": "20241030",
+   "end_date": "20240930",
+   "report_type": "1",
+   "update_flag": "1",
+   "revenue": 10851685615.18,
+   "total_revenue": 10851685615.18,
+   "oper_cost": 9050149606.38,
+   "sell_exp": 106036593.6,
+   "admin_exp": 458286253.29,
+   "rd_exp": 255586652.19,
+   "fin_exp": -27767553.02,
+   "invest_income": 13462111.29,
+   "fv_value_chg_gain": 27043854.54,
+   "forex_gain": null,
+   "assets_impair_loss": -18855540.02,
+   "oth_b_income": null,
+   "non_oper_income": 17398611.66,
+   "nca_disploss": null,
+   "total_profit": 968034413.01,
+   "income_tax": 155914601.34,
+   "n_income": 812119811.67,
+   "n_income_attr_p": 661378001.23,
+   "minority_gain": 150741810.44
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20241030",
+   "f_ann_date": "20241030",
+   "end_date": "20240930",
+   "report_type": "1",
+   "update_flag": "0",
+   "revenue": 10851685615.18,
+   "total_revenue": 10851685615.18,
+   "oper_cost": 9050149606.38,
+   "sell_exp": 106036593.6,
+   "admin_exp": 458286253.29,
+   "rd_exp": 255586652.19,
+   "fin_exp": -27767553.02,
+   "invest_income": 13462111.29,
+   "fv_value_chg_gain": 27043854.54,
+   "forex_gain": null,
+   "assets_impair_loss": -18855540.02,
+   "oth_b_income": null,
+   "non_oper_income": 17398611.66,
+   "nca_disploss": null,
+   "total_profit": 968034413.01,
+   "income_tax": 155914601.34,
+   "n_income": 812119811.67,
+   "n_income_attr_p": 661378001.23,
+   "minority_gain": 150741810.44
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20240830",
+   "f_ann_date": "20240830",
+   "end_date": "20240630",
+   "report_type": "1",
+   "update_flag": "1",
+   "revenue": 7054564140.96,
+   "total_revenue": 7054564140.96,
+   "oper_cost": 5876509371.66,
+   "sell_exp": 60795240.42,
+   "admin_exp": 304375917.27,
+   "rd_exp": 177476592.13,
+   "fin_exp": 53672479.89,
+   "invest_income": 10017323.17,
+   "fv_value_chg_gain": 41426016.85,
+   "forex_gain": null,
+   "assets_impair_loss": -2006927.94,
+   "oth_b_income": null,
+   "non_oper_income": 12344081.85,
+   "nca_disploss": null,
+   "total_profit": 572220594.71,
+   "income_tax": 103770133.0,
+   "n_income": 468450461.71,
+   "n_income_attr_p": 360316903.43,
+   "minority_gain": 108133558.28
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20240430",
+   "f_ann_date": "20240430",
+   "end_date": "20240331",
+   "report_type": "1",
+   "update_flag": "1",
+   "revenue": 3126379017.67,
+   "total_revenue": 3126379017.67,
+   "oper_cost": 2607401369.02,
+   "sell_exp": 27373345.78,
+   "admin_exp": 144929111.22,
+   "rd_exp": 88784638.0,
+   "fin_exp": 31395698.22,
+   "invest_income": -3034773.02,
+   "fv_value_chg_gain": 8085710.89,
+   "forex_gain": null,
+   "assets_impair_loss": -1452528.96,
+   "oth_b_income": null,
+   "non_oper_income": 1367088.74,
+   "nca_disploss": null,
+   "total_profit": 218284380.94,
+   "income_tax": 44734269.05,
+   "n_income": 173550111.89,
+   "n_income_attr_p": 121793821.59,
+   "minority_gain": 51756290.3
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20240411",
+   "f_ann_date": "20240411",
+   "end_date": "20231231",
+   "report_type": "1",
+   "update_flag": "1",
+   "revenue": 14264648386.89,
+   "total_revenue": 14264648386.89,
+   "oper_cost": 11890180974.97,
+   "sell_exp": 130966262.52,
+   "admin_exp": 572056493.65,
+   "rd_exp": 362019207.03,
+   "fin_exp": 19995785.72,
+   "invest_income": 37918965.0,
+   "fv_value_chg_gain": -16307800.93,
+   "forex_gain": null,
+   "assets_impair_loss": -231735928.78,
+   "oth_b_income": null,
+   "non_oper_income": 31868868.78,
+   "nca_disploss": null,
+   "total_profit": 991128285.78,
+   "income_tax": 166719437.92,
+   "n_income": 824408847.86,
+   "n_income_attr_p": 644601244.53,
+   "minority_gain": 179807603.33
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20231027",
+   "f_ann_date": "20231027",
+   "end_date": "20230930",
+   "report_type": "1",
+   "update_flag": "1",
+   "revenue": 10971402550.2,
+   "total_revenue": 10971402550.2,
+   "oper_cost": 9359307077.04,
+   "sell_exp": 88119355.78,
+   "admin_exp": 465519266.79,
+   "rd_exp": 244581179.34,
+   "fin_exp": 79705624.74,
+   "invest_income": 18830498.79,
+   "fv_value_chg_gain": -33466322.45,
+   "forex_gain": null,
+   "assets_impair_loss": -15288858.75,
+   "oth_b_income": null,
+   "non_oper_income": 9879560.69,
+   "nca_disploss": null,
+   "total_profit": 704297779.67,
+   "income_tax": 140162407.62,
+   "n_income": 564135372.05,
+   "n_income_attr_p": 446520821.17,
+   "minority_gain": 117614550.88
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20230830",
+   "f_ann_date": "20230830",
+   "end_date": "20230630",
+   "report_type": "1",
+   "update_flag": "1",
+   "revenue": 7740568953.87,
+   "total_revenue": 7740568953.87,
+   "oper_cost": 6658737993.87,
+   "sell_exp": 60255786.15,
+   "admin_exp": 299568503.56,
+   "rd_exp": 173204370.18,
+   "fin_exp": 9113834.03,
+   "invest_income": -3766613.23,
+   "fv_value_chg_gain": -64207968.73,
+   "forex_gain": null,
+   "assets_impair_loss": -3605626.86,
+   "oth_b_income": null,
+   "non_oper_income": 1123297.29,
+   "nca_disploss": null,
+   "total_profit": 463386506.17,
+   "income_tax": 97083384.27,
+   "n_income": 366303121.9,
+   "n_income_attr_p": 296838347.28,
+   "minority_gain": 69464774.62
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20230429",
+   "f_ann_date": "20230429",
+   "end_date": "20230331",
+   "report_type": "1",
+   "update_flag": "1",
+   "revenue": 3933775539.21,
+   "total_revenue": 3933775539.21,
+   "oper_cost": 3511012486.14,
+   "sell_exp": 23437149.77,
+   "admin_exp": 129587702.66,
+   "rd_exp": 87981677.84,
+   "fin_exp": -4828131.77,
+   "invest_income": -13515150.47,
+   "fv_value_chg_gain": -16036206.49,
+   "forex_gain": null,
+   "assets_impair_loss": -1139.75,
+   "oth_b_income": null,
+   "non_oper_income": 870182.45,
+   "nca_disploss": null,
+   "total_profit": 149100330.35,
+   "income_tax": 26247890.81,
+   "n_income": 122852439.54,
+   "n_income_attr_p": 101012991.01,
+   "minority_gain": 21839448.53
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20230421",
+   "f_ann_date": "20230421",
+   "end_date": "20221231",
+   "report_type": "1",
+   "update_flag": "1",
+   "revenue": 16118375162.38,
+   "total_revenue": 16118375162.38,
+   "oper_cost": 14181643369.1,
+   "sell_exp": 81332612.1,
+   "admin_exp": 568939093.61,
+   "rd_exp": 312947869.09,
+   "fin_exp": -426802818.46,
+   "invest_income": 141164939.36,
+   "fv_value_chg_gain": -588539731.75,
+   "forex_gain": null,
+   "assets_impair_loss": -126124886.17,
+   "oth_b_income": null,
+   "non_oper_income": 2150465.93,
+   "nca_disploss": null,
+   "total_profit": 807818894.33,
+   "income_tax": 119031610.96,
+   "n_income": 688787283.37,
+   "n_income_attr_p": 659052805.91,
+   "minority_gain": 29734477.46
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20221028",
+   "f_ann_date": "20221028",
+   "end_date": "20220930",
+   "report_type": "1",
+   "update_flag": "1",
+   "revenue": 12012026889.69,
+   "total_revenue": 12012026889.69,
+   "oper_cost": 10661279733.75,
+   "sell_exp": 78053018.68,
+   "admin_exp": 373690608.38,
+   "rd_exp": 224715953.44,
+   "fin_exp": -498141367.04,
+   "invest_income": 145452132.04,
+   "fv_value_chg_gain": -622520541.43,
+   "forex_gain": null,
+   "assets_impair_loss": -1394076.59,
+   "oth_b_income": null,
+   "non_oper_income": 1885613.27,
+   "nca_disploss": null,
+   "total_profit": 700578927.51,
+   "income_tax": 119587418.68,
+   "n_income": 580991508.83,
+   "n_income_attr_p": 575372352.42,
+   "minority_gain": 5619156.41
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20220826",
+   "f_ann_date": "20220826",
+   "end_date": "20220630",
+   "report_type": "1",
+   "update_flag": "1",
+   "revenue": 7551628982.81,
+   "total_revenue": 7551628982.81,
+   "oper_cost": 6819632193.04,
+   "sell_exp": 38119344.26,
+   "admin_exp": 284698583.0,
+   "rd_exp": 166844813.85,
+   "fin_exp": -491131610.25,
+   "invest_income": 128823529.7,
+   "fv_value_chg_gain": -320368700.86,
+   "forex_gain": null,
+   "assets_impair_loss": -466627.02,
+   "oth_b_income": null,
+   "non_oper_income": 939837.86,
+   "nca_disploss": null,
+   "total_profit": 552431281.59,
+   "income_tax": 91891766.63,
+   "n_income": 460539514.96,
+   "n_income_attr_p": 455661304.59,
+   "minority_gain": 4878210.37
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20220430",
+   "f_ann_date": "20220430",
+   "end_date": "20220331",
+   "report_type": "1",
+   "update_flag": "1",
+   "revenue": 3650790157.67,
+   "total_revenue": 3650790157.67,
+   "oper_cost": 3350817100.61,
+   "sell_exp": 31779243.66,
+   "admin_exp": 125307856.99,
+   "rd_exp": 82805157.92,
+   "fin_exp": -211503166.25,
+   "invest_income": 890686.9,
+   "fv_value_chg_gain": 28523537.45,
+   "forex_gain": null,
+   "assets_impair_loss": null,
+   "oth_b_income": null,
+   "non_oper_income": 310379.72,
+   "nca_disploss": null,
+   "total_profit": 304872885.3,
+   "income_tax": 56012168.14,
+   "n_income": 248860717.16,
+   "n_income_attr_p": 242209458.98,
+   "minority_gain": 6651258.18
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20220421",
+   "f_ann_date": "20220421",
+   "end_date": "20211231",
+   "report_type": "1",
+   "update_flag": "1",
+   "revenue": 16488253175.97,
+   "total_revenue": 16488253175.97,
+   "oper_cost": 14898335355.79,
+   "sell_exp": 69785695.89,
+   "admin_exp": 628140916.72,
+   "rd_exp": 310326547.06,
+   "fin_exp": -29237756.61,
+   "invest_income": -5134611.33,
+   "fv_value_chg_gain": 314635023.47,
+   "forex_gain": null,
+   "assets_impair_loss": -25967125.51,
+   "oth_b_income": null,
+   "non_oper_income": 4110984.36,
+   "nca_disploss": null,
+   "total_profit": 1023367407.9,
+   "income_tax": 189304282.88,
+   "n_income": 834063125.02,
+   "n_income_attr_p": 775394154.82,
+   "minority_gain": 58668970.2
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20220421",
+   "f_ann_date": "20220421",
+   "end_date": "20211231",
+   "report_type": "1",
+   "update_flag": "0",
+   "revenue": 16488253175.97,
+   "total_revenue": 16488253175.97,
+   "oper_cost": 14898335355.79,
+   "sell_exp": 69785695.89,
+   "admin_exp": 628140916.72,
+   "rd_exp": 310326547.06,
+   "fin_exp": -29237756.61,
+   "invest_income": -5134611.33,
+   "fv_value_chg_gain": 314635023.47,
+   "forex_gain": null,
+   "assets_impair_loss": -25967125.51,
+   "oth_b_income": null,
+   "non_oper_income": 4110984.36,
+   "nca_disploss": null,
+   "total_profit": 1023367407.9,
+   "income_tax": 189304282.88,
+   "n_income": 834063125.02,
+   "n_income_attr_p": 775394154.82,
+   "minority_gain": 58668970.2
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20211028",
+   "f_ann_date": "20211028",
+   "end_date": "20210930",
+   "report_type": "1",
+   "update_flag": "1",
+   "revenue": 12267669423.97,
+   "total_revenue": 12267669423.97,
+   "oper_cost": 11208395192.68,
+   "sell_exp": 81879244.07,
+   "admin_exp": 411050613.82,
+   "rd_exp": 205176176.99,
+   "fin_exp": 30058661.5,
+   "invest_income": 20098350.22,
+   "fv_value_chg_gain": 328501960.1,
+   "forex_gain": null,
+   "assets_impair_loss": 2967771.46,
+   "oth_b_income": null,
+   "non_oper_income": 4156985.96,
+   "nca_disploss": null,
+   "total_profit": 737569990.07,
+   "income_tax": 159930560.43,
+   "n_income": 577639429.64,
+   "n_income_attr_p": 516874581.63,
+   "minority_gain": 60764848.01
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20210826",
+   "f_ann_date": "20210826",
+   "end_date": "20210630",
+   "report_type": "1",
+   "update_flag": "1",
+   "revenue": 7955019954.21,
+   "total_revenue": 7955019954.21,
+   "oper_cost": 7211554703.52,
+   "sell_exp": 57486399.0,
+   "admin_exp": 317267585.09,
+   "rd_exp": 151436328.39,
+   "fin_exp": 49576909.43,
+   "invest_income": 5785698.71,
+   "fv_value_chg_gain": 218568298.76,
+   "forex_gain": null,
+   "assets_impair_loss": 2971505.46,
+   "oth_b_income": null,
+   "non_oper_income": 2774968.16,
+   "nca_disploss": null,
+   "total_profit": 425206920.88,
+   "income_tax": 104447829.15,
+   "n_income": 320759091.73,
+   "n_income_attr_p": 273087154.78,
+   "minority_gain": 47671936.95
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20210430",
+   "f_ann_date": "20210430",
+   "end_date": "20210331",
+   "report_type": "1",
+   "update_flag": "1",
+   "revenue": 3826694970.47,
+   "total_revenue": 3826694970.47,
+   "oper_cost": 3528965365.63,
+   "sell_exp": 27830652.87,
+   "admin_exp": 98728235.27,
+   "rd_exp": 64151767.91,
+   "fin_exp": 222274062.79,
+   "invest_income": 2090991.06,
+   "fv_value_chg_gain": 392797736.29,
+   "forex_gain": null,
+   "assets_impair_loss": null,
+   "oth_b_income": null,
+   "non_oper_income": 831981.54,
+   "nca_disploss": null,
+   "total_profit": 288545999.3,
+   "income_tax": 57991639.54,
+   "n_income": 230554359.76,
+   "n_income_attr_p": 200112361.34,
+   "minority_gain": 30441998.42
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20210430",
+   "f_ann_date": "20210430",
+   "end_date": "20201231",
+   "report_type": "1",
+   "update_flag": "0",
+   "revenue": 14967234846.43,
+   "total_revenue": 14967234846.43,
+   "oper_cost": 13271458293.82,
+   "sell_exp": 82425127.05,
+   "admin_exp": 473768439.9,
+   "rd_exp": 255116919.67,
+   "fin_exp": 270608466.68,
+   "invest_income": 259383871.64,
+   "fv_value_chg_gain": 253253607.49,
+   "forex_gain": null,
+   "assets_impair_loss": -31358192.77,
+   "oth_b_income": null,
+   "non_oper_income": 3895509.68,
+   "nca_disploss": null,
+   "total_profit": 1119886949.09,
+   "income_tax": 166799309.35,
+   "n_income": 953087639.74,
+   "n_income_attr_p": 857132642.21,
+   "minority_gain": 95954997.53
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20210430",
+   "f_ann_date": "20210430",
+   "end_date": "20201231",
+   "report_type": "1",
+   "update_flag": "1",
+   "revenue": 14967234846.43,
+   "total_revenue": 14967234846.43,
+   "oper_cost": 13271458293.82,
+   "sell_exp": 82425127.05,
+   "admin_exp": 473768439.9,
+   "rd_exp": 255116919.67,
+   "fin_exp": 270608466.68,
+   "invest_income": 259383871.64,
+   "fv_value_chg_gain": 253253607.49,
+   "forex_gain": null,
+   "assets_impair_loss": -31358192.77,
+   "oth_b_income": null,
+   "non_oper_income": 3895509.68,
+   "nca_disploss": null,
+   "total_profit": 1119886949.09,
+   "income_tax": 166799309.35,
+   "n_income": 953087639.74,
+   "n_income_attr_p": 857132642.21,
+   "minority_gain": 95954997.53
+  }
+ ],
+ "cashflow_c": [
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20261030",
+   "f_ann_date": "20261030",
+   "end_date": "20260930",
+   "report_type": "1",
+   "update_flag": "0",
+   "n_cashflow_act": -289598784.22,
+   "c_pay_acq_const_fiolta": 760683008.6
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20260826",
+   "f_ann_date": "20260826",
+   "end_date": "20260630",
+   "report_type": "1",
+   "update_flag": "1",
+   "n_cashflow_act": 117896779.98,
+   "c_pay_acq_const_fiolta": 545563447.76
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20260826",
+   "f_ann_date": "20260826",
+   "end_date": "20260630",
+   "report_type": "1",
+   "update_flag": "0",
+   "n_cashflow_act": 117896779.98,
+   "c_pay_acq_const_fiolta": 545563447.76
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20260429",
+   "f_ann_date": "20260429",
+   "end_date": "20260331",
+   "report_type": "1",
+   "update_flag": "1",
+   "n_cashflow_act": 114111396.48,
+   "c_pay_acq_const_fiolta": 384983693.87
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20260429",
+   "f_ann_date": "20260429",
+   "end_date": "20260331",
+   "report_type": "1",
+   "update_flag": "0",
+   "n_cashflow_act": 114111396.48,
+   "c_pay_acq_const_fiolta": 384983693.87
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20260429",
+   "f_ann_date": "20260429",
+   "end_date": "20251231",
+   "report_type": "1",
+   "update_flag": "1",
+   "n_cashflow_act": 1764618556.72,
+   "c_pay_acq_const_fiolta": 1220286986.32
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20251030",
+   "f_ann_date": "20251030",
+   "end_date": "20250930",
+   "report_type": "1",
+   "update_flag": "1",
+   "n_cashflow_act": 2033492584.88,
+   "c_pay_acq_const_fiolta": 883298706.08
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20251030",
+   "f_ann_date": "20251030",
+   "end_date": "20250930",
+   "report_type": "1",
+   "update_flag": "0",
+   "n_cashflow_act": 2033492584.88,
+   "c_pay_acq_const_fiolta": 883298706.08
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20250828",
+   "f_ann_date": "20250828",
+   "end_date": "20250630",
+   "report_type": "1",
+   "update_flag": "1",
+   "n_cashflow_act": 1456332557.47,
+   "c_pay_acq_const_fiolta": 556542734.07
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20250430",
+   "f_ann_date": "20250430",
+   "end_date": "20250331",
+   "report_type": "1",
+   "update_flag": "1",
+   "n_cashflow_act": 668618332.05,
+   "c_pay_acq_const_fiolta": 380090320.27
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20250430",
+   "f_ann_date": "20250430",
+   "end_date": "20250331",
+   "report_type": "1",
+   "update_flag": "0",
+   "n_cashflow_act": 668618332.05,
+   "c_pay_acq_const_fiolta": 380090320.27
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20250425",
+   "f_ann_date": "20250425",
+   "end_date": "20241231",
+   "report_type": "1",
+   "update_flag": "1",
+   "n_cashflow_act": 2428401907.74,
+   "c_pay_acq_const_fiolta": 1431716950.91
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20241030",
+   "f_ann_date": "20241030",
+   "end_date": "20240930",
+   "report_type": "1",
+   "update_flag": "1",
+   "n_cashflow_act": 1917497482.96,
+   "c_pay_acq_const_fiolta": 1296251442.98
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20241030",
+   "f_ann_date": "20241030",
+   "end_date": "20240930",
+   "report_type": "1",
+   "update_flag": "0",
+   "n_cashflow_act": 1917497482.96,
+   "c_pay_acq_const_fiolta": 1296251442.98
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20240830",
+   "f_ann_date": "20240830",
+   "end_date": "20240630",
+   "report_type": "1",
+   "update_flag": "1",
+   "n_cashflow_act": 1353705517.3,
+   "c_pay_acq_const_fiolta": 757203934.75
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20240430",
+   "f_ann_date": "20240430",
+   "end_date": "20240331",
+   "report_type": "1",
+   "update_flag": "1",
+   "n_cashflow_act": 452284899.16,
+   "c_pay_acq_const_fiolta": 417577120.37
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20240430",
+   "f_ann_date": "20240430",
+   "end_date": "20240331",
+   "report_type": "1",
+   "update_flag": "0",
+   "n_cashflow_act": 452284899.16,
+   "c_pay_acq_const_fiolta": 417577120.37
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20240411",
+   "f_ann_date": "20240411",
+   "end_date": "20231231",
+   "report_type": "1",
+   "update_flag": "1",
+   "n_cashflow_act": 2002232683.5,
+   "c_pay_acq_const_fiolta": 1086611608.96
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20231027",
+   "f_ann_date": "20231027",
+   "end_date": "20230930",
+   "report_type": "1",
+   "update_flag": "1",
+   "n_cashflow_act": 790814110.97,
+   "c_pay_acq_const_fiolta": 906182118.33
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20231027",
+   "f_ann_date": "20231027",
+   "end_date": "20230930",
+   "report_type": "1",
+   "update_flag": "0",
+   "n_cashflow_act": 790814110.97,
+   "c_pay_acq_const_fiolta": 906182118.33
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20230830",
+   "f_ann_date": "20230830",
+   "end_date": "20230630",
+   "report_type": "1",
+   "update_flag": "1",
+   "n_cashflow_act": 1550099162.44,
+   "c_pay_acq_const_fiolta": 709393133.53
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20230429",
+   "f_ann_date": "20230429",
+   "end_date": "20230331",
+   "report_type": "1",
+   "update_flag": "1",
+   "n_cashflow_act": 512120752.57,
+   "c_pay_acq_const_fiolta": 362121977.91
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20230429",
+   "f_ann_date": "20230429",
+   "end_date": "20230331",
+   "report_type": "1",
+   "update_flag": "0",
+   "n_cashflow_act": 512120752.57,
+   "c_pay_acq_const_fiolta": 362121977.91
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20230421",
+   "f_ann_date": "20230421",
+   "end_date": "20221231",
+   "report_type": "1",
+   "update_flag": "1",
+   "n_cashflow_act": 895695279.53,
+   "c_pay_acq_const_fiolta": 1884516050.39
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20230421",
+   "f_ann_date": "20230421",
+   "end_date": "20221231",
+   "report_type": "1",
+   "update_flag": "0",
+   "n_cashflow_act": 895695279.53,
+   "c_pay_acq_const_fiolta": 1884516050.39
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20221028",
+   "f_ann_date": "20221028",
+   "end_date": "20220930",
+   "report_type": "1",
+   "update_flag": "1",
+   "n_cashflow_act": 967731229.89,
+   "c_pay_acq_const_fiolta": 1511966339.71
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20220826",
+   "f_ann_date": "20220826",
+   "end_date": "20220630",
+   "report_type": "1",
+   "update_flag": "1",
+   "n_cashflow_act": -106331914.21,
+   "c_pay_acq_const_fiolta": 868257748.59
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20220430",
+   "f_ann_date": "20220430",
+   "end_date": "20220331",
+   "report_type": "1",
+   "update_flag": "1",
+   "n_cashflow_act": -791130977.27,
+   "c_pay_acq_const_fiolta": 456515059.74
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20220421",
+   "f_ann_date": "20220421",
+   "end_date": "20211231",
+   "report_type": "1",
+   "update_flag": "1",
+   "n_cashflow_act": 867605722.02,
+   "c_pay_acq_const_fiolta": 2830414152.67
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20220421",
+   "f_ann_date": "20220421",
+   "end_date": "20211231",
+   "report_type": "1",
+   "update_flag": "0",
+   "n_cashflow_act": 867605722.02,
+   "c_pay_acq_const_fiolta": 2830414152.67
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20211028",
+   "f_ann_date": "20211028",
+   "end_date": "20210930",
+   "report_type": "1",
+   "update_flag": "1",
+   "n_cashflow_act": 64569286.54,
+   "c_pay_acq_const_fiolta": 1757910696.38
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20210826",
+   "f_ann_date": "20210826",
+   "end_date": "20210630",
+   "report_type": "1",
+   "update_flag": "1",
+   "n_cashflow_act": 78166837.78,
+   "c_pay_acq_const_fiolta": 1002383577.79
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20210430",
+   "f_ann_date": "20210430",
+   "end_date": "20210331",
+   "report_type": "1",
+   "update_flag": "1",
+   "n_cashflow_act": -179702844.79,
+   "c_pay_acq_const_fiolta": 392253940.11
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20210430",
+   "f_ann_date": "20210430",
+   "end_date": "20201231",
+   "report_type": "1",
+   "update_flag": "0",
+   "n_cashflow_act": 3122476019.87,
+   "c_pay_acq_const_fiolta": 1942442456.73
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20210430",
+   "f_ann_date": "20210430",
+   "end_date": "20201231",
+   "report_type": "1",
+   "update_flag": "1",
+   "n_cashflow_act": 3122476019.87,
+   "c_pay_acq_const_fiolta": 1942442456.73
+  }
+ ],
+ "balance": [
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20261030",
+   "f_ann_date": "20261030",
+   "end_date": "20260930",
+   "report_type": "1",
+   "update_flag": "1",
+   "accounts_receiv": 5029063773.87,
+   "notes_receiv": 48981953.3,
+   "inventories": 4313534312.5,
+   "contract_liab": 190804122.84,
+   "adv_receipts": 104000805.5,
+   "st_borr": 10648339768.89,
+   "lt_borr": 110450935.0,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 17252838.39,
+   "money_cap": 13925410800.43,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 13717930062.11
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20261030",
+   "f_ann_date": "20261030",
+   "end_date": "20260930",
+   "report_type": "1",
+   "update_flag": "0",
+   "accounts_receiv": 5029063773.87,
+   "notes_receiv": 48981953.3,
+   "inventories": 4313534312.5,
+   "contract_liab": 190804122.84,
+   "adv_receipts": 104000805.5,
+   "st_borr": 10648339768.89,
+   "lt_borr": 110450935.0,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 17252838.39,
+   "money_cap": 13925410800.43,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 13717930062.11
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20260826",
+   "f_ann_date": "20260826",
+   "end_date": "20260630",
+   "report_type": "1",
+   "update_flag": "1",
+   "accounts_receiv": 4604014482.63,
+   "notes_receiv": null,
+   "inventories": 3521808931.8,
+   "contract_liab": 182629044.17,
+   "adv_receipts": 69273858.81,
+   "st_borr": 8871055300.68,
+   "lt_borr": 114103960.0,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 18703676.52,
+   "money_cap": 10934614068.44,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 13318397022.03
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20260826",
+   "f_ann_date": "20260826",
+   "end_date": "20260630",
+   "report_type": "1",
+   "update_flag": "0",
+   "accounts_receiv": 4604014482.63,
+   "notes_receiv": null,
+   "inventories": 3521808931.8,
+   "contract_liab": 182629044.17,
+   "adv_receipts": 69273858.81,
+   "st_borr": 8871055300.68,
+   "lt_borr": 114103960.0,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 18703676.52,
+   "money_cap": 10934614068.44,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 13318397022.03
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20260429",
+   "f_ann_date": "20260429",
+   "end_date": "20260331",
+   "report_type": "1",
+   "update_flag": "1",
+   "accounts_receiv": 4239768356.55,
+   "notes_receiv": null,
+   "inventories": 2867407037.89,
+   "contract_liab": 145638487.46,
+   "adv_receipts": 76127309.98,
+   "st_borr": 5889941925.34,
+   "lt_borr": 106758814.79,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 27139364.43,
+   "money_cap": 8101201027.26,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 13360340570.17
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20260429",
+   "f_ann_date": "20260429",
+   "end_date": "20260331",
+   "report_type": "1",
+   "update_flag": "0",
+   "accounts_receiv": 4239768356.55,
+   "notes_receiv": null,
+   "inventories": 2867407037.89,
+   "contract_liab": 145638487.46,
+   "adv_receipts": 76127309.98,
+   "st_borr": 5889941925.34,
+   "lt_borr": 106758814.79,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 27139364.43,
+   "money_cap": 8101201027.26,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 13360340570.17
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20260429",
+   "f_ann_date": "20260429",
+   "end_date": "20251231",
+   "report_type": "1",
+   "update_flag": "0",
+   "accounts_receiv": 4249582366.92,
+   "notes_receiv": null,
+   "inventories": 2428301058.9,
+   "contract_liab": 169647299.97,
+   "adv_receipts": 55015399.53,
+   "st_borr": 5333157966.49,
+   "lt_borr": 110450935.0,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 29136023.53,
+   "money_cap": 6828043306.01,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 13096699266.25
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20251030",
+   "f_ann_date": "20251030",
+   "end_date": "20250930",
+   "report_type": "1",
+   "update_flag": "0",
+   "accounts_receiv": 3737585658.41,
+   "notes_receiv": 408000.86,
+   "inventories": 2441872337.55,
+   "contract_liab": 196718502.9,
+   "adv_receipts": 9795562.65,
+   "st_borr": 5847754438.68,
+   "lt_borr": 487719105.0,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 11453342.44,
+   "money_cap": 7913368510.98,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 12734791742.27
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20250828",
+   "f_ann_date": "20250828",
+   "end_date": "20250630",
+   "report_type": "1",
+   "update_flag": "0",
+   "accounts_receiv": 3853888548.61,
+   "notes_receiv": 408000.86,
+   "inventories": 2390026006.64,
+   "contract_liab": 337302956.85,
+   "adv_receipts": 34763565.47,
+   "st_borr": 6959848575.87,
+   "lt_borr": 447099119.56,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 510874823.57,
+   "money_cap": 9327662433.4,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 12326808386.55
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20250430",
+   "f_ann_date": "20250430",
+   "end_date": "20250331",
+   "report_type": "1",
+   "update_flag": "0",
+   "accounts_receiv": 3880130533.6,
+   "notes_receiv": 1342599.89,
+   "inventories": 2511143515.26,
+   "contract_liab": 408188844.91,
+   "adv_receipts": 40408488.63,
+   "st_borr": 6639661017.01,
+   "lt_borr": 1906181429.96,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 18957316.4,
+   "money_cap": 9664346620.95,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 12154361243.35
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20250425",
+   "f_ann_date": "20250425",
+   "end_date": "20241231",
+   "report_type": "1",
+   "update_flag": "0",
+   "accounts_receiv": 3936468718.61,
+   "notes_receiv": 6703045.72,
+   "inventories": 2629809717.77,
+   "contract_liab": 375726849.1,
+   "adv_receipts": 39829022.16,
+   "st_borr": 5191599900.99,
+   "lt_borr": 1887590000.0,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 707251848.32,
+   "money_cap": 7321946745.09,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 11876799194.96
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20241030",
+   "f_ann_date": "20241030",
+   "end_date": "20240930",
+   "report_type": "1",
+   "update_flag": "0",
+   "accounts_receiv": 3657262807.37,
+   "notes_receiv": 4165673.35,
+   "inventories": 2995234765.47,
+   "contract_liab": 646723351.49,
+   "adv_receipts": 45786869.77,
+   "st_borr": 7153384783.55,
+   "lt_borr": 1897900000.0,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 711420617.28,
+   "money_cap": 9030655493.21,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 11563875876.18
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20240830",
+   "f_ann_date": "20240830",
+   "end_date": "20240630",
+   "report_type": "1",
+   "update_flag": "0",
+   "accounts_receiv": 3440074803.04,
+   "notes_receiv": 1686000.0,
+   "inventories": 2877637493.51,
+   "contract_liab": 737913004.29,
+   "adv_receipts": 14391659.09,
+   "st_borr": 7199587506.83,
+   "lt_borr": 1898800000.0,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 709137793.4,
+   "money_cap": 9024398179.35,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 11041466324.3
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20240430",
+   "f_ann_date": "20240430",
+   "end_date": "20240331",
+   "report_type": "1",
+   "update_flag": "0",
+   "accounts_receiv": 3457422100.51,
+   "notes_receiv": 3159111.26,
+   "inventories": 3065069794.32,
+   "contract_liab": 848118106.61,
+   "adv_receipts": 8276298.06,
+   "st_borr": 7749297234.66,
+   "lt_borr": 1100601138.89,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 2290070515.98,
+   "money_cap": 9899705207.34,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 11009820246.35
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20240411",
+   "f_ann_date": "20240411",
+   "end_date": "20231231",
+   "report_type": "1",
+   "update_flag": "1",
+   "accounts_receiv": 3695047693.61,
+   "notes_receiv": 4047985.62,
+   "inventories": 3525859256.48,
+   "contract_liab": 753524743.67,
+   "adv_receipts": 8508378.47,
+   "st_borr": 5587243048.28,
+   "lt_borr": 1399060002.78,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 2003666896.41,
+   "money_cap": 7723299663.1,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 10962137542.77
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20240411",
+   "f_ann_date": "20240411",
+   "end_date": "20231231",
+   "report_type": "1",
+   "update_flag": "0",
+   "accounts_receiv": 3695047693.61,
+   "notes_receiv": 4047985.62,
+   "inventories": 3525859256.48,
+   "contract_liab": 753524743.67,
+   "adv_receipts": 8508378.47,
+   "st_borr": 5587243048.28,
+   "lt_borr": 1399060002.78,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 2003666896.41,
+   "money_cap": 7723299663.1,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 10962137542.77
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20231027",
+   "f_ann_date": "20231027",
+   "end_date": "20230930",
+   "report_type": "1",
+   "update_flag": "1",
+   "accounts_receiv": 3152667291.84,
+   "notes_receiv": 236287968.04,
+   "inventories": 3640990242.05,
+   "contract_liab": 868591931.59,
+   "adv_receipts": 36332211.44,
+   "st_borr": 6445813938.51,
+   "lt_borr": 2986746116.67,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 4648624.67,
+   "money_cap": 7307144458.79,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 10854109640.32
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20230830",
+   "f_ann_date": "20230830",
+   "end_date": "20230630",
+   "report_type": "1",
+   "update_flag": "1",
+   "accounts_receiv": 3118249868.18,
+   "notes_receiv": 132197983.6,
+   "inventories": 3354841691.38,
+   "contract_liab": 606312652.2,
+   "adv_receipts": 22755741.71,
+   "st_borr": 7829943077.21,
+   "lt_borr": 2500920388.89,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 330974979.92,
+   "money_cap": 9341262802.29,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 10407233264.63
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20230830",
+   "f_ann_date": "20230830",
+   "end_date": "20230630",
+   "report_type": "1",
+   "update_flag": "0",
+   "accounts_receiv": 3118249868.18,
+   "notes_receiv": 132197983.6,
+   "inventories": 3354841691.38,
+   "contract_liab": 606312652.2,
+   "adv_receipts": 22755741.71,
+   "st_borr": 7829943077.21,
+   "lt_borr": 2500920388.89,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 330974979.92,
+   "money_cap": 9341262802.29,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 10407233264.63
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20230429",
+   "f_ann_date": "20230429",
+   "end_date": "20230331",
+   "report_type": "1",
+   "update_flag": "1",
+   "accounts_receiv": 2951200454.68,
+   "notes_receiv": 57246776.07,
+   "inventories": 3715186915.68,
+   "contract_liab": 738230313.96,
+   "adv_receipts": 28791780.98,
+   "st_borr": 8117739763.3,
+   "lt_borr": 2501168830.56,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 342058030.22,
+   "money_cap": 8992786022.25,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 10401055647.32
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20230429",
+   "f_ann_date": "20230429",
+   "end_date": "20230331",
+   "report_type": "1",
+   "update_flag": "0",
+   "accounts_receiv": 2951200454.68,
+   "notes_receiv": 57246776.07,
+   "inventories": 3715186915.68,
+   "contract_liab": 738230313.96,
+   "adv_receipts": 28791780.98,
+   "st_borr": 8117739763.3,
+   "lt_borr": 2501168830.56,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 342058030.22,
+   "money_cap": 8992786022.25,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 10401055647.32
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20230421",
+   "f_ann_date": "20230421",
+   "end_date": "20221231",
+   "report_type": "1",
+   "update_flag": "1",
+   "accounts_receiv": 2674127604.3,
+   "notes_receiv": 70313391.5,
+   "inventories": 4522889446.08,
+   "contract_liab": 625114365.84,
+   "adv_receipts": 28330134.33,
+   "st_borr": 8682645693.02,
+   "lt_borr": 2001483185.42,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 342167623.08,
+   "money_cap": 8897166415.34,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 10318929498.82
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20230421",
+   "f_ann_date": "20230421",
+   "end_date": "20221231",
+   "report_type": "1",
+   "update_flag": "0",
+   "accounts_receiv": 2674127604.3,
+   "notes_receiv": 70313391.5,
+   "inventories": 4522889446.08,
+   "contract_liab": 625114365.84,
+   "adv_receipts": 28330134.33,
+   "st_borr": 8682645693.02,
+   "lt_borr": 2001483185.42,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 342167623.08,
+   "money_cap": 8897166415.34,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 10318929498.82
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20221028",
+   "f_ann_date": "20221028",
+   "end_date": "20220930",
+   "report_type": "1",
+   "update_flag": "0",
+   "accounts_receiv": 2923649558.11,
+   "notes_receiv": 5871540.12,
+   "inventories": 4977266744.37,
+   "contract_liab": 481641656.5,
+   "adv_receipts": 4801324.67,
+   "st_borr": 8820691455.7,
+   "lt_borr": 1999500000.0,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 352742179.22,
+   "money_cap": 8603165935.38,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 10301511758.3
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20220826",
+   "f_ann_date": "20220826",
+   "end_date": "20220630",
+   "report_type": "1",
+   "update_flag": "0",
+   "accounts_receiv": 2632645601.42,
+   "notes_receiv": 19081123.36,
+   "inventories": 4442293509.66,
+   "contract_liab": 491773090.25,
+   "adv_receipts": 2533455.06,
+   "st_borr": 10076326100.41,
+   "lt_borr": 2000000000.0,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 862742179.22,
+   "money_cap": 9920884708.82,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 10152188884.04
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20220430",
+   "f_ann_date": "20220430",
+   "end_date": "20220331",
+   "report_type": "1",
+   "update_flag": "0",
+   "accounts_receiv": 3221184028.61,
+   "notes_receiv": 17013406.39,
+   "inventories": 3984814843.52,
+   "contract_liab": 166042683.88,
+   "adv_receipts": 2791395.12,
+   "st_borr": 8811315146.61,
+   "lt_borr": 1130000000.0,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 1450000000.0,
+   "money_cap": 8176331641.19,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 10074116437.18
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20220421",
+   "f_ann_date": "20220421",
+   "end_date": "20211231",
+   "report_type": "1",
+   "update_flag": "0",
+   "accounts_receiv": 2772079902.57,
+   "notes_receiv": 16694684.66,
+   "inventories": 3545482786.56,
+   "contract_liab": 192803513.58,
+   "adv_receipts": 2314569.1,
+   "st_borr": 8141470490.59,
+   "lt_borr": 630000000.0,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": 1454800025.85,
+   "money_cap": 8545163850.1,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 9846917365.02
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20211028",
+   "f_ann_date": "20211028",
+   "end_date": "20210930",
+   "report_type": "1",
+   "update_flag": "1",
+   "accounts_receiv": 2757495095.6,
+   "notes_receiv": 36866299.84,
+   "inventories": 3150858538.0,
+   "contract_liab": 504580863.14,
+   "adv_receipts": 15561217.71,
+   "st_borr": 6844382791.34,
+   "lt_borr": 2090000000.0,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": null,
+   "money_cap": 7325803377.02,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 9476255135.97
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20211028",
+   "f_ann_date": "20211028",
+   "end_date": "20210930",
+   "report_type": "1",
+   "update_flag": "0",
+   "accounts_receiv": 2757495095.6,
+   "notes_receiv": 36866299.84,
+   "inventories": 3150858538.0,
+   "contract_liab": 504580863.14,
+   "adv_receipts": 15561217.71,
+   "st_borr": 6844382791.34,
+   "lt_borr": 2090000000.0,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": null,
+   "money_cap": 7325803377.02,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 9476255135.97
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20210826",
+   "f_ann_date": "20210826",
+   "end_date": "20210630",
+   "report_type": "1",
+   "update_flag": "0",
+   "accounts_receiv": 2730435159.76,
+   "notes_receiv": 45051722.72,
+   "inventories": 2487229293.89,
+   "contract_liab": 269432325.17,
+   "adv_receipts": 11537125.78,
+   "st_borr": 7700063726.28,
+   "lt_borr": 2100000000.0,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": null,
+   "money_cap": 8634645947.34,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 9138005045.01
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20210430",
+   "f_ann_date": "20210430",
+   "end_date": "20210331",
+   "report_type": "1",
+   "update_flag": "1",
+   "accounts_receiv": 2731813627.9,
+   "notes_receiv": 35026474.06,
+   "inventories": 2431583805.41,
+   "contract_liab": 15597516.38,
+   "adv_receipts": 8286645.95,
+   "st_borr": 7438697797.78,
+   "lt_borr": 2100000000.0,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": null,
+   "money_cap": 6798916044.67,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 7773427922.76
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20210430",
+   "f_ann_date": "20210430",
+   "end_date": "20201231",
+   "report_type": "1",
+   "update_flag": "0",
+   "accounts_receiv": 2926805378.96,
+   "notes_receiv": 27318122.42,
+   "inventories": 2367355677.16,
+   "contract_liab": 27556941.58,
+   "adv_receipts": 11501323.32,
+   "st_borr": 7775268255.36,
+   "lt_borr": 1850000000.0,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": null,
+   "money_cap": 7494030376.8,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 7584933624.26
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20210430",
+   "f_ann_date": "20210430",
+   "end_date": "20201231",
+   "report_type": "1",
+   "update_flag": "1",
+   "accounts_receiv": 2926805378.96,
+   "notes_receiv": 27318122.42,
+   "inventories": 2367355677.16,
+   "contract_liab": 27556941.58,
+   "adv_receipts": 11501323.32,
+   "st_borr": 7775268255.36,
+   "lt_borr": 1850000000.0,
+   "bond_payable": null,
+   "non_cur_liab_due_1y": null,
+   "money_cap": 7494030376.8,
+   "goodwill": 10313565.41,
+   "total_hldr_eqy_exc_min_int": 7584933624.26
+  }
+ ],
+ "indicator": [
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20261030",
+   "end_date": "20260930",
+   "update_flag": "0",
+   "profit_dedt": 808838963.8
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20260826",
+   "end_date": "20260630",
+   "update_flag": "1",
+   "profit_dedt": 504286284.31
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20260826",
+   "end_date": "20260630",
+   "update_flag": "0",
+   "profit_dedt": 504286284.31
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20260429",
+   "end_date": "20260331",
+   "update_flag": "1",
+   "profit_dedt": 142765477.92
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20260429",
+   "end_date": "20251231",
+   "update_flag": "1",
+   "profit_dedt": 967930805.0
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20251030",
+   "end_date": "20250930",
+   "update_flag": "1",
+   "profit_dedt": 576439580.83
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20251030",
+   "end_date": "20250930",
+   "update_flag": "0",
+   "profit_dedt": 576439580.83
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20250828",
+   "end_date": "20250630",
+   "update_flag": "1",
+   "profit_dedt": 317569007.26
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20250430",
+   "end_date": "20250331",
+   "update_flag": "1",
+   "profit_dedt": 124215262.69
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20250425",
+   "end_date": "20241231",
+   "update_flag": "1",
+   "profit_dedt": 900577554.08
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20241030",
+   "end_date": "20240930",
+   "update_flag": "1",
+   "profit_dedt": 617059789.4
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20241030",
+   "end_date": "20240930",
+   "update_flag": "0",
+   "profit_dedt": 617059789.4
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20240830",
+   "end_date": "20240630",
+   "update_flag": "1",
+   "profit_dedt": 344703931.96
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20240430",
+   "end_date": "20240331",
+   "update_flag": "1",
+   "profit_dedt": 104672588.71
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20240411",
+   "end_date": "20231231",
+   "update_flag": "1",
+   "profit_dedt": 673248839.38
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20231027",
+   "end_date": "20230930",
+   "update_flag": "1",
+   "profit_dedt": 374075875.68
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20230830",
+   "end_date": "20230630",
+   "update_flag": "1",
+   "profit_dedt": 265033483.91
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20230429",
+   "end_date": "20230331",
+   "update_flag": "1",
+   "profit_dedt": 87653500.06
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20230429",
+   "end_date": "20230331",
+   "update_flag": "0",
+   "profit_dedt": 87653500.06
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20230421",
+   "end_date": "20221231",
+   "update_flag": "1",
+   "profit_dedt": 652989746.8
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20230421",
+   "end_date": "20221231",
+   "update_flag": "0",
+   "profit_dedt": 652989746.8
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20221028",
+   "end_date": "20220930",
+   "update_flag": "1",
+   "profit_dedt": 612283453.03
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20221028",
+   "end_date": "20220930",
+   "update_flag": "0",
+   "profit_dedt": 612283453.03
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20220826",
+   "end_date": "20220630",
+   "update_flag": "1",
+   "profit_dedt": 229245669.66
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20220826",
+   "end_date": "20220630",
+   "update_flag": "0",
+   "profit_dedt": 229245669.66
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20220430",
+   "end_date": "20220331",
+   "update_flag": "1",
+   "profit_dedt": -20864045.61
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20220430",
+   "end_date": "20220331",
+   "update_flag": "0",
+   "profit_dedt": -20864045.61
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20220421",
+   "end_date": "20211231",
+   "update_flag": "1",
+   "profit_dedt": 307525753.47
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20220421",
+   "end_date": "20211231",
+   "update_flag": "0",
+   "profit_dedt": 307525753.47
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20211028",
+   "end_date": "20210930",
+   "update_flag": "1",
+   "profit_dedt": 147744627.26
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20211028",
+   "end_date": "20210930",
+   "update_flag": "0",
+   "profit_dedt": 147744627.26
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20210826",
+   "end_date": "20210630",
+   "update_flag": "1",
+   "profit_dedt": 68780338.12
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20210826",
+   "end_date": "20210630",
+   "update_flag": "0",
+   "profit_dedt": 68780338.12
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20210430",
+   "end_date": "20210331",
+   "update_flag": "1",
+   "profit_dedt": 64039750.58
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20210430",
+   "end_date": "20210331",
+   "update_flag": "0",
+   "profit_dedt": 64039750.58
+  }
+ ],
+ "audit": [
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20260429",
+   "end_date": "20251231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": 1380000.0,
+   "audit_agency": "大信会计师事务所",
+   "audit_sign": "龚荣华,韩士民"
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20250425",
+   "end_date": "20241231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": 1200000.0,
+   "audit_agency": "大信会计师事务所",
+   "audit_sign": "龚荣华,韩士民"
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20240411",
+   "end_date": "20231231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": 1440000.0,
+   "audit_agency": "大信会计师事务所",
+   "audit_sign": "龚荣华,韩士民"
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20230421",
+   "end_date": "20221231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": 1440000.0,
+   "audit_agency": "大信会计师事务所",
+   "audit_sign": "龚荣华,韩士民"
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20220421",
+   "end_date": "20211231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": 1560000.0,
+   "audit_agency": "立信会计师事务所",
+   "audit_sign": "章顺文,张嫣明"
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20210430",
+   "end_date": "20201231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": 1560000.0,
+   "audit_agency": "立信会计师事务所",
+   "audit_sign": "章顺文,张嫣明"
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20200424",
+   "end_date": "20191231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": 1360000.0,
+   "audit_agency": "立信会计师事务所",
+   "audit_sign": "章顺文,倪万杰"
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20190420",
+   "end_date": "20181231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": 1360000.0,
+   "audit_agency": "立信会计师事务所",
+   "audit_sign": "崔岩,何岚"
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20180412",
+   "end_date": "20171231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": 1671500.0,
+   "audit_agency": "立信会计师事务所",
+   "audit_sign": "崔岩,何岚"
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20170331",
+   "end_date": "20161231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": null,
+   "audit_agency": "立信会计师事务所",
+   "audit_sign": "何岚,崔岩"
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20160331",
+   "end_date": "20151231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": null,
+   "audit_agency": "信永中和会计师事务所",
+   "audit_sign": "罗玉成,王雅明"
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20150330",
+   "end_date": "20141231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": null,
+   "audit_agency": "信永中和会计师事务所",
+   "audit_sign": "罗玉成,王雅明"
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20140331",
+   "end_date": "20131231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": null,
+   "audit_agency": "信永中和会计师事务所",
+   "audit_sign": "罗玉成,王雅明"
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20130329",
+   "end_date": "20121231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": null,
+   "audit_agency": "信永中和会计师事务所",
+   "audit_sign": "谭小青,王雅明"
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20120330",
+   "end_date": "20111231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": null,
+   "audit_agency": "信永中和会计师事务所",
+   "audit_sign": "谭小青,王雅明"
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20110331",
+   "end_date": "20101231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": null,
+   "audit_agency": "信永中和会计师事务所",
+   "audit_sign": "谭小青,刘彦山"
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20100424",
+   "end_date": "20091231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": null,
+   "audit_agency": "信永中和会计师事务所",
+   "audit_sign": "谭小青,刘彦山"
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20090423",
+   "end_date": "20081231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": null,
+   "audit_agency": "信永中和会计师事务所",
+   "audit_sign": "谭小青,董秦川"
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20080419",
+   "end_date": "20071231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": null,
+   "audit_agency": "利安达信隆会计师事务所",
+   "audit_sign": "丁力,王远"
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20070822",
+   "end_date": "20070630",
+   "audit_result": "标准无保留意见",
+   "audit_fees": null,
+   "audit_agency": "利安达信隆会计师事务所",
+   "audit_sign": "王黎萍,王远"
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20070423",
+   "end_date": "20061231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": null,
+   "audit_agency": "利安达信隆会计师事务所",
+   "audit_sign": "王黎萍,王远"
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20060425",
+   "end_date": "20051231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": null,
+   "audit_agency": "深圳市鹏城会计师事务所有限公司",
+   "audit_sign": "王磊,崔志民"
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20050411",
+   "end_date": "20041231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": null,
+   "audit_agency": "深圳大华天诚会计师事务所",
+   "audit_sign": null
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20040426",
+   "end_date": "20031231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": null,
+   "audit_agency": "深圳南方民和会计师事务所有限责任公司",
+   "audit_sign": null
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20030424",
+   "end_date": "20021231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": null,
+   "audit_agency": "深圳南方民和会计师事务所",
+   "audit_sign": null
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20020412",
+   "end_date": "20011231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": null,
+   "audit_agency": "深圳南方民和会计师事务所有限责任公司",
+   "audit_sign": null
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20010302",
+   "end_date": "20001231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": null,
+   "audit_agency": "中天勤会计师事务所",
+   "audit_sign": null
+  },
+  {
+   "ts_code": "000021.SZ",
+   "ann_date": "20000427",
+   "end_date": "19991231",
+   "audit_result": "标准无保留意见",
+   "audit_fees": null,
+   "audit_agency": "深圳中天会计师事务所",
+   "audit_sign": null
+  }
+ ],
+ "forecast": [],
+ "express": [],
+ "disclosure": [],
+ "mainbz": [
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20260630",
+   "bz_item": "高端制造",
+   "bz_sales": 4722491313.18,
+   "bz_profit": 561913886.99,
+   "bz_cost": 4160577426.19
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20260630",
+   "bz_item": "计量智能终端",
+   "bz_sales": 1357132610.06,
+   "bz_profit": 492024951.34,
+   "bz_cost": 865107658.72
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20260630",
+   "bz_item": "存储半导体",
+   "bz_sales": 2138016090.05,
+   "bz_profit": 485716029.97,
+   "bz_cost": 1652300060.08
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20260630",
+   "bz_item": "其他业务",
+   "bz_sales": 60817157.1,
+   "bz_profit": 23427706.74,
+   "bz_cost": 37389450.36
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20260630",
+   "bz_item": "产品",
+   "bz_sales": 8278457170.39,
+   "bz_profit": 1563082575.04,
+   "bz_cost": 6715374595.35
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20251231",
+   "bz_item": "高端制造",
+   "bz_sales": 8535402038.94,
+   "bz_profit": 828404526.11,
+   "bz_cost": 7706997512.83
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20251231",
+   "bz_item": "计量智能终端",
+   "bz_sales": 3020599484.63,
+   "bz_profit": 1185826059.15,
+   "bz_cost": 1834773425.48
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20251231",
+   "bz_item": "存储半导体",
+   "bz_sales": 4090725850.3,
+   "bz_profit": 834709932.58,
+   "bz_cost": 3256015917.72
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20251231",
+   "bz_item": "其他业务",
+   "bz_sales": 100665718.63,
+   "bz_profit": 36584267.68,
+   "bz_cost": 64081450.95
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20251231",
+   "bz_item": "产品",
+   "bz_sales": 15747393092.5,
+   "bz_profit": 2885524785.52,
+   "bz_cost": 12861868306.98
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20250630",
+   "bz_item": "高端制造",
+   "bz_sales": 3909931885.25,
+   "bz_profit": 281571205.97,
+   "bz_cost": 3628360679.28
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20250630",
+   "bz_item": "计量智能终端",
+   "bz_sales": 1679277034.33,
+   "bz_profit": 642098646.5,
+   "bz_cost": 1037178387.83
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20250630",
+   "bz_item": "存储半导体业务",
+   "bz_sales": 2099600553.21,
+   "bz_profit": 284604803.71,
+   "bz_cost": 1814995749.5
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20250630",
+   "bz_item": "其他业务",
+   "bz_sales": 50843163.75,
+   "bz_profit": 10577580.26,
+   "bz_cost": 40265583.49
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20250630",
+   "bz_item": "产品",
+   "bz_sales": 7739652636.54,
+   "bz_profit": 1218852236.44,
+   "bz_cost": 6520800400.1
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20241231",
+   "bz_item": "高端制造",
+   "bz_sales": 8292420536.41,
+   "bz_profit": 708426363.9,
+   "bz_cost": 7583994172.51
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20241231",
+   "bz_item": "计量智能终端",
+   "bz_sales": 2935130329.72,
+   "bz_profit": 1055589881.1,
+   "bz_cost": 1879540448.62
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20241231",
+   "bz_item": "存储半导体",
+   "bz_sales": 3521643123.28,
+   "bz_profit": 748609031.32,
+   "bz_cost": 2773034091.96
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20241231",
+   "bz_item": "其他业务",
+   "bz_sales": 77972519.12,
+   "bz_profit": 4945513.5,
+   "bz_cost": 73027005.62
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20241231",
+   "bz_item": "产品",
+   "bz_sales": 14827166508.53,
+   "bz_profit": 2517570789.82,
+   "bz_cost": 12309595718.71
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20240630",
+   "bz_item": "高端制造",
+   "bz_sales": 3924624653.82,
+   "bz_profit": 265446029.41,
+   "bz_cost": 3659178624.41
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20240630",
+   "bz_item": "计量智能终端",
+   "bz_sales": 1318091364.49,
+   "bz_profit": 501329082.47,
+   "bz_cost": 816762282.02
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20240630",
+   "bz_item": "存储半导体业务",
+   "bz_sales": 1775879370.98,
+   "bz_profit": 395501961.43,
+   "bz_cost": 1380377409.55
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20240630",
+   "bz_item": "其他业务",
+   "bz_sales": 35968751.67,
+   "bz_profit": 15777695.99,
+   "bz_cost": 20191055.68
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20240630",
+   "bz_item": "产品",
+   "bz_sales": 7054564140.96,
+   "bz_profit": 1178054769.3,
+   "bz_cost": 5876509371.66
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20231231",
+   "bz_item": "高端制造",
+   "bz_sales": 9121674638.81,
+   "bz_profit": 981016930.88,
+   "bz_cost": 8140657707.93
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20231231",
+   "bz_item": "计量智能终端",
+   "bz_sales": 2544612430.18,
+   "bz_profit": 860618663.04,
+   "bz_cost": 1683993767.14
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20231231",
+   "bz_item": "存储半导体",
+   "bz_sales": 2558915387.43,
+   "bz_profit": 508139892.69,
+   "bz_cost": 2050775494.74
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20231231",
+   "bz_item": "其他业务",
+   "bz_sales": 39445930.47,
+   "bz_profit": 24691925.31,
+   "bz_cost": 14754005.16
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20231231",
+   "bz_item": "产品",
+   "bz_sales": 14264648386.89,
+   "bz_profit": 2374467411.92,
+   "bz_cost": 11890180974.97
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20230630",
+   "bz_item": "高端制造",
+   "bz_sales": 5038798417.08,
+   "bz_profit": 426522059.09,
+   "bz_cost": 4612276357.99
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20230630",
+   "bz_item": "计量智能终端",
+   "bz_sales": 1300169974.54,
+   "bz_profit": 416408162.43,
+   "bz_cost": 883761812.11
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20230630",
+   "bz_item": "存储半导体业务",
+   "bz_sales": 1358761721.76,
+   "bz_profit": 225471580.76,
+   "bz_cost": 1133290141.0
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20230630",
+   "bz_item": "其他业务",
+   "bz_sales": 42838840.49,
+   "bz_profit": 13429157.72,
+   "bz_cost": 29409682.77
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20230630",
+   "bz_item": "产品",
+   "bz_sales": 7740568953.87,
+   "bz_profit": 1081830960.0,
+   "bz_cost": 6658737993.87
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20221231",
+   "bz_item": "高端制造",
+   "bz_sales": 11594291795.78,
+   "bz_profit": 1128806951.85,
+   "bz_cost": 10465484843.93
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20221231",
+   "bz_item": "计量智能终端",
+   "bz_sales": 1794359654.98,
+   "bz_profit": 364019230.88,
+   "bz_cost": 1430340424.1
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20221231",
+   "bz_item": "存储半导体",
+   "bz_sales": 2647436590.77,
+   "bz_profit": 408256954.39,
+   "bz_cost": 2239179636.38
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20221231",
+   "bz_item": "其他业务",
+   "bz_sales": 82287120.85,
+   "bz_profit": 35648656.16,
+   "bz_cost": 46638464.69
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20221231",
+   "bz_item": "产品",
+   "bz_sales": 16118375162.38,
+   "bz_profit": 1936731793.28,
+   "bz_cost": 14181643369.1
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20220630",
+   "bz_item": "高端制造",
+   "bz_sales": 5309306003.12,
+   "bz_profit": 363341711.26,
+   "bz_cost": 4945964291.86
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20220630",
+   "bz_item": "计量智能终端",
+   "bz_sales": 639588612.3,
+   "bz_profit": 106251958.35,
+   "bz_cost": 533336653.95
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20220630",
+   "bz_item": "存储半导体业务",
+   "bz_sales": 1529421079.52,
+   "bz_profit": 214816417.01,
+   "bz_cost": 1314604662.51
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20220630",
+   "bz_item": "其他业务",
+   "bz_sales": 73313287.87,
+   "bz_profit": 47586703.15,
+   "bz_cost": 25726584.72
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20220630",
+   "bz_item": "产品",
+   "bz_sales": 7551628982.81,
+   "bz_profit": 731996789.77,
+   "bz_cost": 6819632193.04
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20211231",
+   "bz_item": "高端制造",
+   "bz_sales": 12143793313.39,
+   "bz_profit": 792100859.17,
+   "bz_cost": 11351692454.22
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20211231",
+   "bz_item": "计量智能终端",
+   "bz_sales": 1332201369.1,
+   "bz_profit": 293957556.77,
+   "bz_cost": 1038243812.33
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20211231",
+   "bz_item": "存储半导体业务",
+   "bz_sales": 2885459925.42,
+   "bz_profit": 466249947.32,
+   "bz_cost": 2419209978.1
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20211231",
+   "bz_item": "其他业务",
+   "bz_sales": 126798568.06,
+   "bz_profit": 37609456.92,
+   "bz_cost": 89189111.14
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20211231",
+   "bz_item": "产品",
+   "bz_sales": 16488253175.97,
+   "bz_profit": 1589917820.18,
+   "bz_cost": 14898335355.79
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20210630",
+   "bz_item": "高端制造",
+   "bz_sales": 5600344581.77,
+   "bz_profit": 292701630.18,
+   "bz_cost": 5307642951.59
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20210630",
+   "bz_item": "自有产品",
+   "bz_sales": 849913413.1,
+   "bz_profit": 229454018.21,
+   "bz_cost": 620459394.89
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20210630",
+   "bz_item": "存储半导体业务",
+   "bz_sales": 1400857066.72,
+   "bz_profit": 180834676.76,
+   "bz_cost": 1220022389.96
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20210630",
+   "bz_item": "其他业务",
+   "bz_sales": 103904892.62,
+   "bz_profit": 40474925.54,
+   "bz_cost": 63429967.08
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20210630",
+   "bz_item": "产品",
+   "bz_sales": 7955019954.21,
+   "bz_profit": 743465250.69,
+   "bz_cost": 7211554703.52
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20201231",
+   "bz_item": "高端制造",
+   "bz_sales": 10218382925.11,
+   "bz_profit": 624242956.27,
+   "bz_cost": 9594139968.84
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20201231",
+   "bz_item": "自有产品",
+   "bz_sales": 2128477754.97,
+   "bz_profit": 617238680.51,
+   "bz_cost": 1511239074.46
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20201231",
+   "bz_item": "存储半导体业务",
+   "bz_sales": 2361455768.82,
+   "bz_profit": 353828625.71,
+   "bz_cost": 2007627143.11
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20201231",
+   "bz_item": "其他业务",
+   "bz_sales": 258918397.53,
+   "bz_profit": 100466290.12,
+   "bz_cost": 158452107.41
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20201231",
+   "bz_item": "产品",
+   "bz_sales": 14967234846.43,
+   "bz_profit": 1695776552.61,
+   "bz_cost": 13271458293.82
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20200630",
+   "bz_item": "自有产品",
+   "bz_sales": 1073785568.94,
+   "bz_profit": 293064902.1,
+   "bz_cost": 780720666.84
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20200630",
+   "bz_item": "硬盘相关产品",
+   "bz_sales": 2047921673.19,
+   "bz_profit": 153361550.71,
+   "bz_cost": 1894560122.48
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20200630",
+   "bz_item": "其他业务",
+   "bz_sales": 143113903.83,
+   "bz_profit": 68328890.24,
+   "bz_cost": 74785013.59
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20200630",
+   "bz_item": "产品",
+   "bz_sales": 6952142724.63,
+   "bz_profit": 860025201.14,
+   "bz_cost": 6092117523.49
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20200630",
+   "bz_item": "OEM产品",
+   "bz_sales": 3687321578.67,
+   "bz_profit": 345269858.09,
+   "bz_cost": 3342051720.58
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20191231",
+   "bz_item": "自有产品",
+   "bz_sales": 1674480399.07,
+   "bz_profit": 493979675.17,
+   "bz_cost": 1180500723.9
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20191231",
+   "bz_item": "硬盘相关产品",
+   "bz_sales": 4081845672.51,
+   "bz_profit": 268228160.89,
+   "bz_cost": 3813617511.62
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20191231",
+   "bz_item": "其他",
+   "bz_sales": 79477879.33,
+   "bz_profit": 58088149.77,
+   "bz_cost": 21389729.56
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20191231",
+   "bz_item": "产品",
+   "bz_sales": 13223818815.08,
+   "bz_profit": 1260265390.02,
+   "bz_cost": 11963553425.06
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20191231",
+   "bz_item": "OEM产品",
+   "bz_sales": 7388014864.17,
+   "bz_profit": 439969404.19,
+   "bz_cost": 6948045459.98
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20190630",
+   "bz_item": "自有产品",
+   "bz_sales": 824525439.67,
+   "bz_profit": 203694619.43,
+   "bz_cost": 620830820.24
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20190630",
+   "bz_item": "硬盘相关产品",
+   "bz_sales": 1867211987.07,
+   "bz_profit": 118992033.1,
+   "bz_cost": 1748219953.97
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20190630",
+   "bz_item": "其他业务",
+   "bz_sales": 44233399.19,
+   "bz_profit": 16828642.06,
+   "bz_cost": 27404757.13
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20190630",
+   "bz_item": "产品",
+   "bz_sales": 6466509240.29,
+   "bz_profit": 534814548.56,
+   "bz_cost": 5931694691.73
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20190630",
+   "bz_item": "OEM产品",
+   "bz_sales": 3730538414.36,
+   "bz_profit": 195299253.97,
+   "bz_cost": 3535239160.39
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20181231",
+   "bz_item": "自有产品",
+   "bz_sales": 1275155797.96,
+   "bz_profit": 213932733.68,
+   "bz_cost": 1061223064.28
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20181231",
+   "bz_item": "硬盘相关产品",
+   "bz_sales": 4360830735.9,
+   "bz_profit": 311873113.91,
+   "bz_cost": 4048957621.99
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20181231",
+   "bz_item": "其他业务",
+   "bz_sales": 86966200.66,
+   "bz_profit": 29838734.4,
+   "bz_cost": 57127466.26
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20181231",
+   "bz_item": "产品",
+   "bz_sales": 16061005965.27,
+   "bz_profit": 754969343.86,
+   "bz_cost": 15306036621.41
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20181231",
+   "bz_item": "OEM产品",
+   "bz_sales": 10338053230.75,
+   "bz_profit": 199324761.87,
+   "bz_cost": 10138728468.88
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20180630",
+   "bz_item": "自有产品",
+   "bz_sales": 628114120.6,
+   "bz_profit": 119331142.99,
+   "bz_cost": 508782977.61
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20180630",
+   "bz_item": "硬盘相关产品",
+   "bz_sales": 2172944811.81,
+   "bz_profit": 131977417.46,
+   "bz_cost": 2040967394.35
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20180630",
+   "bz_item": "其他业务",
+   "bz_sales": 35935864.91,
+   "bz_profit": -1616227.42,
+   "bz_cost": 37552092.33
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20180630",
+   "bz_item": "产品",
+   "bz_sales": 8264991735.06,
+   "bz_profit": 327260370.21,
+   "bz_cost": 7937731364.85
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20180630",
+   "bz_item": "OEM产品",
+   "bz_sales": 5427996937.74,
+   "bz_profit": 77568037.18,
+   "bz_cost": 5350428900.56
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20171231",
+   "bz_item": "自有产品",
+   "bz_sales": 1168513200.02,
+   "bz_profit": 205181008.53,
+   "bz_cost": 963332191.49
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20171231",
+   "bz_item": "硬盘相关产品",
+   "bz_sales": 4498062247.61,
+   "bz_profit": 219681532.62,
+   "bz_cost": 4278380714.99
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20171231",
+   "bz_item": "其他业务",
+   "bz_sales": 40189177.58,
+   "bz_profit": 19736559.76,
+   "bz_cost": 20452617.82
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20171231",
+   "bz_item": "产品",
+   "bz_sales": 14209778550.46,
+   "bz_profit": 909110329.37,
+   "bz_cost": 13300668221.09
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20171231",
+   "bz_item": "OEM产品",
+   "bz_sales": 8503013925.25,
+   "bz_profit": 464511228.46,
+   "bz_cost": 8038502696.79
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20170630",
+   "bz_item": "自有产品",
+   "bz_sales": 532485732.87,
+   "bz_profit": 93931374.06,
+   "bz_cost": 438554358.81
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20170630",
+   "bz_item": "硬盘相关产品",
+   "bz_sales": 2482575413.29,
+   "bz_profit": 118723421.2,
+   "bz_cost": 2363851992.09
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20170630",
+   "bz_item": "其他业务",
+   "bz_sales": 49521518.93,
+   "bz_profit": 13225649.49,
+   "bz_cost": 36295869.44
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20170630",
+   "bz_item": "产品",
+   "bz_sales": 7186882218.68,
+   "bz_profit": 425606902.73,
+   "bz_cost": 6761275315.95
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20170630",
+   "bz_item": "OEM产品",
+   "bz_sales": 4122299553.59,
+   "bz_profit": 199726457.98,
+   "bz_cost": 3922573095.61
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20161231",
+   "bz_item": "自有产品",
+   "bz_sales": 700527158.03,
+   "bz_profit": 192805148.97,
+   "bz_cost": 507722009.06
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20161231",
+   "bz_item": "硬盘相关产品",
+   "bz_sales": 6475411476.46,
+   "bz_profit": 245764766.21,
+   "bz_cost": 6229646710.25
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20161231",
+   "bz_item": "其他业务",
+   "bz_sales": 48586310.42,
+   "bz_profit": 10713036.84,
+   "bz_cost": 37873273.58
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20161231",
+   "bz_item": "产品",
+   "bz_sales": 15069170534.44,
+   "bz_profit": 854714801.52,
+   "bz_cost": 14214455732.92
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20161231",
+   "bz_item": "OEM产品",
+   "bz_sales": 7844645589.53,
+   "bz_profit": 405431849.5,
+   "bz_cost": 7439213740.03
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20160630",
+   "bz_item": "自有产品",
+   "bz_sales": 298170345.59,
+   "bz_profit": 93131706.26,
+   "bz_cost": 205038639.33
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20160630",
+   "bz_item": "硬盘及相关产品",
+   "bz_sales": 2882446318.38,
+   "bz_profit": 97919689.72,
+   "bz_cost": 2784526628.66
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20160630",
+   "bz_item": "其他业务",
+   "bz_sales": 42629061.07,
+   "bz_profit": 6123293.58,
+   "bz_cost": 36505767.49
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20160630",
+   "bz_item": "产品",
+   "bz_sales": 6868763353.29,
+   "bz_profit": 356253163.96,
+   "bz_cost": 6512510189.33
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20160630",
+   "bz_item": "OEM产品",
+   "bz_sales": 3645517628.25,
+   "bz_profit": 159078474.4,
+   "bz_cost": 3486439153.85
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20151231",
+   "bz_item": "自有产品",
+   "bz_sales": 765964148.13,
+   "bz_profit": 219793007.68,
+   "bz_cost": 546171140.45
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20151231",
+   "bz_item": "硬盘相关产品",
+   "bz_sales": 6773443340.97,
+   "bz_profit": 195645747.82,
+   "bz_cost": 6577797593.15
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20151231",
+   "bz_item": "其他业务",
+   "bz_sales": 55718839.09,
+   "bz_profit": 12916057.43,
+   "bz_cost": 42802781.66
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20151231",
+   "bz_item": "产品",
+   "bz_sales": 15361814755.44,
+   "bz_profit": 665093921.25,
+   "bz_cost": 14696720834.19
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20151231",
+   "bz_item": "OEM",
+   "bz_sales": 7766688427.25,
+   "bz_profit": 236739108.32,
+   "bz_cost": 7529949318.93
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20150630",
+   "bz_item": "自有产品",
+   "bz_sales": 303650892.38,
+   "bz_profit": 91798912.79,
+   "bz_cost": 211851979.59
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20150630",
+   "bz_item": "硬盘相关产品",
+   "bz_sales": 3189676981.43,
+   "bz_profit": 83362172.54,
+   "bz_cost": 3106314808.89
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20150630",
+   "bz_item": "其他业务",
+   "bz_sales": 37984149.85,
+   "bz_profit": 10735526.13,
+   "bz_cost": 27248623.72
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20150630",
+   "bz_item": "产品",
+   "bz_sales": 7199107568.5,
+   "bz_profit": 276779052.86,
+   "bz_cost": 6922328515.64
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20150630",
+   "bz_item": "OEM",
+   "bz_sales": 3667795544.84,
+   "bz_profit": 90882441.4,
+   "bz_cost": 3576913103.44
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20141231",
+   "bz_item": "自有产品",
+   "bz_sales": 557833135.87,
+   "bz_profit": 120110501.97,
+   "bz_cost": 437722633.9
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20141231",
+   "bz_item": "硬盘相关产品",
+   "bz_sales": 6934391445.62,
+   "bz_profit": 182053092.74,
+   "bz_cost": 6752338352.88
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20141231",
+   "bz_item": "其他业务",
+   "bz_sales": 55405588.27,
+   "bz_profit": 17470018.66,
+   "bz_cost": 37935569.61
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20141231",
+   "bz_item": "产品",
+   "bz_sales": 16444164971.33,
+   "bz_profit": 524257168.4,
+   "bz_cost": 15919907802.93
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20141231",
+   "bz_item": "OEM",
+   "bz_sales": 8896534801.57,
+   "bz_profit": 204623555.03,
+   "bz_cost": 8691911246.54
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20140630",
+   "bz_item": "自有产品",
+   "bz_sales": 283066550.83,
+   "bz_profit": 71164090.71,
+   "bz_cost": 211902460.12
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20140630",
+   "bz_item": "硬盘相关产品",
+   "bz_sales": 3056667782.92,
+   "bz_profit": 75673478.07,
+   "bz_cost": 2980994304.85
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20140630",
+   "bz_item": "其他业务",
+   "bz_sales": 30433683.57,
+   "bz_profit": 9333479.65,
+   "bz_cost": 21100203.92
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20140630",
+   "bz_item": "产品",
+   "bz_sales": 7689980161.91,
+   "bz_profit": 245665105.34,
+   "bz_cost": 7444315056.57
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20140630",
+   "bz_item": "OEM",
+   "bz_sales": 4319812144.59,
+   "bz_profit": 89494056.91,
+   "bz_cost": 4230318087.68
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20131231",
+   "bz_item": "自有产品",
+   "bz_sales": 565617512.34,
+   "bz_profit": 41635242.28,
+   "bz_cost": 523982270.06
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20131231",
+   "bz_item": "硬盘相关产品",
+   "bz_sales": 7920315669.53,
+   "bz_profit": 116635954.55,
+   "bz_cost": 7803679714.98
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20131231",
+   "bz_item": "其他业务",
+   "bz_sales": 58321271.04,
+   "bz_profit": 23449036.92,
+   "bz_cost": 34872234.12
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20131231",
+   "bz_item": "产品",
+   "bz_sales": 15039531962.51,
+   "bz_profit": 354631739.07,
+   "bz_cost": 14684900223.44
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20131231",
+   "bz_item": "OEM",
+   "bz_sales": 6495277509.6,
+   "bz_profit": 172911505.32,
+   "bz_cost": 6322366004.28
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20130630",
+   "bz_item": "自有产品",
+   "bz_sales": 285348121.4,
+   "bz_profit": 30938386.35,
+   "bz_cost": 254409735.05
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20130630",
+   "bz_item": "硬盘相关产品",
+   "bz_sales": 4190387726.14,
+   "bz_profit": 39946324.79,
+   "bz_cost": 4150441401.35
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20130630",
+   "bz_item": "其他业务",
+   "bz_sales": 24469722.71,
+   "bz_profit": 2825059.43,
+   "bz_cost": 21644663.28
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20130630",
+   "bz_item": "产品",
+   "bz_sales": 7429413412.4,
+   "bz_profit": 127327729.12,
+   "bz_cost": 7302085683.28
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20130630",
+   "bz_item": "OEM产品",
+   "bz_sales": 2929207842.15,
+   "bz_profit": 53617958.55,
+   "bz_cost": 2875589883.6
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20121231",
+   "bz_item": "自有产品",
+   "bz_sales": 551799007.43,
+   "bz_profit": 41637690.81,
+   "bz_cost": 510161316.62
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20121231",
+   "bz_item": "硬盘相关产品",
+   "bz_sales": 10089783705.69,
+   "bz_profit": 78161101.1,
+   "bz_cost": 10011622604.59
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20121231",
+   "bz_item": "其他业务",
+   "bz_sales": 161306695.61,
+   "bz_profit": 60762846.24,
+   "bz_cost": 100543849.37
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20121231",
+   "bz_item": "产品",
+   "bz_sales": 16399516862.92,
+   "bz_profit": 415942696.91,
+   "bz_cost": 15983574166.01
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20121231",
+   "bz_item": "OEM",
+   "bz_sales": 5596627454.19,
+   "bz_profit": 235381058.76,
+   "bz_cost": 5361246395.43
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20120630",
+   "bz_item": "自有产品",
+   "bz_sales": 199520869.91,
+   "bz_profit": 7159749.44,
+   "bz_cost": 192361120.47
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20120630",
+   "bz_item": "硬盘相关产品",
+   "bz_sales": 5601128671.28,
+   "bz_profit": 46143138.4,
+   "bz_cost": 5554985532.88
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20120630",
+   "bz_item": "其他业务",
+   "bz_sales": 27362065.65,
+   "bz_profit": 5741458.49,
+   "bz_cost": 21620607.16
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20120630",
+   "bz_item": "产品",
+   "bz_sales": 8423092134.06,
+   "bz_profit": 205147056.24,
+   "bz_cost": 8217945077.82
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20120630",
+   "bz_item": "OEM产品",
+   "bz_sales": 2595080527.22,
+   "bz_profit": 146102709.91,
+   "bz_cost": 2448977817.31
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20111231",
+   "bz_item": "自有产品",
+   "bz_sales": 852510136.64,
+   "bz_profit": 147649760.43,
+   "bz_cost": 704860376.21
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20111231",
+   "bz_item": "硬盘相关产品",
+   "bz_sales": 10550090949.39,
+   "bz_profit": 72013395.86,
+   "bz_cost": 10478077553.53
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20111231",
+   "bz_item": "其他业务",
+   "bz_sales": 69539556.58,
+   "bz_profit": 24432312.0,
+   "bz_cost": 45107244.58
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20111231",
+   "bz_item": "产品",
+   "bz_sales": 18630380585.04,
+   "bz_profit": 509172279.19,
+   "bz_cost": 18121208305.85
+  },
+  {
+   "ts_code": "000021.SZ",
+   "end_date": "20111231",
+   "bz_item": "OEM",
+   "bz_sales": 7158239942.43,
+   "bz_profit": 265076810.9,
+   "bz_cost": 6893163131.53
+  }
+ ],
+ "bars": [
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20261030",
+   "pct_chg": -4.9241,
+   "vol": 481482.84,
+   "amount": 1267161.45718
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20261029",
+   "pct_chg": -5.6254,
+   "vol": 505551.69,
+   "amount": 1397975.83628
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20261028",
+   "pct_chg": 3.2468,
+   "vol": 509561.64,
+   "amount": 1446041.22729
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20261027",
+   "pct_chg": -2.8732,
+   "vol": 435135.49,
+   "amount": 1244164.74533
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20261026",
+   "pct_chg": -2.2268,
+   "vol": 601986.06,
+   "amount": 1733284.28517
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20261023",
+   "pct_chg": 3.072,
+   "vol": 665444.67,
+   "amount": 1864238.15809
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20261022",
+   "pct_chg": -1.9391,
+   "vol": 548535.1,
+   "amount": 1573013.44614
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20261021",
+   "pct_chg": 0.6272,
+   "vol": 351445.63,
+   "amount": 1019570.1184
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20261020",
+   "pct_chg": 1.5929,
+   "vol": 411480.2,
+   "amount": 1179202.72392
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20261019",
+   "pct_chg": -0.3527,
+   "vol": 388686.7,
+   "amount": 1090265.71021
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20261016",
+   "pct_chg": 0.8179,
+   "vol": 488056.9,
+   "amount": 1396490.78923
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20261015",
+   "pct_chg": -4.8393,
+   "vol": 486423.89,
+   "amount": 1376227.9082
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20261014",
+   "pct_chg": -3.1148,
+   "vol": 321679.96,
+   "amount": 965164.40695
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20261013",
+   "pct_chg": -0.1963,
+   "vol": 461508.7,
+   "amount": 1383832.95448
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20261012",
+   "pct_chg": -4.5894,
+   "vol": 400902.68,
+   "amount": 1245296.35756
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20261009",
+   "pct_chg": -3.2911,
+   "vol": 635517.7,
+   "amount": 1987615.36937
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20261008",
+   "pct_chg": 0.8833,
+   "vol": 546680.39,
+   "amount": 1833463.10425
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260930",
+   "pct_chg": -2.8411,
+   "vol": 395147.91,
+   "amount": 1311080.43916
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260929",
+   "pct_chg": 0.3266,
+   "vol": 338734.04,
+   "amount": 1145219.55882
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260928",
+   "pct_chg": -5.2069,
+   "vol": 541700.97,
+   "amount": 1849502.89585
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260924",
+   "pct_chg": -3.7388,
+   "vol": 463553.36,
+   "amount": 1664037.94098
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260923",
+   "pct_chg": -0.2702,
+   "vol": 504753.72,
+   "amount": 1862319.12408
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260922",
+   "pct_chg": -0.5642,
+   "vol": 790080.56,
+   "amount": 2958271.09493
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260921",
+   "pct_chg": 0.7307,
+   "vol": 824148.73,
+   "amount": 3060501.15102
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260918",
+   "pct_chg": 4.0552,
+   "vol": 1122003.7,
+   "amount": 4118746.0544
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260917",
+   "pct_chg": -1.9061,
+   "vol": 708581.71,
+   "amount": 2543733.31684
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260916",
+   "pct_chg": 6.7532,
+   "vol": 1101546.81,
+   "amount": 3906385.83513
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260915",
+   "pct_chg": 0.4146,
+   "vol": 502732.26,
+   "amount": 1712010.72243
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260914",
+   "pct_chg": -3.5969,
+   "vol": 518786.84,
+   "amount": 1759237.04649
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260911",
+   "pct_chg": -4.0274,
+   "vol": 838649.78,
+   "amount": 2908246.15775
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260910",
+   "pct_chg": 4.3155,
+   "vol": 1147234.05,
+   "amount": 4174930.34182
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260909",
+   "pct_chg": 0.0,
+   "vol": 443941.04,
+   "amount": 1561825.50089
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260908",
+   "pct_chg": -0.8501,
+   "vol": 570037.05,
+   "amount": 2010156.14512
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260907",
+   "pct_chg": 2.2306,
+   "vol": 540148.97,
+   "amount": 1900677.15417
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260904",
+   "pct_chg": -2.2096,
+   "vol": 571196.8,
+   "amount": 1999443.82718
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260903",
+   "pct_chg": -0.6753,
+   "vol": 479712.21,
+   "amount": 1696706.90747
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260902",
+   "pct_chg": -2.7101,
+   "vol": 456147.43,
+   "amount": 1626172.46619
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260901",
+   "pct_chg": -3.2061,
+   "vol": 551659.95,
+   "amount": 2029070.25561
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260831",
+   "pct_chg": 1.5335,
+   "vol": 640461.91,
+   "amount": 2373271.50323
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260828",
+   "pct_chg": -1.7966,
+   "vol": 728648.63,
+   "amount": 2750359.98333
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260827",
+   "pct_chg": 4.4714,
+   "vol": 870165.46,
+   "amount": 3246175.51232
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260826",
+   "pct_chg": -1.6024,
+   "vol": 562031.42,
+   "amount": 2045580.28976
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260825",
+   "pct_chg": 0.0815,
+   "vol": 626335.91,
+   "amount": 2278034.19846
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260824",
+   "pct_chg": -2.9288,
+   "vol": 695815.75,
+   "amount": 2552424.85495
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260821",
+   "pct_chg": 0.9859,
+   "vol": 618528.91,
+   "amount": 2332260.17297
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260820",
+   "pct_chg": 0.2404,
+   "vol": 771324.56,
+   "amount": 2909156.7981
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260819",
+   "pct_chg": -10.0,
+   "vol": 1431193.47,
+   "amount": 5516439.87369
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260818",
+   "pct_chg": -2.3474,
+   "vol": 1384325.11,
+   "amount": 5836895.29604
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260817",
+   "pct_chg": 5.8911,
+   "vol": 1599922.03,
+   "amount": 6688369.27632
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260814",
+   "pct_chg": 1.7193,
+   "vol": 973603.98,
+   "amount": 3892748.41388
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260813",
+   "pct_chg": -1.9827,
+   "vol": 1296931.44,
+   "amount": 5305427.73163
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260812",
+   "pct_chg": 1.3564,
+   "vol": 966280.5,
+   "amount": 3899564.54469
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260811",
+   "pct_chg": -0.9701,
+   "vol": 1121358.31,
+   "amount": 4525310.89187
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260810",
+   "pct_chg": -1.5912,
+   "vol": 1091512.22,
+   "amount": 4366484.18888
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260807",
+   "pct_chg": 2.3553,
+   "vol": 1549369.62,
+   "amount": 6278235.75573
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260806",
+   "pct_chg": 3.1266,
+   "vol": 1671003.8,
+   "amount": 6575241.56981
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260805",
+   "pct_chg": 5.9113,
+   "vol": 1620704.57,
+   "amount": 6181916.47705
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260804",
+   "pct_chg": 5.8824,
+   "vol": 1305717.9,
+   "amount": 4686872.31083
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260803",
+   "pct_chg": -7.3059,
+   "vol": 1269791.61,
+   "amount": 4469804.69967
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260731",
+   "pct_chg": 2.2241,
+   "vol": 1574028.53,
+   "amount": 6071401.51478
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260730",
+   "pct_chg": -9.2902,
+   "vol": 1592657.84,
+   "amount": 5981223.82343
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260729",
+   "pct_chg": 1.4914,
+   "vol": 1907820.78,
+   "amount": 7329667.57854
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260728",
+   "pct_chg": -9.9886,
+   "vol": 1727654.39,
+   "amount": 7082910.78861
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260727",
+   "pct_chg": 4.6678,
+   "vol": 2332492.09,
+   "amount": 9773369.76504
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260724",
+   "pct_chg": 7.4188,
+   "vol": 2096956.62,
+   "amount": 8593148.11245
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260723",
+   "pct_chg": -2.8095,
+   "vol": 1331404.91,
+   "amount": 5261035.26715
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260722",
+   "pct_chg": 4.0621,
+   "vol": 2209303.4,
+   "amount": 9090711.09118
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260721",
+   "pct_chg": 9.9886,
+   "vol": 1851611.46,
+   "amount": 6584954.73527
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260720",
+   "pct_chg": -9.9205,
+   "vol": 1602050.96,
+   "amount": 5975483.54208
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260717",
+   "pct_chg": -9.9908,
+   "vol": 1601620.27,
+   "amount": 6514397.02123
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260716",
+   "pct_chg": -8.2945,
+   "vol": 1769956.16,
+   "amount": 7901730.20662
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260715",
+   "pct_chg": -9.9981,
+   "vol": 1835022.82,
+   "amount": 9081246.72095
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260714",
+   "pct_chg": 0.7483,
+   "vol": 2069584.21,
+   "amount": 10711843.93
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260713",
+   "pct_chg": -9.9983,
+   "vol": 2103138.08,
+   "amount": 11596948.9986
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260710",
+   "pct_chg": 2.9694,
+   "vol": 3031016.37,
+   "amount": 18369597.5441
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260709",
+   "pct_chg": 9.9941,
+   "vol": 1845381.09,
+   "amount": 10109407.2509
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260708",
+   "pct_chg": -5.4374,
+   "vol": 1630632.0,
+   "amount": 8436490.421
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260707",
+   "pct_chg": 1.4447,
+   "vol": 1699884.26,
+   "amount": 9214178.04521
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260706",
+   "pct_chg": -4.6682,
+   "vol": 1644910.43,
+   "amount": 8981156.95857
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260703",
+   "pct_chg": -0.2142,
+   "vol": 2351310.83,
+   "amount": 12654340.5078
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260702",
+   "pct_chg": -10.0064,
+   "vol": 1761593.24,
+   "amount": 9940689.25487
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260701",
+   "pct_chg": -3.1274,
+   "vol": 3101964.52,
+   "amount": 19585847.1114
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260630",
+   "pct_chg": 9.1913,
+   "vol": 2661146.55,
+   "amount": 16372523.1632
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260629",
+   "pct_chg": 9.9981,
+   "vol": 2396365.82,
+   "amount": 13770298.1016
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260626",
+   "pct_chg": 0.5827,
+   "vol": 2272891.53,
+   "amount": 12463271.5559
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260625",
+   "pct_chg": 5.8285,
+   "vol": 2244945.56,
+   "amount": 11922396.8298
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260624",
+   "pct_chg": 10.0,
+   "vol": 1909993.41,
+   "amount": 9165517.68342
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260623",
+   "pct_chg": -2.0994,
+   "vol": 1773391.53,
+   "amount": 8211136.58104
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260622",
+   "pct_chg": 5.9946,
+   "vol": 1925258.53,
+   "amount": 8791270.83155
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260618",
+   "pct_chg": 2.6334,
+   "vol": 1886099.24,
+   "amount": 8236411.12943
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260617",
+   "pct_chg": 5.249,
+   "vol": 1654931.46,
+   "amount": 6952080.32811
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260616",
+   "pct_chg": 3.2936,
+   "vol": 1563359.84,
+   "amount": 6337496.118
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260615",
+   "pct_chg": 6.4168,
+   "vol": 1327925.73,
+   "amount": 5102805.73784
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260612",
+   "pct_chg": -5.0921,
+   "vol": 1445140.88,
+   "amount": 5599872.68422
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260611",
+   "pct_chg": 1.9301,
+   "vol": 1298236.63,
+   "amount": 5018748.42382
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260610",
+   "pct_chg": 2.7171,
+   "vol": 1447768.27,
+   "amount": 5488297.38835
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260609",
+   "pct_chg": 6.1351,
+   "vol": 1121730.62,
+   "amount": 4120489.60935
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260608",
+   "pct_chg": -7.2384,
+   "vol": 1186883.32,
+   "amount": 4271846.467
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260605",
+   "pct_chg": -3.9063,
+   "vol": 1362653.39,
+   "amount": 5246077.065
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260604",
+   "pct_chg": 3.6031,
+   "vol": 1662804.67,
+   "amount": 6550356.937
+  },
+  {
+   "ts_code": "000021.SZ",
+   "trade_date": "20260603",
+   "pct_chg": 3.0124,
+   "vol": 1880732.21,
+   "amount": 7290738.601
+  }
+ ],
+ "sector": {
+  "code": "850854.SI",
+  "name": "消费电子零部件及组装",
+  "level": "l3",
+  "members": [
+   "000021.SZ",
+   "600130.SH",
+   "600363.SH",
+   "002475.SZ",
+   "002241.SZ",
+   "300136.SZ",
+   "300115.SZ",
+   "002139.SZ",
+   "300322.SZ",
+   "002655.SZ",
+   "601231.SH",
+   "300433.SZ",
+   "002055.SZ",
+   "301123.SZ",
+   "002600.SZ",
+   "002369.SZ",
+   "603380.SH",
+   "300647.SZ",
+   "002855.SZ",
+   "002861.SZ",
+   "300686.SZ",
+   "300679.SZ",
+   "300709.SZ",
+   "300787.SZ",
+   "300793.SZ",
+   "603327.SH",
+   "002947.SZ",
+   "300916.SZ",
+   "301285.SZ",
+   "300857.SZ",
+   "301491.SZ",
+   "603890.SH",
+   "300735.SZ",
+   "601138.SH",
+   "603629.SH",
+   "002981.SZ",
+   "002426.SZ",
+   "300951.SZ",
+   "300968.SZ",
+   "300956.SZ",
+   "688260.SH",
+   "605277.SH",
+   "300843.SZ",
+   "002993.SZ",
+   "920212.BJ",
+   "603633.SH",
+   "002681.SZ",
+   "301389.SZ",
+   "301051.SZ",
+   "301387.SZ",
+   "300812.SZ",
+   "002925.SZ",
+   "920857.BJ",
+   "920346.BJ",
+   "300256.SZ",
+   "688210.SH",
+   "600203.SH",
+   "301086.SZ",
+   "301626.SZ",
+   "002866.SZ",
+   "920005.BJ",
+   "002402.SZ",
+   "301180.SZ",
+   "301383.SZ",
+   "301329.SZ",
+   "301486.SZ",
+   "301067.SZ",
+   "301326.SZ",
+   "300128.SZ",
+   "603296.SH",
+   "603595.SH",
+   "300032.SZ",
+   "001314.SZ",
+   "002635.SZ",
+   "300602.SZ",
+   "688678.SH",
+   "300822.SZ",
+   "300976.SZ",
+   "002660.SZ",
+   "603626.SH",
+   "603052.SH",
+   "920357.BJ",
+   "920701.BJ",
+   "920876.BJ",
+   "920267.BJ",
+   "603341.SH",
+   "300784.SZ",
+   "300868.SZ",
+   "301567.SZ",
+   "600898.SH",
+   "603133.SH"
+  ],
+  "rows": [
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20261030",
+    "pct_change": -4.43
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20261029",
+    "pct_change": -5.02
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20261028",
+    "pct_change": 3.39
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20261027",
+    "pct_change": -3.25
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20261026",
+    "pct_change": -2.15
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20261023",
+    "pct_change": 4.26
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20261022",
+    "pct_change": -3.11
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20261021",
+    "pct_change": 1.38
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20261020",
+    "pct_change": 2.9
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20261019",
+    "pct_change": 1.29
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20261016",
+    "pct_change": 0.44
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20261015",
+    "pct_change": -3.25
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20261014",
+    "pct_change": -3.33
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20261013",
+    "pct_change": 0.29
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20261012",
+    "pct_change": -3.75
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20261009",
+    "pct_change": -1.15
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20261008",
+    "pct_change": -3.2
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260930",
+    "pct_change": -1.06
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260929",
+    "pct_change": 0.28
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260928",
+    "pct_change": -4.87
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260924",
+    "pct_change": -2.92
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260923",
+    "pct_change": -0.72
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260922",
+    "pct_change": 0.18
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260921",
+    "pct_change": 1.24
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260918",
+    "pct_change": 2.27
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260917",
+    "pct_change": 0.1
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260916",
+    "pct_change": 2.71
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260915",
+    "pct_change": -1.35
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260914",
+    "pct_change": -1.58
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260911",
+    "pct_change": -0.31
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260910",
+    "pct_change": -1.23
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260909",
+    "pct_change": 0.02
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260908",
+    "pct_change": -1.81
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260907",
+    "pct_change": 3.24
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260904",
+    "pct_change": -2.46
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260903",
+    "pct_change": 0.16
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260902",
+    "pct_change": -0.2
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260901",
+    "pct_change": -2.35
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260831",
+    "pct_change": 2.33
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260828",
+    "pct_change": -1.24
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260827",
+    "pct_change": 2.92
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260826",
+    "pct_change": 1.05
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260825",
+    "pct_change": 1.05
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260824",
+    "pct_change": -2.25
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260821",
+    "pct_change": 1.41
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260820",
+    "pct_change": 0.7
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260819",
+    "pct_change": -7.44
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260818",
+    "pct_change": -0.88
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260817",
+    "pct_change": 3.41
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260814",
+    "pct_change": 1.62
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260813",
+    "pct_change": -0.74
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260812",
+    "pct_change": 1.34
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260811",
+    "pct_change": -1.27
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260810",
+    "pct_change": -0.58
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260807",
+    "pct_change": 1.55
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260806",
+    "pct_change": 1.12
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260805",
+    "pct_change": 4.68
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260804",
+    "pct_change": 5.18
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260803",
+    "pct_change": -2.71
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260731",
+    "pct_change": 2.95
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260730",
+    "pct_change": -6.04
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260729",
+    "pct_change": 0.73
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260728",
+    "pct_change": -5.27
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260727",
+    "pct_change": 3.35
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260724",
+    "pct_change": -2.08
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260723",
+    "pct_change": 1.2
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260722",
+    "pct_change": -0.96
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260721",
+    "pct_change": 7.06
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260720",
+    "pct_change": -3.13
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260717",
+    "pct_change": -8.01
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260716",
+    "pct_change": -1.3
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260715",
+    "pct_change": -2.99
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260714",
+    "pct_change": 2.35
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260713",
+    "pct_change": -6.74
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260710",
+    "pct_change": -2.25
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260709",
+    "pct_change": 4.55
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260708",
+    "pct_change": -1.57
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260707",
+    "pct_change": -1.54
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260706",
+    "pct_change": -2.79
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260703",
+    "pct_change": 2.57
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260702",
+    "pct_change": -6.77
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260701",
+    "pct_change": -2.57
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260630",
+    "pct_change": 5.43
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260629",
+    "pct_change": -2.74
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260626",
+    "pct_change": -5.35
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260625",
+    "pct_change": 0.89
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260624",
+    "pct_change": 4.92
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260623",
+    "pct_change": -2.2
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260622",
+    "pct_change": -0.03
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260618",
+    "pct_change": 3.86
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260617",
+    "pct_change": 2.0
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260616",
+    "pct_change": 1.24
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260615",
+    "pct_change": 6.16
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260612",
+    "pct_change": -0.46
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260611",
+    "pct_change": -0.89
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260610",
+    "pct_change": -4.38
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260609",
+    "pct_change": 3.72
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260608",
+    "pct_change": -5.17
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260605",
+    "pct_change": -2.9
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260604",
+    "pct_change": -0.73
+   },
+   {
+    "ts_code": "850854.SI",
+    "trade_date": "20260603",
+    "pct_change": 1.24
+   }
+  ]
+ },
+ "peers": {
+  "period": "20260930",
+  "members": 90,
+  "cur": {
+   "002655.SZ": {
+    "rev": 420243137.49,
+    "np": -3582258.23,
+    "ded_cum": 10754341.21
+   },
+   "600203.SH": {
+    "rev": 3947498899.97,
+    "np": -8978663.85,
+    "ded_cum": 23705780.13
+   },
+   "300822.SZ": {
+    "rev": 164827051.02,
+    "np": -13667426.43,
+    "ded_cum": -14125039.13
+   },
+   "301486.SZ": {
+    "rev": 634875502.05,
+    "np": 42244089.55,
+    "ded_cum": 44383329.87
+   },
+   "300709.SZ": {
+    "rev": 1091205171.17,
+    "np": 121657987.89,
+    "ded_cum": 114348255.31
+   },
+   "300976.SZ": {
+    "rev": 1019087626.67,
+    "np": 89819175.91,
+    "ded_cum": 215029366.99
+   },
+   "002055.SZ": {
+    "rev": 904520934.37,
+    "np": -13195592.91,
+    "ded_cum": -5834590.08
+   },
+   "603595.SH": {
+    "rev": 376510800.4,
+    "np": -32739601.92,
+    "ded_cum": -197939586.31
+   },
+   "920267.BJ": {
+    "rev": 159505656.14,
+    "np": 2125735.94,
+    "ded_cum": -1140666.26
+   },
+   "002660.SZ": {
+    "rev": 324595199.66,
+    "np": 7984460.22,
+    "ded_cum": -28457926.92
+   },
+   "002861.SZ": {
+    "rev": 315851792.03,
+    "np": -15216801.45,
+    "ded_cum": -70674410.97
+   },
+   "002241.SZ": {
+    "rev": 28174141081.38,
+    "np": 1152959049.91,
+    "ded_cum": 2112451525.16
+   },
+   "300433.SZ": {
+    "rev": 19035440030.74,
+    "np": 842959201.61,
+    "ded_cum": 998094761.82
+   },
+   "603626.SH": {
+    "rev": 634262811.04,
+    "np": -89362328.4,
+    "ded_cum": -258042523.21
+   },
+   "002947.SZ": {
+    "rev": 819162118.14,
+    "np": 96403971.96,
+    "ded_cum": 333076594.89
+   },
+   "002866.SZ": {
+    "rev": 435232724.65,
+    "np": 14223614.35,
+    "ded_cum": 17031453.88
+   },
+   "301383.SZ": {
+    "rev": 570169506.17,
+    "np": 11781111.89,
+    "ded_cum": -42447884.22
+   },
+   "301567.SZ": {
+    "rev": 117864445.88,
+    "np": -1615240.4,
+    "ded_cum": 1590341.66
+   },
+   "301387.SZ": {
+    "rev": 602862867.35,
+    "np": -6657924.77,
+    "ded_cum": -24405125.23
+   },
+   "002635.SZ": {
+    "rev": 1971327219.25,
+    "np": 106500824.24,
+    "ded_cum": 116961584.86
+   },
+   "301180.SZ": {
+    "rev": 425097962.38,
+    "np": 37614109.61,
+    "ded_cum": 11367750.94
+   },
+   "300787.SZ": {
+    "rev": 941118011.49,
+    "np": -49381572.7,
+    "ded_cum": -101561372.84
+   },
+   "300968.SZ": {
+    "rev": 442869692.26,
+    "np": -15744732.41,
+    "ded_cum": -92328200.47
+   },
+   "301123.SZ": {
+    "rev": 1059437376.62,
+    "np": -5937196.45,
+    "ded_cum": -7927386.86
+   },
+   "301285.SZ": {
+    "rev": 245853160.07,
+    "np": -2981367.2,
+    "ded_cum": -60575348.19
+   },
+   "300956.SZ": {
+    "rev": 480013568.93,
+    "np": -51033464.22,
+    "ded_cum": -83782113.98
+   },
+   "300735.SZ": {
+    "rev": 2141558716.35,
+    "np": 14146918.15,
+    "ded_cum": 34593132.01
+   },
+   "300843.SZ": {
+    "rev": 690600639.2,
+    "np": 59062974.97,
+    "ded_cum": 177381235.81
+   },
+   "001314.SZ": {
+    "rev": 2036441803.67,
+    "np": 5655279.89,
+    "ded_cum": 138883415.91
+   },
+   "300857.SZ": {
+    "rev": 7087168326.47,
+    "np": 1223930421.41,
+    "ded_cum": 3068291135.24
+   },
+   "300322.SZ": {
+    "rev": 817821895.42,
+    "np": 17298027.51,
+    "ded_cum": 42433051.37
+   },
+   "300784.SZ": {
+    "rev": 161012725.15,
+    "np": 8142941.27,
+    "ded_cum": 22105094.75
+   },
+   "603296.SH": {
+    "rev": 72294511491.26,
+    "np": 1323667477.51,
+    "ded_cum": 2863096517.38
+   },
+   "920005.BJ": {
+    "rev": 143792602.09,
+    "np": 22880191.79,
+    "ded_cum": 48516544.37
+   },
+   "002855.SZ": {
+    "rev": 250650374.76,
+    "np": -26029823.54,
+    "ded_cum": -90356692.86
+   },
+   "920357.BJ": {
+    "rev": 184884034.93,
+    "np": 21353792.93,
+    "ded_cum": 49508062.3
+   },
+   "002925.SZ": {
+    "rev": 1657971301.3,
+    "np": -185878550.32,
+    "ded_cum": 247437192.19
+   },
+   "002402.SZ": {
+    "rev": 2935240064.12,
+    "np": 11150478.68,
+    "ded_cum": 214424239.78
+   },
+   "301389.SZ": {
+    "rev": 197274260.25,
+    "np": 26915757.17,
+    "ded_cum": 52966331.14
+   },
+   "300602.SZ": {
+    "rev": 2066063276.23,
+    "np": 170492057.92,
+    "ded_cum": 425791120.95
+   },
+   "002139.SZ": {
+    "rev": 3266040764.46,
+    "np": 69365614.19,
+    "ded_cum": 177621909.33
+   },
+   "300951.SZ": {
+    "rev": 411426650.97,
+    "np": -33555783.12,
+    "ded_cum": -65328608.87
+   },
+   "300916.SZ": {
+    "rev": 436783504.04,
+    "np": 15508501.5,
+    "ded_cum": 18353154.91
+   },
+   "300032.SZ": {
+    "rev": 334561625.82,
+    "np": 7401780.45,
+    "ded_cum": -77398821.95
+   },
+   "301329.SZ": {
+    "rev": 325984686.72,
+    "np": 5322995.81,
+    "ded_cum": 32991962.66
+   },
+   "300868.SZ": {
+    "rev": 200527408.52,
+    "np": 1409887.33,
+    "ded_cum": -32513135.39
+   },
+   "301086.SZ": {
+    "rev": 515744472.75,
+    "np": 99021685.08,
+    "ded_cum": 168706259.18
+   },
+   "301067.SZ": {
+    "rev": 147671025.72,
+    "np": -18501853.62,
+    "ded_cum": -39098482.87
+   },
+   "603633.SH": {
+    "rev": 517045236.81,
+    "np": -23887396.96,
+    "ded_cum": -88203152.81
+   },
+   "605277.SH": {
+    "rev": 1128171741.97,
+    "np": 52126893.41,
+    "ded_cum": 189046922.54
+   },
+   "300115.SZ": {
+    "rev": 5723523438.79,
+    "np": -84049288.51,
+    "ded_cum": -81859417.85
+   },
+   "002369.SZ": {
+    "rev": 332897466.02,
+    "np": -55753752.95,
+    "ded_cum": -131922602.29
+   },
+   "601231.SH": {
+    "rev": 19544015785.02,
+    "np": 714577548.65,
+    "ded_cum": 1451615226.81
+   },
+   "300136.SZ": {
+    "rev": 2510405335.71,
+    "np": 317512011.24,
+    "ded_cum": 365439620.04
+   },
+   "002993.SZ": {
+    "rev": 5810559216.22,
+    "np": -22113538.8,
+    "ded_cum": -57854152.31
+   },
+   "002426.SZ": {
+    "rev": 890913355.26,
+    "np": -84388014.58,
+    "ded_cum": -294578789.79
+   },
+   "300128.SZ": {
+    "rev": 883550488.76,
+    "np": -48693695.4,
+    "ded_cum": -171204453.84
+   },
+   "920701.BJ": {
+    "rev": 196690187.05,
+    "np": -7214932.99,
+    "ded_cum": -6017758.19
+   },
+   "002681.SZ": {
+    "rev": 886334272.87,
+    "np": 13575013.68,
+    "ded_cum": 1305292.05
+   },
+   "920346.BJ": {
+    "rev": 68995494.71,
+    "np": 7384392.21,
+    "ded_cum": 26098184.18
+   },
+   "300812.SZ": {
+    "rev": 100775562.18,
+    "np": 8936301.09,
+    "ded_cum": 15738565.01
+   },
+   "300679.SZ": {
+    "rev": 1379456485.88,
+    "np": 114706079.61,
+    "ded_cum": 319018330.34
+   },
+   "300256.SZ": {
+    "rev": 378689030.66,
+    "np": 21212586.19,
+    "ded_cum": -78422794.42
+   },
+   "300686.SZ": {
+    "rev": 357875214.71,
+    "np": -37223535.83,
+    "ded_cum": -110341568.84
+   },
+   "300647.SZ": {
+    "rev": 316016704.37,
+    "np": -20414493.26,
+    "ded_cum": -9109969.07
+   },
+   "301326.SZ": {
+    "rev": 385895579.29,
+    "np": -22323113.88,
+    "ded_cum": -72962814.36
+   },
+   "603890.SH": {
+    "rev": 1046031102.62,
+    "np": -16312012.92,
+    "ded_cum": 46828932.25
+   },
+   "301491.SZ": {
+    "rev": 674352976.63,
+    "np": 55132344.09,
+    "ded_cum": 102576134.6
+   },
+   "603341.SH": {
+    "rev": 13930111217.67,
+    "np": 178011392.81,
+    "ded_cum": 6331224.6
+   },
+   "300793.SZ": {
+    "rev": 845075827.2,
+    "np": 24791875.66,
+    "ded_cum": 258196.41
+   },
+   "601138.SH": {
+    "rev": 383553853000.0,
+    "np": 16634153000.0,
+    "ded_cum": 39448956000.0
+   },
+   "301051.SZ": {
+    "rev": 362070848.6,
+    "np": -40912801.38,
+    "ded_cum": -156360164.34
+   },
+   "688678.SH": {
+    "rev": 572936880.63,
+    "np": 1637733.77,
+    "ded_cum": 68299885.54
+   },
+   "603380.SH": {
+    "rev": 709475879.58,
+    "np": 30830083.51,
+    "ded_cum": 143816377.4
+   },
+   "002981.SZ": {
+    "rev": 695305464.44,
+    "np": 28131146.06,
+    "ded_cum": 32730810.11
+   },
+   "002600.SZ": {
+    "rev": 15522309643.86,
+    "np": 1153102016.14,
+    "ded_cum": 1446544810.41
+   },
+   "920212.BJ": {
+    "rev": 144565333.75,
+    "np": 4030259.24,
+    "ded_cum": 6424090.03
+   },
+   "603327.SH": {
+    "rev": 951489107.97,
+    "np": 49788744.67,
+    "ded_cum": 112293900.45
+   },
+   "920857.BJ": {
+    "rev": 74792024.2,
+    "np": -17571559.33,
+    "ded_cum": -54312542.94
+   },
+   "301626.SZ": {
+    "rev": 1514984301.9,
+    "np": 138915320.81,
+    "ded_cum": 156474232.09
+   },
+   "002475.SZ": {
+    "rev": 110507438321.43,
+    "np": 5214284630.58,
+    "ded_cum": 10374121432.38
+   },
+   "920876.BJ": {
+    "rev": 164213549.73,
+    "np": 4913898.45,
+    "ded_cum": 5374536.76
+   },
+   "600130.SH": {
+    "rev": 190897394.89,
+    "np": -890090.99,
+    "ded_cum": -4469366.31
+   },
+   "688260.SH": {
+    "rev": 312551840.45,
+    "np": 23978860.49,
+    "ded_cum": -79909760.99
+   },
+   "603629.SH": {
+    "rev": 1127293339.84,
+    "np": 268095407.13,
+    "ded_cum": 916336736.29
+   },
+   "603052.SH": {
+    "rev": 245586148.21,
+    "np": -22996369.64,
+    "ded_cum": -52936836.33
+   },
+   "600363.SH": {
+    "rev": 699189433.26,
+    "np": 125089136.78,
+    "ded_cum": 269752562.71
+   },
+   "688210.SH": {
+    "rev": 174666112.72,
+    "np": -44207262.57,
+    "ded_cum": -104735205.8
+   }
+  },
+  "prior": {
+   "920357.BJ": {
+    "rev": 168880105.1,
+    "np": 19448007.49,
+    "ded_cum": 48019175.37
+   },
+   "002660.SZ": {
+    "rev": 292839966.47,
+    "np": -35391058.8,
+    "ded_cum": -65563108.22
+   },
+   "300976.SZ": {
+    "rev": 873463526.0,
+    "np": 98942071.42,
+    "ded_cum": 216954779.76
+   },
+   "603595.SH": {
+    "rev": 618246208.7,
+    "np": 26606974.72,
+    "ded_cum": -27670555.83
+   },
+   "300679.SZ": {
+    "rev": 1515139429.21,
+    "np": 130119753.21,
+    "ded_cum": 368778552.93
+   },
+   "301567.SZ": {
+    "rev": 117444022.43,
+    "np": 7049270.26,
+    "ded_cum": 11967180.31
+   },
+   "301051.SZ": {
+    "rev": 422687373.65,
+    "np": 126537251.05,
+    "ded_cum": -303932781.15
+   },
+   "301180.SZ": {
+    "rev": 414671682.97,
+    "np": 7651019.26,
+    "ded_cum": 6244158.16
+   },
+   "300686.SZ": {
+    "rev": 429768285.4,
+    "np": -23474359.65,
+    "ded_cum": -61953433.48
+   },
+   "002402.SZ": {
+    "rev": 2823568398.55,
+    "np": 249215189.37,
+    "ded_cum": 568046751.8
+   },
+   "002655.SZ": {
+    "rev": 387589148.36,
+    "np": 20044785.5,
+    "ded_cum": 65819709.48
+   },
+   "300916.SZ": {
+    "rev": 418096409.48,
+    "np": 28860212.7,
+    "ded_cum": 75581377.41
+   },
+   "300956.SZ": {
+    "rev": 580508348.2,
+    "np": 3495695.74,
+    "ded_cum": 7898335.93
+   },
+   "301626.SZ": {
+    "rev": 310385491.16,
+    "np": 48111335.82,
+    "ded_cum": 137486492.12
+   },
+   "920267.BJ": {
+    "rev": 110941386.95,
+    "np": -5438581.13,
+    "ded_cum": 1828484.83
+   },
+   "300951.SZ": {
+    "rev": 386635545.92,
+    "np": 46364596.03,
+    "ded_cum": 137170084.06
+   },
+   "301285.SZ": {
+    "rev": 255467419.86,
+    "np": -11558551.09,
+    "ded_cum": -24511443.15
+   },
+   "301387.SZ": {
+    "rev": 409453535.56,
+    "np": 4939420.5,
+    "ded_cum": 25490638.97
+   },
+   "002947.SZ": {
+    "rev": 718106659.52,
+    "np": 173579907.21,
+    "ded_cum": 395169173.82
+   },
+   "002241.SZ": {
+    "rev": 30557096441.15,
+    "np": 1170612428.68,
+    "ded_cum": 2066991960.75
+   },
+   "300322.SZ": {
+    "rev": 781587199.6,
+    "np": 17176725.52,
+    "ded_cum": 45419274.06
+   },
+   "301491.SZ": {
+    "rev": 557503750.26,
+    "np": 61807229.17,
+    "ded_cum": 155661413.39
+   },
+   "301123.SZ": {
+    "rev": 650345310.21,
+    "np": 15697003.03,
+    "ded_cum": 3029952.33
+   },
+   "300822.SZ": {
+    "rev": 238020786.59,
+    "np": 15102333.63,
+    "ded_cum": 32298883.37
+   },
+   "002139.SZ": {
+    "rev": 2685252142.52,
+    "np": 90377019.93,
+    "ded_cum": 395859713.53
+   },
+   "002855.SZ": {
+    "rev": 455510839.63,
+    "np": -86034406.9,
+    "ded_cum": -290371921.65
+   },
+   "002993.SZ": {
+    "rev": 1997689392.94,
+    "np": 122355969.26,
+    "ded_cum": 293244514.18
+   },
+   "300256.SZ": {
+    "rev": 506305991.45,
+    "np": 3701732.68,
+    "ded_cum": -50771903.31
+   },
+   "300784.SZ": {
+    "rev": 137158542.13,
+    "np": 12094028.6,
+    "ded_cum": 39978317.76
+   },
+   "300812.SZ": {
+    "rev": 80044928.96,
+    "np": 4725542.74,
+    "ded_cum": 30331947.42
+   },
+   "301086.SZ": {
+    "rev": 294509269.4,
+    "np": 58923652.48,
+    "ded_cum": 79730172.01
+   },
+   "301486.SZ": {
+    "rev": 233604593.72,
+    "np": -18556140.77,
+    "ded_cum": -1856071.61
+   },
+   "600203.SH": {
+    "rev": 4007500559.64,
+    "np": 65277958.21,
+    "ded_cum": 63327071.68
+   },
+   "603296.SH": {
+    "rev": 44942628952.98,
+    "np": 1209593204.97,
+    "ded_cum": 2479275763.35
+   },
+   "688678.SH": {
+    "rev": 670148785.93,
+    "np": 51627399.78,
+    "ded_cum": 23576928.67
+   },
+   "001314.SZ": {
+    "rev": 1330807151.59,
+    "np": -4431461.99,
+    "ded_cum": 5781682.41
+   },
+   "002426.SZ": {
+    "rev": 927104174.93,
+    "np": -30686168.19,
+    "ded_cum": -95354139.56
+   },
+   "002635.SZ": {
+    "rev": 1294695160.52,
+    "np": 38647461.02,
+    "ded_cum": 47393173.1
+   },
+   "300032.SZ": {
+    "rev": 418733116.57,
+    "np": 19426018.65,
+    "ded_cum": -81312.62
+   },
+   "300735.SZ": {
+    "rev": 2937066048.35,
+    "np": 99606680.03,
+    "ded_cum": 182726159.58
+   },
+   "300843.SZ": {
+    "rev": 469757245.95,
+    "np": 18846476.77,
+    "ded_cum": 103456563.51
+   },
+   "601231.SH": {
+    "rev": 16427474248.2,
+    "np": 625163771.02,
+    "ded_cum": 1130676689.32
+   },
+   "603626.SH": {
+    "rev": 870725738.98,
+    "np": -9563001.0,
+    "ded_cum": -179205452.97
+   },
+   "002861.SZ": {
+    "rev": 235652080.71,
+    "np": -9158540.38,
+    "ded_cum": -41544361.49
+   },
+   "300128.SZ": {
+    "rev": 620790291.51,
+    "np": -49971241.05,
+    "ded_cum": -162166621.18
+   },
+   "300136.SZ": {
+    "rev": 2759291983.02,
+    "np": 324655726.21,
+    "ded_cum": 429197773.67
+   },
+   "300433.SZ": {
+    "rev": 20702378465.46,
+    "np": 1700263547.19,
+    "ded_cum": 2702615086.47
+   },
+   "300602.SZ": {
+    "rev": 1734140242.21,
+    "np": 120082705.66,
+    "ded_cum": 248069619.01
+   },
+   "300787.SZ": {
+    "rev": 907686681.51,
+    "np": 10752252.45,
+    "ded_cum": 65923707.13
+   },
+   "301067.SZ": {
+    "rev": 179039059.89,
+    "np": -6058294.37,
+    "ded_cum": -6343128.21
+   },
+   "301383.SZ": {
+    "rev": 597223518.66,
+    "np": -14689487.08,
+    "ded_cum": -24996497.51
+   },
+   "603341.SH": {
+    "rev": 11423907012.98,
+    "np": 151665837.93,
+    "ded_cum": 270752983.12
+   },
+   "920005.BJ": {
+    "rev": 118232676.49,
+    "np": 16256569.46,
+    "ded_cum": 53708010.22
+   },
+   "002055.SZ": {
+    "rev": 1150412424.54,
+    "np": 20469016.7,
+    "ded_cum": 50935010.65
+   },
+   "002369.SZ": {
+    "rev": 387122683.88,
+    "np": -77737823.07,
+    "ded_cum": -156426371.77
+   },
+   "002866.SZ": {
+    "rev": 585621233.77,
+    "np": 26727260.66,
+    "ded_cum": 48309543.89
+   },
+   "002981.SZ": {
+    "rev": 581706149.52,
+    "np": 46553478.71,
+    "ded_cum": 92141531.77
+   },
+   "300115.SZ": {
+    "rev": 4870189949.53,
+    "np": 161898941.49,
+    "ded_cum": 442604259.77
+   },
+   "300647.SZ": {
+    "rev": 156427341.69,
+    "np": -9122086.24,
+    "ded_cum": -9585844.09
+   },
+   "300709.SZ": {
+    "rev": 852002407.33,
+    "np": 69981713.83,
+    "ded_cum": 141748081.23
+   },
+   "300793.SZ": {
+    "rev": 620137569.99,
+    "np": 3703288.71,
+    "ded_cum": 3268640.57
+   },
+   "300868.SZ": {
+    "rev": 149132615.81,
+    "np": -15217419.6,
+    "ded_cum": -49303233.87
+   },
+   "300968.SZ": {
+    "rev": 458929493.5,
+    "np": 18734978.48,
+    "ded_cum": 16956247.8
+   },
+   "301326.SZ": {
+    "rev": 524410669.54,
+    "np": 25447231.31,
+    "ded_cum": -20084348.48
+   },
+   "301329.SZ": {
+    "rev": 237064675.99,
+    "np": 16040858.95,
+    "ded_cum": 44671634.33
+   },
+   "301389.SZ": {
+    "rev": 136868277.85,
+    "np": 27157900.16,
+    "ded_cum": 72748925.14
+   },
+   "601138.SH": {
+    "rev": 243171777000.0,
+    "np": 10373411000.0,
+    "ded_cum": 21657193000.0
+   },
+   "603327.SH": {
+    "rev": 730388731.75,
+    "np": 40060196.39,
+    "ded_cum": 74294592.18
+   },
+   "603380.SH": {
+    "rev": 551725097.21,
+    "np": 61484072.2,
+    "ded_cum": 170997553.66
+   },
+   "603890.SH": {
+    "rev": 1271158292.28,
+    "np": 137682335.15,
+    "ded_cum": 190348977.08
+   },
+   "605277.SH": {
+    "rev": 927743704.64,
+    "np": 59440094.46,
+    "ded_cum": 151176280.48
+   },
+   "920212.BJ": {
+    "rev": 129953034.29,
+    "np": 6415186.08,
+    "ded_cum": -2132766.65
+   },
+   "920346.BJ": {
+    "rev": 60764808.9,
+    "np": 9389569.98,
+    "ded_cum": 31337722.85
+   },
+   "920701.BJ": {
+    "rev": 267698017.28,
+    "np": 20531194.49,
+    "ded_cum": 53322113.45
+   },
+   "920857.BJ": {
+    "rev": 98919322.39,
+    "np": -11679124.35,
+    "ded_cum": -9634968.67
+   },
+   "002475.SZ": {
+    "rev": 96411453423.77,
+    "np": 4874019115.27,
+    "ded_cum": 9542027519.35
+   },
+   "002600.SZ": {
+    "rev": 13965110956.81,
+    "np": 1011511011.71,
+    "ded_cum": 1503154146.09
+   },
+   "002681.SZ": {
+    "rev": 729603387.21,
+    "np": -4302975.15,
+    "ded_cum": 8963661.28
+   },
+   "002925.SZ": {
+    "rev": 1061835184.56,
+    "np": 40118380.46,
+    "ded_cum": 167883617.21
+   },
+   "300857.SZ": {
+    "rev": 3386626339.4,
+    "np": 265879158.41,
+    "ded_cum": 683375410.97
+   },
+   "600130.SH": {
+    "rev": 102412980.24,
+    "np": -431773.5,
+    "ded_cum": -4884201.29
+   },
+   "600363.SH": {
+    "rev": 855745020.11,
+    "np": 137160130.79,
+    "ded_cum": 364204379.86
+   },
+   "603052.SH": {
+    "rev": 246112460.56,
+    "np": -304851.18,
+    "ded_cum": 20874289.25
+   },
+   "603629.SH": {
+    "rev": 946345692.66,
+    "np": 164868401.17,
+    "ded_cum": 143907321.04
+   },
+   "603633.SH": {
+    "rev": 383722776.97,
+    "np": -19689728.91,
+    "ded_cum": 6993852.59
+   },
+   "688210.SH": {
+    "rev": 239557108.42,
+    "np": 883982.6,
+    "ded_cum": 2842480.71
+   },
+   "688260.SH": {
+    "rev": 153525701.25,
+    "np": -45901516.4,
+    "ded_cum": -152167828.22
+   },
+   "920876.BJ": {
+    "rev": 117702409.97,
+    "np": 412804.58,
+    "ded_cum": 1150435.24
+   }
+  }
+ }
+}

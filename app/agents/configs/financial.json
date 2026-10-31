@@ -1,0 +1,130 @@
+{
+  "source": "financial",
+  "rounds": 1,
+  "take": 8,
+  "records": "rows",
+  "cache_ttl": "financial",
+  "when_empty": "没有可分析的财报",
+  "when_no_facts": "财报没有整理出可引用的事实",
+  "when_insufficient": "这批财报不足以形成观点",
+  "context": {
+    "facts": ["id", "period", "kind", "summary"],
+    "debate": ["id", "event"],
+    "previous": ["fact_ids", "claim"]
+  },
+  "read": {
+    "list": "rows",
+    "require": "summary",
+    "fields": {
+      "period": "period",
+      "kind": "kind",
+      "summary": "summary"
+    }
+  },
+  "facts": {
+    "name": "事实整理",
+    "max": 8,
+    "must": "event",
+    "prompt": [
+      "你是财报事实整理员。只根据给定财报记录摘事实，不要判断利多或利空。",
+      "一条事实只写记录里明确出现的数字和变化。",
+      "一季报、半年报、三季报是从年初累计到该报告期，不要把相邻两期直接相减。同比只写记录里已经给出的同比。",
+      "row_id 填写对应记录的 id，对不上就留空。",
+      "numbers 只收录记录里出现的数字。",
+      "不要输出观点、买卖建议或涨跌预测。"
+    ],
+    "fields": {
+      "time": "string",
+      "event": "string",
+      "row_id": "string",
+      "numbers": "string[]"
+    }
+  },
+  "debate": {
+    "max_points": 3,
+    "cite": "fact_ids",
+    "point": {
+      "fact_ids": "string[]",
+      "claim": "string",
+      "reasoning": "string",
+      "assumption": "string"
+    },
+    "roles": [
+      {
+        "id": "bull",
+        "name": "看多",
+        "prompt": [
+          "你是财报看多分析员。只能引用事实编号，不能补充事实，也不能编造金额。",
+          "材料不足以看多时 sufficient 为 false，用 note 说明原因。",
+          "claim 用日常说法，不要写假设、依据类型、权重。",
+          "assumption 只留给后台，写这条论点依赖、但财报没有证实的前提。"
+        ]
+      },
+      {
+        "id": "bear",
+        "name": "看空",
+        "prompt": [
+          "你是财报看空分析员。只能引用事实编号，不能补充事实，也不能编造金额。",
+          "材料不足以看空时 sufficient 为 false，用 note 说明原因。",
+          "claim 用日常说法，不要写假设、依据类型、权重。",
+          "assumption 只留给后台，写这条论点依赖、但财报没有证实的前提。"
+        ]
+      }
+    ]
+  },
+  "summary": {
+    "name": "主分析",
+    "prompt": [
+      "你是财报主分析员。只根据事实清单、看多论点、看空论点和 records 写给普通用户看的结论。不要引入清单之外的数字。",
+      "必须在偏多和偏空里二选一，不能写中性。正反两边都弱时，选和最近一期利润方向更一致、数字更具体的一方，并把 certainty 写成低。",
+      "lean_level 表示偏向有多明显：1 稍微，2 比较明显，3 非常明显。certainty 表示把握，只能是高、一般、低。两边是两回事：最新一期方向清楚但只有一期数据时，lean_level 可以写 2，certainty 写低。",
+      "headline 不超过 25 个字，必须以财报面偏多：或财报面偏空：开头。why 不超过 80 个字。",
+      "全部用日常说法。净资产收益率不要写成 ROE，每股收益不要写成 EPS，市盈率不要写成 PE。不要出现假设、依据类型、权重，也不要出现买入、卖出、建仓。",
+      "一季报、半年报、三季报是从年初累计的，不要把相邻两期相减说成增长。",
+      "key_points 最多 3 条，按对股价影响从大到小排。如果看多和看空都有论点，必须保留 1 条反方。fact_id 必须来自事实编号，title 和 plain 只能复述该事实。",
+      "today.change 是最近一个交易日的真实涨跌幅，原样写入 today_move.change，不要改这个数字。它为空时 change 留空，不要编造百分比。explain 必须回答这天涨跌是不是这份财报导致的；对不上就直说。",
+      "watch_next 至少 1 条，必须同时写 if_better 和 if_worse：下一期财报好于最近一期会怎样，差于最近一期会怎样。",
+      "more 的条数可以先写 0，程序会改成实际数字。fine_print 固定写：以上为基于公开财报数据的研究分析，不构成投资建议。"
+    ],
+    "fields": {
+      "verdict": {
+        "lean": "string",
+        "lean_level": "number",
+        "headline": "string",
+        "why": "string",
+        "certainty": "string",
+        "certainty_note": "string"
+      },
+      "today_move": {
+        "change": "string",
+        "explain": "string"
+      },
+      "key_points": {
+        "max": 6,
+        "items": {
+          "lean": "string",
+          "title": "string",
+          "plain": "string",
+          "why_it_matters": "string",
+          "time": "string",
+          "fact_id": "string"
+        }
+      },
+      "watch_next": {
+        "max": 3,
+        "items": {
+          "what": "string",
+          "when": "string",
+          "if_better": "string",
+          "if_worse": "string"
+        }
+      },
+      "more": {
+        "periods_read": "number",
+        "periods_used": "number",
+        "note": "string"
+      },
+      "fine_print": "string"
+    }
+  }
+}

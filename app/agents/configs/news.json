@@ -1,0 +1,146 @@
+{
+  "source": "news",
+  "rounds": 1,
+  "take": 12,
+  "records": "articles",
+  "when_empty": "没有可分析的新闻",
+  "when_no_facts": "新闻没有整理出可引用的事实",
+  "when_insufficient": "这批新闻不足以形成观点",
+  "context": {
+    "facts": ["id", "title", "source", "time", "summary", "source_grade", "session", "relevance"],
+    "debate": ["id", "event", "category", "direction", "basis", "magnitude", "weight"],
+    "previous": ["fact_ids", "claim"]
+  },
+  "read": {
+    "list": "items",
+    "require": "title",
+    "fields": {
+      "title": "title",
+      "source": ["source_name", "source"],
+      "time": "time",
+      "summary": "summary",
+      "url": "url",
+      "source_grade": "source_grade",
+      "session": "session",
+      "relevance": "relevance",
+      "heat_count": "heat_count"
+    }
+  },
+  "facts": {
+    "name": "事件抽取",
+    "max": 8,
+    "must": "event",
+    "prompt": [
+      "你是事件抽取员。只根据给定新闻抽取事件，不要判断短期该偏多还是偏空，也不要计算权重。",
+      "一条新闻只抽一个事件。category 只能是：业绩、经营、资本、风险与治理、政策与行业、宏观与市场、观点、传闻与澄清。",
+      "scope 只能是公司、行业、市场。basis 只能是事实、计划、预测、传闻。direction 只能是利好、利空、中性，指对未来盈利或估值的方向，不是股价已经涨跌。",
+      "persistence 只能是一次性或可持续。研报、评级、目标价的 basis 写预测，category 写观点。传闻没有公告印证时 basis 写传闻。",
+      "amount 和 base 只写正文里出现的金额，并保留亿、万等单位。numbers 只写正文里出现的数字。正文没有的金额和日期不要补。",
+      "magnitude 可以先写大、中或小，程序会按金额占比重算；正文没有数字时不要写大。",
+      "article_id 填写对应新闻的 id，对不上就留空。reason 用一句话说明为什么是这个方向。"
+    ],
+    "fields": {
+      "time": "string",
+      "source": "string",
+      "event": "string",
+      "article_id": "string",
+      "category": "string",
+      "scope": "string",
+      "basis": "string",
+      "direction": "string",
+      "persistence": "string",
+      "magnitude": "string",
+      "amount": "string",
+      "base": "string",
+      "numbers": "string[]",
+      "reason": "string"
+    }
+  },
+  "debate": {
+    "max_points": 3,
+    "cite": "fact_ids",
+    "point": {
+      "fact_ids": "string[]",
+      "claim": "string",
+      "reasoning": "string",
+      "assumption": "string"
+    },
+    "roles": [
+      {
+        "id": "bull",
+        "name": "看多",
+        "prompt": [
+          "你是看多分析员。只能引用事实编号，不能补充事实，也不能改事件的方向和权重。",
+          "材料不足以看多时 sufficient 为 false，用 note 说明原因。",
+          "claim 用日常说法。如果事实的 direction 不是利好，不要把它说成利好。",
+          "assumption 只留给后台，写这条论点依赖、但新闻没有证实的前提。"
+        ]
+      },
+      {
+        "id": "bear",
+        "name": "看空",
+        "prompt": [
+          "你是看空分析员。只能引用事实编号，不能补充事实，也不能改事件的方向和权重。",
+          "材料不足以看空时 sufficient 为 false，用 note 说明原因。",
+          "claim 用日常说法。如果事实的 direction 不是利空，不要把它说成利空。",
+          "assumption 只留给后台，写这条论点依赖、但新闻没有证实的前提。"
+        ]
+      }
+    ]
+  },
+  "summary": {
+    "name": "主分析",
+    "prompt": [
+      "你是主分析员。只根据事实清单、看多论点、看空论点和 articles 写给普通用户看的结论。不要引入清单之外的事实。",
+      "today.score 由代码计算。verdict 的 lean、lean_level、certainty 必须与 today.score 完全一致，不能因为论述改方向、强度或把握。",
+      "必须在偏多和偏空里二选一，不能写中性。headline 顺着 score.lean 写，不超过 25 个字，并且以新闻面偏多：或新闻面偏空：开头。",
+      "why 不超过 90 个字，写成两句：先写看到的事实，再用“不过”接上反方最有力的一条证据。事实里的 market_reaction 如果不为空，要写进这句反方证据。",
+      "全部用日常说法。不要出现假设、依据类型、权重，也不要出现英文缩写和行话，例如 Q3、去库、出清。不要出现买入、卖出、建仓。",
+      "key_news 最多 3 条，按 weight 从大到小排。如果存在反方事件，必须保留 1 条。title、plain、source、time、url 必须来自 articles，不能编造链接。",
+      "today.change 是今天的真实涨跌幅，原样写入 today_move.change，不要改这个数字。它为空时 change 留空，不要编造百分比。explain 必须回答今天的涨跌是不是这些新闻导致的；对不上就直说。",
+      "watch_next 至少 1 条，必须同时写 if_better 和 if_worse：好于预期会怎样，差于预期会怎样。没有确认日期时 when 写尚未确定，不要编造披露日。",
+      "more 的条数可以先写 0，程序会改成实际数字。fine_print 固定写：以上为基于公开新闻的研究分析，不构成投资建议。"
+    ],
+    "fields": {
+      "verdict": {
+        "lean": "string",
+        "lean_level": "number",
+        "headline": "string",
+        "why": "string",
+        "certainty": "string",
+        "certainty_note": "string"
+      },
+      "today_move": {
+        "change": "string",
+        "explain": "string"
+      },
+      "key_news": {
+        "max": 6,
+        "items": {
+          "lean": "string",
+          "title": "string",
+          "plain": "string",
+          "why_it_matters": "string",
+          "source": "string",
+          "time": "string",
+          "url": "string"
+        }
+      },
+      "watch_next": {
+        "max": 3,
+        "items": {
+          "what": "string",
+          "when": "string",
+          "if_better": "string",
+          "if_worse": "string"
+        }
+      },
+      "more": {
+        "news_read": "number",
+        "news_used": "number",
+        "note": "string"
+      },
+      "fine_print": "string"
+    }
+  }
+}
