@@ -14,17 +14,19 @@ MENU = {
     "L2": ("cost_zone", "大资金成本区", "down", 1),
     "L3": ("pre_news", "消息发布前价位", "down", 3),
     "L4": ("swing_low", "近期波段低点", "down", 4),
+    "L11": ("swing_60", "60 日波段低点", "down", 4),
     "L5": ("pattern_invalid", "量价形态失效价", "down", 5),
     "L6": ("volume_cluster", "放量密集区", "down", 6),
     "L7": ("low_20", "20 日最低收盘", "down", 7),
-    "L8": ("low_250", "一年最低收盘", "down", 8),
+    "L10": ("low_60", "60 日最低收盘", "down", 8),
+    "L8": ("low_250", "一年最低收盘", "down", 9),
     "U1": ("prev_high", "前高", "up", 1),
     "U2": ("year_high", "一年高点", "up", 2),
     "U3": ("position_high", "位置变偏高价", "up", 3),
     "U4": ("volume_cluster", "放量密集区", "up", 4),
     "U5": ("ma20", "20 日均线", "up", 5),          # 现价跌到均线下方时，均线变成上方的压力
     "U6": ("cost_zone", "大资金成本区", "up", 6),   # 同理：成本区在现价上方就是压力
-    "L9": ("vol_band", "波动带下沿", "down", 9),    # 最后一道兜底：历史收盘价里找不到任何价时才用
+    "L9": ("vol_band", "波动带下沿", "down", 10),   # 最后一道兜底：历史收盘价里找不到任何价时才用
     "U9": ("vol_band", "波动带上沿", "up", 9),
 }
 
@@ -34,11 +36,13 @@ FORMULA = {
     "20 日均线": "最近 20 个交易日收盘价的平均值",
     "大资金成本区": "最近 20 天里大资金（超大单加大单）净流入的日子，按净流入金额加权算出的平均收盘价",
     "消息发布前价位": "重要利好消息发布前一个交易日的收盘价（盘后发布取当天收盘）",
-    "近期波段低点": "最近 20 天里，前后各 3 天收盘价都更高的那个低点",
+    "近期波段低点": "最近 20 天里，前后各 3 天收盘价都更高、并且低于现价的那个低点",
+    "60 日波段低点": "最近 20 天没有低于现价的波段低点时，改看最近 60 天里同样定义、并且低于现价的低点",
     "量价形态失效价": "收盘价跌回 20 天前的收盘价，近 20 日就不再是上涨，现在的量价判断就不成立",
     "放量密集区": "最近 60 天成交量最集中的那一档价格",
-    "20 日最低收盘": "最近 20 天里最低的收盘价（上面的价都用不了时的兜底）",
-    "一年最低收盘": "最近 250 天里最低的收盘价（现价已经跌到近期最低时，下方只能参照它）",
+    "20 日最低收盘": "最近 20 天里低于现价的最低收盘。现价自己就是这 20 天的最低时，这条不存在",
+    "60 日最低收盘": "最近 60 天里低于现价的最低收盘。和 20 日最低是同一个价时不重复列出",
+    "一年最低收盘": "最近 250 天里低于现价的最低收盘。现价已经是一年最低时，这条不存在",
     "波动带下沿": "历史收盘价里已经找不到更低的价时的兜底：现价往下两个「一周典型波动」（最近 20 天日波动 × √5 × 2），限制在 3% 到 15% 之间",
     "波动带上沿": "历史收盘价里已经找不到更高的价时的兜底：现价往上两个「一周典型波动」（最近 20 天日波动 × √5 × 2），限制在 3% 到 15% 之间",
     "前高": "最近 60 天里最高的收盘价",
@@ -54,6 +58,16 @@ def _closes(bars: list[dict]) -> list[float]:
 def ma20(bars: list[dict]):
     closes = _closes(bars)[-20:]
     return sum(closes) / len(closes) if len(closes) == 20 else None
+
+
+def low_below(closes: list[float], days: int) -> float | None:
+    """窗口内严格低于最后一根收盘的最低价。现价自己就是最低时，没有这条支撑。"""
+    window = closes[-days:] if len(closes) >= days else closes
+    if len(window) < 2:
+        return None
+    current = closes[-1]
+    below = [value for value in window if value < current]
+    return min(below) if below else None
 
 
 def swing_low(bars: list[dict], window: int = 20, wing: int = 3):
@@ -133,16 +147,28 @@ def raw_candidates(aligned: dict, pattern: str | None = None, news: dict | None 
     prices = {
         "L1" if ma is not None and ma < current else "U5": ma,
         "L2" if cost is not None and cost < current else "U6": cost,
-        "L4": swing_low(bars),
         "L5": pattern_invalid(bars, pattern),
     }
+    swing20 = swing_low(bars, 20)
+    swing60 = swing_low(bars, 60)
+    if swing20 is not None and swing20 < current:
+        prices["L4"] = swing20
+    if swing60 is not None and swing60 < current and swing60 != swing20:
+        prices["L11"] = swing60
     if news and news.get("impact") == "positive":
         prices["L3"] = pre_news(bars, news.get("published"), news.get("session"))
     cluster = volume_cluster(bars)
     if cluster is not None:
         prices["L6" if cluster < current else "U4"] = cluster
-    prices["L7"] = min(closes[-20:])
-    prices["L8"] = min(closes[-250:])
+    low20 = low_below(closes, 20)
+    low60 = low_below(closes, 60)
+    low250 = low_below(closes, 250)
+    if low20 is not None:
+        prices["L7"] = low20
+    if low60 is not None and low60 != low20:
+        prices["L10"] = low60
+    if low250 is not None and low250 not in (low20, low60):
+        prices["L8"] = low250
     prices["U1"] = max(closes[-60:])
     prices["U2"] = max(closes[-250:])
     if len(closes) >= 60:

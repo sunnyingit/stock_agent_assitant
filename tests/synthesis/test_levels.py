@@ -321,6 +321,14 @@ class IntegrationTest(unittest.TestCase):
         self.assertEqual([item["id"] for item in picked], ["L4", "L1"])
         self.assertEqual(cand.fallback_rows(rows, "up"), [])
 
+    def test_sixty_day_low_is_used_when_price_is_already_the_twenty_day_low(self):
+        closes = [50.0] * 230 + [20.0] * 10 + [40.0] * 10 + [30.0] * 5 + [40.0] * 25 + [36.0] * 19 + [35.0]
+        rows = {item["id"]: item for item in cand.raw_candidates(make_aligned(closes))}
+        self.assertNotIn("L7", rows)
+        self.assertEqual(rows["L10"]["price"], 30.0)
+        self.assertEqual(rows["L8"]["price"], 20.0)
+        self.assertLess(rows["L10"]["price"], closes[-1])
+
     def test_twenty_day_low_is_the_last_resort_support(self):
         aligned = make_aligned()
         rows = {item["id"]: item for item in cand.raw_candidates(aligned)}
