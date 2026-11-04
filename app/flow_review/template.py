@@ -21,14 +21,19 @@ TITLES = {key: title for key, title, _ in QUESTIONS}
 
 # 每个问题该看的事实：给模型一张"看哪几条"的索引，减少漏看和乱引用
 RELEVANT = {
-    "q1": ["fr.ret_20d", "fr.ret_5d", "fr.big_net_20d", "fr.net_rate_20d", "fr.pattern"],
-    "q2": ["fr.elg_net_20d", "fr.lg_net_20d", "fr.md_net_20d", "fr.sm_net_20d", "fr.concentration"],
-    "q3": ["fr.streak", "fr.in_out_days", "fr.trend", "fr.net_rate_5d", "fr.net_rate_20d", "fr.last_day_net", "fr.last_day_z"],
-    "q4": ["fr.net_rate_20d", "fr.net_rate_5d", "fr.net_to_circ", "fr.circ_mv", "fr.flow_pctile", "fr.last_day_rate", "fr.last_day_z"],
-    "q5": ["fr.ret_20d", "fr.sector_ret", "fr.index_ret", "fr.sector_flow", "fr.net_rate_vs_sector", "fr.sector_rank", "fr.market_turnover"],
-    "q6": ["fr.toplist_days", "fr.toplist_net", "fr.toplist_inst_net", "fr.margin_buy_pct", "fr.margin_change_10d", "fr.block_trade"],
+    "q1": ["fr.ret_5d", "fr.ret_3d", "fr.ret_20d", "fr.big_net_5d", "fr.big_net_20d", "fr.net_rate_5d", "fr.net_rate_3d", "fr.net_rate_20d", "fr.pattern", "fr.high_vol_down", "fr.close_pos"],
+    "q2": ["fr.elg_net_5d", "fr.lg_net_5d", "fr.md_net_5d", "fr.sm_net_5d", "fr.concentration", "fr.elg_net_20d", "fr.lg_net_20d"],
+    "q3": ["fr.streak", "fr.in_out_days", "fr.trend", "fr.net_rate_5d", "fr.net_rate_3d", "fr.net_rate_20d", "fr.last_day_net", "fr.last_day_z", "fr.last_share_5d"],
+    "q4": ["fr.net_rate_5d", "fr.net_rate_3d", "fr.net_rate_20d", "fr.net_to_circ", "fr.circ_mv", "fr.flow_pctile", "fr.last_day_rate", "fr.last_day_z"],
+    "q5": [
+        "fr.ret_5d", "fr.sector_ret", "fr.index_ret", "fr.sector_flow", "fr.net_rate_vs_sector",
+        "fr.ret_3d", "fr.sector_ret_3d", "fr.index_ret_3d", "fr.sector_flow_3d", "fr.net_rate_vs_sector_3d",
+        "fr.ret_20d", "fr.sector_ret_20d", "fr.index_ret_20d", "fr.sector_flow_20d", "fr.net_rate_vs_sector_20d",
+        "fr.sector_rank", "fr.market_turnover",
+    ],
+    "q6": ["fr.toplist_days", "fr.toplist_net", "fr.toplist_inst_net", "fr.margin_buy_pct", "fr.margin_change_10d", "fr.margin_pctile", "fr.block_trade"],
     "q7": ["fr.limit_days", "fr.limit_last", "fr.zero_volume_days", "fr.data_lag", "fr.coverage"],
-    "q8": ["fr.from_year_high", "fr.hints", "fr.rel_vol", "fr.up_down_vol", "fr.turnover_pctile", "fr.pattern"],
+    "q8": ["fr.from_year_high", "fr.hints", "fr.hint_pv", "fr.hint_ind", "fr.hint_stall", "fr.hint_record", "fr.rel_vol_5d", "fr.rel_vol", "fr.up_down_vol", "fr.turnover_pctile", "fr.pattern"],
 }
 
 
@@ -48,29 +53,40 @@ def answers(d: dict, text: dict[str, str], anomalies: list[dict]) -> list[dict]:
     has = text.__contains__
     out = []
 
-    # q1
-    if d.get("ret_20d") is None or d.get("big_net_20d") is None:
+    # q1：主结论近 5 日
+    if d.get("ret_5d") is None or d.get("big_net_5d") is None:
         out.append(_missing("q1", "缺少价格或资金流数据"))
     else:
-        up, inflow = d["ret_20d"] > 0, d["big_net_20d"] > 0
-        cites = ["fr.ret_20d", "fr.big_net_20d"]
+        up, inflow = d["ret_5d"] > 0, d["big_net_5d"] > 0
+        cites = ["fr.ret_5d", "fr.big_net_5d"]
         if up and inflow:
-            out.append(_item("q1", "support", f"近 20 日股价 {text['fr.ret_20d']}，大资金同期净额 {text['fr.big_net_20d']}，价格和资金方向一致。", cites))
+            said = f"近 5 日股价 {text['fr.ret_5d']}，大资金同期净额 {text['fr.big_net_5d']}，价格和资金方向一致。"
+            status = "support"
         elif up:
-            out.append(_item("q1", "warn", f"近 20 日股价 {text['fr.ret_20d']}，但大资金同期净额 {text['fr.big_net_20d']}，上涨没有大资金配合，出现背离。", cites))
+            said = f"近 5 日股价 {text['fr.ret_5d']}，但大资金同期净额 {text['fr.big_net_5d']}，上涨没有大资金配合，出现背离。"
+            status = "warn"
         elif inflow:
-            out.append(_item("q1", "neutral", f"近 20 日股价 {text['fr.ret_20d']}，大资金同期净额 {text['fr.big_net_20d']}，下跌中有资金承接，需要观察是否企稳。", cites))
+            said = f"近 5 日股价 {text['fr.ret_5d']}，大资金同期净额 {text['fr.big_net_5d']}，下跌中有资金承接，需要观察是否企稳。"
+            status = "neutral"
         else:
-            out.append(_item("q1", "warn", f"近 20 日股价 {text['fr.ret_20d']}，大资金同期净额 {text['fr.big_net_20d']}，价格和资金同步走弱。", cites))
+            said = f"近 5 日股价 {text['fr.ret_5d']}，大资金同期净额 {text['fr.big_net_5d']}，价格和资金同步走弱。"
+            status = "warn"
+        if d.get("high_vol_down"):
+            said += f"其中放量下跌 {text['fr.high_vol_down']}。"
+            cites.append("fr.high_vol_down")
+        if has("fr.close_pos"):
+            said += f"近 5 日收盘强度 {text['fr.close_pos']}。"
+            cites.append("fr.close_pos")
+        out.append(_item("q1", status, said, cites))
 
-    # q2：东财四档净额合计约等于 0，大额和小额方向相反是口径的必然，不能当证据；要看各档内部是否同向
-    sizes = [d.get(f"{key}_net_20d") for key in ("elg", "lg", "md", "sm")]
+    # q2：近 5 日分档；东财四档净额合计约等于 0，要看超大单和大单是否同向
+    sizes = [d.get(f"{key}_net_5d") for key in ("elg", "lg", "md", "sm")]
     if any(value is None for value in sizes):
         out.append(_missing("q2", "缺少分档资金流"))
     else:
         elg, lg = sizes[0], sizes[1]
-        cites = ["fr.elg_net_20d", "fr.lg_net_20d", "fr.md_net_20d", "fr.sm_net_20d"]
-        tail = (f"超大单 {text['fr.elg_net_20d']}，大单 {text['fr.lg_net_20d']}，中单 {text['fr.md_net_20d']}，小单 {text['fr.sm_net_20d']}。"
+        cites = ["fr.elg_net_5d", "fr.lg_net_5d", "fr.md_net_5d", "fr.sm_net_5d"]
+        tail = (f"近 5 日超大单 {text['fr.elg_net_5d']}，大单 {text['fr.lg_net_5d']}，中单 {text['fr.md_net_5d']}，小单 {text['fr.sm_net_5d']}。"
                 "各档净额合计接近 0，大额和小额方向相反是统计口径的必然，真正要看的是超大单和大单是否同向。")
         if elg > 0 and lg > 0:
             out.append(_item("q2", "support", "超大单和大单同时净流入，大额资金内部方向一致。" + tail, cites))
@@ -83,30 +99,30 @@ def answers(d: dict, text: dict[str, str], anomalies: list[dict]) -> list[dict]:
     if not has("fr.trend") and not has("fr.streak"):
         out.append(_missing("q3", "缺少逐日资金流"))
     else:
-        streak, cites = d.get("streak") or 0, [c for c in ("fr.streak", "fr.trend", "fr.in_out_days") if has(c)]
+        streak, cites = d.get("streak") or 0, [c for c in ("fr.streak", "fr.trend", "fr.in_out_days", "fr.last_share_5d") if has(c)]
         parts = [text[c] for c in cites]
         status = "support" if streak >= 3 else "warn" if streak <= -3 else "neutral"
         out.append(_item("q3", status, "；".join(parts) + "。", cites))
 
-    # q4
-    if d.get("net_rate_20d") is None:
+    # q4：力度看近 5 日
+    if d.get("net_rate_5d") is None:
         out.append(_missing("q4", "缺少资金流和成交额"))
     else:
-        rate, cites = d["net_rate_20d"], [c for c in ("fr.net_rate_20d", "fr.flow_pctile", "fr.net_to_circ") if has(c)]
+        rate, cites = d["net_rate_5d"], [c for c in ("fr.net_rate_5d", "fr.flow_pctile", "fr.net_to_circ", "fr.net_rate_20d") if has(c)]
         strength = "较强" if abs(rate) >= 0.05 else "一般" if abs(rate) >= 0.02 else "很弱"
         side = "流入" if rate > 0 else "流出"
         extra = "，".join(f"{text[c]}" if c != "fr.flow_pctile" else f"单日强度处于近一年 {text[c]} 分位" for c in cites[1:])
         status = ("support" if rate > 0 else "warn") if strength != "很弱" else "neutral"
-        out.append(_item("q4", status, f"近 20 日大资金净{side}占成交额 {text['fr.net_rate_20d']}，力度{strength}" + (f"；{extra}" if extra else "") + "。", cites))
+        out.append(_item("q4", status, f"近 5 日大资金净{side}占成交额 {text['fr.net_rate_5d']}，力度{strength}" + (f"；{extra}" if extra else "") + "。", cites))
 
-    # q5
+    # q5：主结论近 5 日；3 / 20 日对照说明是个股强还是大家一起涨
     cites = [c for c in ("fr.sector_ret", "fr.index_ret", "fr.sector_flow", "fr.sector_rank", "fr.market_turnover") if has(c)]
-    if not cites or d.get("ret_20d") is None:
+    if not cites or d.get("ret_5d") is None:
         out.append(_missing("q5", "缺少板块或大盘数据"))
     else:
         bits = []
         if d.get("sector_ret") is not None:
-            bits.append(f"同期板块 {text['fr.sector_ret']}")
+            bits.append(f"近 5 日板块 {text['fr.sector_ret']}")
         if d.get("index_ret") is not None:
             bits.append(f"沪深300 {text['fr.index_ret']}")
         if has("fr.sector_flow"):
@@ -118,16 +134,33 @@ def answers(d: dict, text: dict[str, str], anomalies: list[dict]) -> list[dict]:
         ref = d.get("sector_ret") if d.get("sector_ret") is not None else d.get("index_ret")
         if ref is None:
             status, lead = "neutral", ""
-        elif d["ret_20d"] > ref + 0.03:
-            status, lead = "support", f"本股涨幅 {text['fr.ret_20d']}，跑赢参照，"
-        elif d["ret_20d"] < ref - 0.03:
-            status, lead = "warn", f"本股涨幅 {text['fr.ret_20d']}，跑输参照，"
+        elif d["ret_5d"] > ref + 0.03:
+            status, lead = "support", f"本股近 5 日涨幅 {text['fr.ret_5d']}，跑赢参照，"
+        elif d["ret_5d"] < ref - 0.03:
+            status, lead = "warn", f"本股近 5 日涨幅 {text['fr.ret_5d']}，跑输参照，"
         else:
-            status, lead = "neutral", f"本股涨幅 {text['fr.ret_20d']}，和参照基本同步，"
-        out.append(_item("q5", status, lead + "，".join(bits) + "。", ["fr.ret_20d"] + cites))
+            status, lead = "neutral", f"本股近 5 日涨幅 {text['fr.ret_5d']}，和参照基本同步，"
+        contrast = []
+        for days in (3, 20):
+            ret_key, sec_key = f"ret_{days}d", f"sector_ret_{days}d"
+            fact_ret, fact_sec = f"fr.ret_{days}d", f"fr.sector_ret_{days}d"
+            if d.get(ret_key) is None or d.get(sec_key) is None or not has(fact_ret) or not has(fact_sec):
+                continue
+            gap = d[ret_key] - d[sec_key]
+            label = "跑赢板块" if gap > 0.03 else "跑输板块" if gap < -0.03 else "与板块同步"
+            contrast.append(f"近 {days} 日{label}（本股 {text[fact_ret]} / 板块 {text[fact_sec]}）")
+            cites.extend([fact_ret, fact_sec])
+        if contrast:
+            bits.append("对照：" + "；".join(contrast))
+        seen, ordered = set(), []
+        for fact_id in ["fr.ret_5d"] + cites:
+            if fact_id not in seen:
+                seen.add(fact_id)
+                ordered.append(fact_id)
+        out.append(_item("q5", status, lead + "，".join(bits) + "。", ordered))
 
     # q6
-    cites = [c for c in ("fr.toplist_days", "fr.toplist_inst_net", "fr.margin_buy_pct", "fr.margin_change_10d", "fr.block_trade") if has(c)]
+    cites = [c for c in ("fr.toplist_days", "fr.toplist_inst_net", "fr.margin_buy_pct", "fr.margin_change_10d", "fr.margin_pctile", "fr.block_trade") if has(c)]
     if not cites:
         out.append(_missing("q6", "龙虎榜、融资融券、大宗交易都没有取到"))
     else:
@@ -140,6 +173,8 @@ def answers(d: dict, text: dict[str, str], anomalies: list[dict]) -> list[dict]:
             bits.append("融资买入占成交额 " + text["fr.margin_buy_pct"])
         if has("fr.margin_change_10d"):
             bits.append("融资余额 10 日变化 " + text["fr.margin_change_10d"])
+        if has("fr.margin_pctile"):
+            bits.append("融资余额增幅 " + text["fr.margin_pctile"])
         if has("fr.block_trade"):
             bits.append("大宗交易 " + text["fr.block_trade"])
         inst = d.get("toplist_inst_net")
@@ -160,8 +195,9 @@ def answers(d: dict, text: dict[str, str], anomalies: list[dict]) -> list[dict]:
     else:
         hints, gap = d.get("hints") or [], d["from_year_high"]
         where = "接近一年高点" if gap >= -0.1 else "处在一年高点下方较远的位置" if gap <= -0.3 else "处在一年高点下方的中间位置"
+        detail = [fact for fact in ("fr.hint_pv", "fr.hint_ind", "fr.hint_stall", "fr.hint_record") if d.get(fact)]
         if hints:
-            out.append(_item("q8", "warn", f"收盘价距一年高点 {text['fr.from_year_high']}，{where}，同时出现：{'、'.join(hints)}。", ["fr.from_year_high", "fr.hints"]))
+            out.append(_item("q8", "warn", f"收盘价距一年高点 {text['fr.from_year_high']}，{where}，同时出现：{'、'.join(hints)}。", ["fr.from_year_high", "fr.hints"] + detail))
         else:
             out.append(_item("q8", "support" if gap < -0.1 else "neutral", f"收盘价距一年高点 {text['fr.from_year_high']}，{where}，没有出现滞涨或顶背离。", ["fr.from_year_high", "fr.hints"]))
 
@@ -175,17 +211,48 @@ def answers(d: dict, text: dict[str, str], anomalies: list[dict]) -> list[dict]:
     # q10
     by_key = {item["key"]: item for item in out}
     lead = []
-    if d.get("ret_20d") is not None:
-        lead.append(f"近 20 日股价 {text['fr.ret_20d']}")
-    if d.get("big_net_20d") is not None:
-        lead.append(f"大资金净{'流入' if d['big_net_20d'] > 0 else '流出'} {text['fr.big_net_20d'].lstrip('+-')}")
+    if d.get("ret_5d") is not None:
+        lead.append(f"近 5 日股价 {text['fr.ret_5d']}")
+    if d.get("big_net_5d") is not None:
+        lead.append(f"大资金净{'流入' if d['big_net_5d'] > 0 else '流出'} {text['fr.big_net_5d'].lstrip('+-')}")
     statuses = [by_key[k]["status"] for k in ("q1", "q2", "q3", "q4") if k in by_key and by_key[k]["status"] != "missing"]
     pos, neg = statuses.count("support"), statuses.count("warn")
     status = "support" if pos > neg + 1 else "warn" if neg > pos + 1 else "neutral"
     risk = f"需要留意：{anomalies[0]['title']}。" if anomalies else "暂未发现明显异常。"
-    cites = [c for c in ("fr.ret_20d", "fr.big_net_20d") if has(c)]
+    cites = [c for c in ("fr.ret_5d", "fr.big_net_5d") if has(c)]
     if lead:
         out.append(_item("q10", status, "，".join(lead) + "；" + risk, cites))
     else:
         out.append(_missing("q10", "缺少价格和资金流数据"))
+    return out
+
+
+_FOLLOW_STATUS = {
+    "strong": "support", "yes": "support", "weak": "neutral",
+    "mixed": "neutral", "none": "warn", "flat": "neutral", "unknown": "neutral",
+}
+
+
+def rule_signals(payload: dict, items: list[dict]) -> list[dict]:
+    """页面四句判断：全部由规则/模板答案生成，不调模型。"""
+    by = {row["key"]: row for row in items}
+    out: list[dict] = []
+    follow = payload.get("follow") or {}
+    if follow.get("label"):
+        out.append({
+            "key": "follow",
+            "status": _FOLLOW_STATUS.get(follow.get("level"), "neutral"),
+            "text": str(follow["label"])[:40],
+            "cites": [],
+        })
+    for key, question in (("price", "q1"), ("internal", "q2"), ("sector", "q5")):
+        row = by.get(question)
+        if not row or row.get("status") == "missing" or not row.get("answer"):
+            continue
+        out.append({
+            "key": key,
+            "status": row["status"],
+            "text": str(row["answer"])[:40],
+            "cites": list(row.get("cites") or []),
+        })
     return out

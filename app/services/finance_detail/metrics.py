@@ -106,15 +106,21 @@ def _visible(rows: list[dict], as_of: date) -> list[dict]:
     return [row for row in rows or [] if str(row.get("ann_date") or "") and str(row["ann_date"]) <= cut]
 
 
+def _row_rank(row: dict) -> tuple:
+    """更正版优先于原始版；同一类里取公告日更晚的。公告日相同则后出现的覆盖先出现的。"""
+    revised = 1 if str(row.get("update_flag")) == "1" else 0
+    return (revised, str(row.get("ann_date") or ""))
+
+
 def _by_end(rows: list[dict]) -> dict[str, dict]:
-    """同一报告期有原始和更正两版时，取更正版（update_flag 为 1）。"""
+    """同一报告期有多版时，留下应采用的那一版。"""
     out: dict[str, dict] = {}
     for row in rows:
         end = str(row.get("end_date") or "")
         if not end:
             continue
         prior = out.get(end)
-        if prior is None or str(row.get("update_flag")) == "1" or (str(prior.get("update_flag")) != "1" and str(row.get("ann_date")) > str(prior.get("ann_date"))):
+        if prior is None or _row_rank(row) >= _row_rank(prior):
             out[end] = row
     return out
 
@@ -418,14 +424,14 @@ def _balance(bs: dict, cum, end) -> dict:
         values = [num((row or {}).get(f)) for f in fields]
         return None if all(v is None for v in values) else sum(v or 0 for v in values)
 
-    ar_now, ar_before = pick(now, "accounts_receiv", "notes_receiv"), pick(before, "accounts_receiv", "notes_receiv")
+    ar_now, ar_before = pick(now, "accounts_receiv", "notes_receiv", "receiv_financing"), pick(before, "accounts_receiv", "notes_receiv", "receiv_financing")
     inv_now, inv_before = pick(now, "inventories"), pick(before, "inventories")
     cl_now, cl_before = pick(now, "contract_liab", "adv_receipts"), pick(before, "contract_liab", "adv_receipts")
     rev_yoy = growth(cum["revenue"].get(end), cum["revenue"].get(last_year(end)))
     cost_yoy = growth(cum["oper_cost"].get(end), cum["oper_cost"].get(last_year(end)))
     ar_yoy, inv_yoy = growth(ar_now, ar_before), growth(inv_now, inv_before)
     equity = num((now or {}).get("total_hldr_eqy_exc_min_int"))
-    debt = pick(now, "st_borr", "lt_borr", "bond_payable", "non_cur_liab_due_1y")
+    debt = pick(now, "st_borr", "lt_borr", "bond_payable", "non_cur_liab_due_1y", "lease_liab")
     goodwill = num((now or {}).get("goodwill"))
     return {
         "cash_balance_for_runway": num((now or {}).get("money_cap")),
@@ -519,32 +525,41 @@ def _window(bars: list[dict], dates: list[str], sector: dict, lo: int, hi: int) 
     return {"stock": stock - 1, "sector": sec - 1 if covered else None, "excess": stock - sec if covered else None}
 
 
+def _event_sessions(dates: list[str], ann: str) -> tuple[int, list[int]] | None:
+    """披露日前一个交易日作起算，披露日当天（休市则顺延到下一个交易日）是第 1 个反应日。
+    第 k 档就是这 k 个交易日的累计涨跌，不多算披露日之前那一天。"""
+    before = [i for i, day in enumerate(dates) if day < ann]
+    if not before:
+        return None
+    base = before[-1]
+    sessions = [i for i, day in enumerate(dates) if day >= ann]
+    return base, sessions
+
+
 def _reaction(snapshot: dict, announced: date | None, today: date) -> dict | None:
-    """披露后的股价反应。统一从披露日前一个交易日的收盘算起（公告只给日期不给时刻，盘前盘后都覆盖到），
-    到披露日之后第 1、3、5 个交易日的收盘，对照所在申万行业指数。"""
+    """披露后的股价反应。从披露日前一个交易日的收盘算到第 1、3、5 个反应日的收盘，对照所在申万行业指数。
+    公告只有日期、没有时刻：披露日当天有成交，就把当天算作第 1 个交易日。"""
     if announced is None:
         return None
     cut = ymd(today)
     bars = sorted((r for r in snapshot.get("bars") or [] if str(r.get("trade_date")) <= cut), key=lambda r: str(r["trade_date"]))
     dates = [str(r["trade_date"]) for r in bars]
-    ann = ymd(announced)
-    before = [i for i, day in enumerate(dates) if day < ann]
-    if not before:
+    span = _event_sessions(dates, ymd(announced))
+    if span is None:
         return None
-    base = before[-1]
+    base, sessions = span
     sector = {str(r["trade_date"]): num(r.get("pct_change")) for r in (snapshot.get("sector") or {}).get("rows") or [] if num(r.get("pct_change")) is not None}
-    after = [i for i, day in enumerate(dates) if day > ann]
     out = {
         "base_date": dates[base], "sector_name": (snapshot.get("sector") or {}).get("name") or "",
-        "days_after": len(after), "after": {}, "pre5": None, "volume_ratio": None,
+        "days_after": len(sessions), "after": {}, "pre5": None, "volume_ratio": None,
     }
     for k in (1, 3, 5):
-        if len(after) >= k:
-            out["after"][k] = _window(bars, dates, sector, base, after[k - 1])
+        if len(sessions) >= k:
+            out["after"][k] = _window(bars, dates, sector, base, sessions[k - 1])
     if base >= 5:
         out["pre5"] = _window(bars, dates, sector, base - 5, base)
-    day = base + 1
-    if day < len(bars):
+    if sessions:
+        day = sessions[0]
         today_amount = num(bars[day].get("amount"))
         history = [a for a in (num(bars[i].get("amount")) for i in range(max(0, base - 19), base + 1)) if a]
         if today_amount and len(history) >= 10:
@@ -553,17 +568,15 @@ def _reaction(snapshot: dict, announced: date | None, today: date) -> dict | Non
 
 
 def forward_returns(bars: list[dict], sector_rows: list[dict], announced: date, horizons=(5, 20)) -> dict[int, dict]:
-    """披露后第 N 个交易日的个股涨幅和相对行业的超额，起算点同 _reaction（披露日前一个交易日的收盘）。数据还不够的档位不给。"""
+    """披露后第 N 个交易日的个股涨幅和相对行业的超额，起算点和档位同 _reaction。数据还不够的档位不给。"""
     ordered = sorted(bars, key=lambda r: str(r["trade_date"]))
     dates = [str(r["trade_date"]) for r in ordered]
-    ann = ymd(announced)
-    before = [i for i, day in enumerate(dates) if day < ann]
-    if not before:
+    span = _event_sessions(dates, ymd(announced))
+    if span is None:
         return {}
-    base = before[-1]
-    after = [i for i, day in enumerate(dates) if day > ann]
+    base, sessions = span
     sector = {str(r["trade_date"]): num(r.get("pct_change")) for r in sector_rows or [] if num(r.get("pct_change")) is not None}
-    return {n: w for n in horizons if len(after) >= n and (w := _window(ordered, dates, sector, base, after[n - 1]))}
+    return {n: w for n in horizons if len(sessions) >= n and (w := _window(ordered, dates, sector, base, sessions[n - 1]))}
 
 
 def _peers(snapshot: dict, m: dict) -> dict | None:

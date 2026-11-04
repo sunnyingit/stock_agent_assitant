@@ -119,22 +119,14 @@ class AttachTest(unittest.TestCase):
         self.assertEqual(built.count(TS) >= 1, True)
         self.assertEqual(attach.attach(self.payload, make_stock(), store, now=store.get(attach.latest_key(TS))["ts"] + 1)["review_state"], "ready")
 
-    def test_build_remembers_the_review_and_a_model_failure_sets_a_retry_time(self):
+    def test_build_remembers_the_rule_review(self):
         payload, aligned = self.payload, make_aligned()
-        review.build(make_stock(), store=self.store, gateway=None, now=NOW, payload=payload, aligned=aligned, extra={"missing": []})
+        result = review.build(make_stock(), store=self.store, gateway=None, now=NOW, payload=payload, aligned=aligned, extra={"missing": []})
         entry = self.store.get(attach.latest_key(TS))
         self.assertEqual(entry["result"]["ts_code"], TS)
         self.assertEqual(entry["retry_after"], 0.0)
-
-        class Down:
-            def complete(self, system, user):
-                raise RuntimeError("模型不可用")
-
-        other = Store(":memory:")
-        review.build(make_stock(), store=other, gateway=Gateway(Down()), now=NOW, payload=payload, aligned=aligned, extra={"missing": []}, model_tag="x")
-        failed = other.get(attach.latest_key(TS))
-        self.assertGreater(failed["retry_after"], failed["ts"])
-        self.assertEqual(failed["result"]["source"], "template")
+        self.assertEqual(result["source"], "template")
+        self.assertTrue(result["signals"])
 
 
 class RouteTest(unittest.TestCase):
@@ -149,34 +141,40 @@ class RouteTest(unittest.TestCase):
         stocks = {TS: make_stock()}
         patches = [
             patch("app.api.v1.resolve_stock", lambda code: stocks.get(code)),
-            patch("app.services.volume_flow.build_detail", lambda stock, window=20, **kw: self.payload),
+            patch("app.services.volume_flow.align.load_aligned", lambda stock: make_aligned()),
+            patch("app.services.volume_flow.build_detail", lambda stock, window=5, **kw: self.payload),
         ]
         for item in patches:
             item.start()
             self.addCleanup(item.stop)
 
     def get(self):
-        return self.client.get(f"/api/v1/stocks/{TS}/dimensions/volume_flow/detail?window=20").get_json()
+        return self.client.get(f"/api/v1/stocks/{TS}/dimensions/volume_flow/detail?window=5").get_json()
 
-    def test_original_fields_stay_and_review_fields_are_added(self):
-        body = self.get()
+    def test_detail_returns_rule_review_without_llm_attach(self):
+        rule = {
+            "ts_code": TS, "source": "template",
+            "items": [{"key": "q1", "status": "support", "answer": "规则答", "cites": [], "source": "template"}],
+            "facts": [{"id": "fr.ret_5d"}], "signals": [], "cited_fact_ids": [],
+        }
+        with patch("app.flow_review.review.build", return_value=rule) as built:
+            body = self.get()
+        built.assert_called_once()
+        self.assertIsNone(built.call_args.kwargs.get("gateway"))
         for key in ("meta", "verdict", "price_volume", "flow_by_size", "flow_daily", "relative_strength", "windows"):
             self.assertIn(key, body)
         self.assertNotIn("position_hints", body)
-        self.assertEqual((body["review"], body["review_state"], body["review_error"]), (None, "disabled", ""))
-
-    def test_a_generated_review_shows_up_in_detail_and_the_cached_payload_is_not_polluted(self):
-        attach.remember(self.store, TS, fake_review())
-        body = self.get()
         self.assertEqual(body["review_state"], "ready")
-        self.assertEqual(body["review"]["facts"], [{"id": "fr.ret_20d"}])
-        self.assertNotIn("review", self.payload)                       # 详情的缓存对象没有被改
+        self.assertEqual(body["review"]["source"], "template")
+        self.assertIsNone(body.get("headline"))
+        self.assertFalse(body.get("analyst_failed"))
+        self.assertNotIn("review", self.payload)
 
-    def test_a_failure_while_reading_the_review_never_breaks_the_detail(self):
-        with patch("app.reviews.attach.attach", side_effect=RuntimeError("库坏了")):
+    def test_a_failure_while_building_rule_review_never_breaks_the_detail(self):
+        with patch("app.flow_review.review.build", side_effect=RuntimeError("规则坏了")):
             body = self.get()
         self.assertEqual(body["review_state"], "unavailable")
-        self.assertIn("库坏了", body["review_error"])
+        self.assertIn("规则坏了", body["review_error"])
         self.assertIn("price_volume", body)
 
 

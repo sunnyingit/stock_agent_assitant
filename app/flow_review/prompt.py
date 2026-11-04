@@ -10,7 +10,7 @@ import json
 
 from app.flow_review.template import QUESTIONS
 
-PROMPT_VERSION = "flow-review-7"
+PROMPT_VERSION = "flow-review-13"
 BANNED = ("建仓", "加仓", "出货", "洗盘", "吸筹", "目标价", "主力", "建议买入", "建议卖出", "买入机会", "卖出信号")
 
 _ASKS = "\n".join(f"{key}. {title}：{ask}" for key, title, ask in QUESTIONS)
@@ -20,11 +20,11 @@ HEAD = f"""【角色：资金面体检】你是面向普通投资者的资金面
 
 RUBRIC = """每个问题的判断标准（status 取 support 偏正面、neutral 中性、warn 需警惕）：
 - 输入里的 reference 是程序按同一套标准给出的参考状态，by_question 告诉你每个问题该看哪几条事实。status 默认采用 reference；只有当事实表里有 reference 没考虑到的证据时才改，并在 answer 里说明依据。
-- q1：看近 20 日涨跌幅和大资金净额的方向。同向 → support；价格涨但大资金净流出（背离）→ warn；价格跌但大资金净流入（有承接，但未必企稳）→ neutral；价格和资金同时走弱 → warn。
-- q2：只看超大单和大单是否同向、中单和小单是否同向，不要拿大额去对小额。超大单和大单同时净流入 → support；同时净流出 → warn；方向不一致 → neutral，并说出分歧在哪一档。
+- q1：主结论看近 5 日涨跌幅和大资金净额的方向；近 3 / 20 日若与 5 日明显不同，在 answer 里点明对照。同向 → support；价格涨但大资金净流出（背离）→ warn；价格跌但大资金净流入（有承接，但未必企稳）→ neutral；价格和资金同时走弱 → warn。
+- q2：只看近 5 日超大单和大单是否同向、中单和小单是否同向，不要拿大额去对小额。超大单和大单同时净流入 → support；同时净流出 → warn；方向不一致 → neutral，并说出分歧在哪一档。
 - q3：看连续天数和"加速还是放缓"。连续净流入不少于 3 天且趋势没有转出 → support；连续净流出不少于 3 天、或趋势转出、或流出在加快 → warn；其余 neutral。
-- q4：净流入占成交额不少于 5%，或单日强度在近一年 80% 分位以上算强；2% 到 5% 算中等；低于 2% 算很弱。强且为流入 → support；强且为流出 → warn；很弱 → neutral。占流通市值的比例作补充说明。
-- q5：本股涨幅和板块（没有板块用大盘）相差超过 3 个百分点才算跑赢或跑输，跑赢 → support，跑输 → warn，其余 neutral；再说板块资金方向、行业资金排名、两市成交额。
+- q4：主看近 5 日净流入占成交额：不少于 5%，或单日强度在近一年 80% 分位以上算强；2% 到 5% 算中等；低于 2% 算很弱。强且为流入 → support；强且为流出 → warn；很弱 → neutral。占流通市值的比例和近 20 日净流入率作补充。
+- q5：主结论看近 5 日：本股涨幅和板块（没有板块用大盘）相差超过 3 个百分点才算跑赢或跑输，跑赢 → support，跑输 → warn，其余 neutral；再用近 3 / 20 日对照说明是「本股更强」还是「板块大盘一起涨」；再说板块资金方向、行业资金排名、两市成交额。
 - q6：龙虎榜机构席位合计净买入超过 0.5 亿元，或融资买入占比有明显抬升 → support；机构净卖出超过 0.5 亿元 → warn；都没有 → neutral，写成"缺少印证"，这不是坏事。
 - q7：近 20 日有疑似涨跌停或停牌 → warn（那几天的数据要打折扣）；没有 → support。财报、解禁等事件日没有接入，不要对事件日下任何结论，也不要猜。
 - q8：命中滞涨、顶背离、天量等位置提示 → warn；接近一年高点（距高点不到 10%）但没有提示 → neutral；其余 support。
@@ -41,11 +41,27 @@ RULES = f"""通用要求：
 7. 如果两项证据互相矛盾，直接说出矛盾，不要为了圆满而回避。"""
 
 EXAMPLES = """示例（只展示写法和语气，数字不要照搬）：
-- 证据一致：{"key": "q1", "status": "support", "answer": "近 20 日股价涨 8.2%，大资金同期净流入 2.1 亿元，价格和资金方向一致，没有背离。", "cites": ["fr.ret_20d", "fr.big_net_20d"]}
-- 内部分歧：{"key": "q2", "status": "neutral", "answer": "超大单净流出 1.1 亿元，大单净流入 3.9 亿元，大额资金内部方向相反，分歧在最大的那一档。", "cites": ["fr.elg_net_20d", "fr.lg_net_20d"]}
-- 证据矛盾：{"key": "q9", "status": "warn", "answer": "大资金在流入，但融资余额 10 日降了 5.1%，两类资金方向不一致，这波流入缺少杠杆资金配合。", "cites": ["fr.big_net_20d", "fr.margin_change_10d"]}"""
+- 证据一致：{"key": "q1", "status": "support", "answer": "近 5 日股价涨 3.2%，大资金同期净流入 1.1 亿元，价格和资金方向一致，没有背离。", "cites": ["fr.ret_5d", "fr.big_net_5d"]}
+- 内部分歧：{"key": "q2", "status": "neutral", "answer": "近 5 日超大单净流出 0.6 亿元，大单净流入 1.4 亿元，大额资金内部方向相反，分歧在最大的那一档。", "cites": ["fr.elg_net_5d", "fr.lg_net_5d"]}
+- 证据矛盾：{"key": "q9", "status": "warn", "answer": "近 5 日大资金在流入，但融资余额 10 日降了 5.1%，两类资金方向不一致，这波流入缺少杠杆资金配合。", "cites": ["fr.big_net_5d", "fr.margin_change_10d"]}"""
 
-FORMAT = """只输出 JSON：{"items": [{"key": "q1", "status": "support", "answer": "", "cites": ["fr.ret_20d"]}]}"""
+FORMAT = """另外用 signals 写四句判断。这四句由你根据事实表下结论，不要套固定句式。
+- follow：有没有人跟着价格走。看成交量、涨跌日的量、大资金是否和价格同一边。
+- price：价格和大资金是不是同一方向。
+- internal：超大单和大单是不是同一方向。
+- sector：板块资金是流入还是流出。
+每句 text 不超过 40 个字。status 只能是 support、neutral、warn。cites 必须是事实表里的编号，句子里的数字必须来自这些事实。
+
+分析写完后，用 cited_fact_ids 挑 1 到 5 条对这只股票资金面最关键的事实，必须来自事实表。按这个顺序，靠前的优先：
+1. 价格和大资金反向，或趋势由流入转为流出、由流出转为流入。
+2. 超大单和大单方向相反，或净流入占成交额达到很强的一档。
+3. 龙虎榜机构大额买卖、融资明显变化、涨跌停或停牌导致数据失真。
+4. 没有上面这些时，再挑近 5 日涨跌和大资金净额。
+中单、小单和大额反向几乎是口径使然，不要因为它占掉名额。
+
+只输出 JSON：{"items": [{"key": "q1", "status": "support", "answer": "", "cites": ["fr.ret_5d"]}],
+"signals": [{"key": "follow", "status": "neutral", "text": "", "cites": ["fr.ret_5d"]}],
+"cited_fact_ids": ["fr.ret_5d", "fr.big_net_5d"]}"""
 
 SYSTEM = "\n\n".join([HEAD, RUBRIC, RULES, EXAMPLES, FORMAT])
 
@@ -53,7 +69,7 @@ FIX_SYSTEM = "\n\n".join([
     HEAD.replace("【角色：资金面体检】", "【角色：资金面体检·修正】"),
     "下面几项你上一次的回答没有通过程序核对（fix 里给出原回答和具体错误）。请只重写这几项：保留原来的判断意思，只改正出错的地方（数字、引用、用词或长度）。status 原样返回 fix 里给出的那个，不要改；answer 的意思也不要变，更不要因此改变对资金方向的判断。",
     RULES,
-    """只输出 JSON：{"items": [{"key": "q1", "status": "support", "answer": "", "cites": ["fr.ret_20d"]}]}""",
+    """只输出 JSON：{"items": [{"key": "q1", "status": "support", "answer": "", "cites": ["fr.ret_5d"]}]}""",
 ])
 
 

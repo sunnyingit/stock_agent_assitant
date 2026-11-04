@@ -111,7 +111,13 @@ def _growth(m, put) -> None:
     put("ff.growth.cum_np_yoy", "累计归母净利润同比", g, "pct", gr["cum_np_yoy"], _pct(gr["cum_np_yoy"]))
     if gr["loss_now"] or gr["loss_prior"]:
         change = gr["loss_change"] or 0
-        put("ff.growth.loss_change", "单季归母较去年同期的变化（亏损时不算百分比）", g, "yi", change, f"{'减亏' if change > 0 else '增亏'} {_yi(abs(change))}")
+        if gr["loss_now"] and gr["loss_prior"]:
+            word = "减亏" if change > 0 else "增亏"
+        elif gr["loss_prior"]:
+            word = "扭亏为盈"
+        else:
+            word = "由盈转亏"
+        put("ff.growth.loss_change", "单季归母较去年同期的变化（亏损或扭亏时不算百分比）", g, "yi", change, f"{word} {_yi(abs(change))}")
     put("ff.growth.qoq_rev", "单季营收环比（未校正）", g, "pct", gr["qoq_rev"], _pct(gr["qoq_rev"]))
     if gr["adj_available"]:
         put("ff.growth.qoq_rev_adj", "季节性校正后的营收环比（本季环比减过去 3 年同季均值）", g, "pp", gr["qoq_rev_adj"], _pp(gr["qoq_rev_adj"]))
@@ -305,14 +311,14 @@ def _reaction(m, put, d) -> None:
     r = m.get("reaction")
     if r:
         put("ff.react.base", "反应的起算点（披露日前一个交易日的收盘；公告只给日期不给时刻，盘前盘后都覆盖）", g, "text", None, f"{r['base_date']} 收盘")
-        put("ff.react.days_after", "披露日之后已观察的交易日数（最多算 5 个，第 5 个交易日后定格）", g, "days", min(r["days_after"], 5), f"{min(r['days_after'], 5)} 个交易日")
+        put("ff.react.days_after", "已观察到的反应交易日数（披露日当天为第 1 日，最多算 5 个）", g, "days", min(r["days_after"], 5), f"{min(r['days_after'], 5)} 个交易日")
         put("ff.react.tone", "财报本身的方向", g, "text", None, tone["text"])
         name = r["sector_name"] or "所属行业"
         if r["pre5"]:
             put("ff.react.pre5", "披露前 5 个交易日的涨跌", g, "text", r["pre5"]["excess"], _move(r["pre5"], name))
         for k, row in r["after"].items():
             if row:
-                put(f"ff.react.after{k}", f"披露日之后第 {k} 个交易日，相对{name}指数的表现", g, "text", row["excess"] if row["excess"] is not None else row["stock"], _move(row, name))
+                put(f"ff.react.after{k}", f"披露日起第 {k} 个交易日，相对{name}指数的表现", g, "text", row["excess"] if row["excess"] is not None else row["stock"], _move(row, name))
         if r["volume_ratio"] is not None:
             put("ff.react.volume", "披露日成交额相对此前 20 日均值", g, "count", r["volume_ratio"], f"{r['volume_ratio']:.2f} 倍")
     peers = m.get("peers")

@@ -52,7 +52,8 @@ CREATE TABLE IF NOT EXISTS jobs (
 CREATE TABLE IF NOT EXISTS watchlist (
   ts_code TEXT PRIMARY KEY,
   name TEXT NOT NULL,
-  added_at REAL NOT NULL
+  added_at REAL NOT NULL,
+  sort_order REAL NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS alerts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -109,6 +110,10 @@ class Store:
             columns = {row["name"] for row in conn.execute("PRAGMA table_info(finance_signals)")}
             if "tracked" not in columns:   # 早先建的库没有这一列
                 conn.execute("ALTER TABLE finance_signals ADD COLUMN tracked TEXT NOT NULL DEFAULT '{}'")
+            watch_cols = {row["name"] for row in conn.execute("PRAGMA table_info(watchlist)")}
+            if "sort_order" not in watch_cols:
+                conn.execute("ALTER TABLE watchlist ADD COLUMN sort_order REAL NOT NULL DEFAULT 0")
+                conn.execute("UPDATE watchlist SET sort_order = added_at")
 
     @contextmanager
     def _conn(self):
@@ -253,11 +258,14 @@ class Store:
 
     # ------------------------------------------------------------ 自选
     def watch_add(self, ts_code: str, name: str, now: float | None = None) -> bool:
-        """加入自选。已经在里面返回 False。"""
+        """加入自选。已经在里面返回 False。新加的排到用户序末尾。"""
+        now = now if now is not None else time.time()
         with self._conn() as conn:
+            row = conn.execute("SELECT MAX(sort_order) AS m FROM watchlist").fetchone()
+            tail = (row["m"] if row and row["m"] is not None else now) + 1
             cursor = conn.execute(
-                "INSERT OR IGNORE INTO watchlist (ts_code, name, added_at) VALUES (?,?,?)",
-                (ts_code, name, now if now is not None else time.time()),
+                "INSERT OR IGNORE INTO watchlist (ts_code, name, added_at, sort_order) VALUES (?,?,?,?)",
+                (ts_code, name, now, tail),
             )
             return cursor.rowcount > 0
 
@@ -267,7 +275,31 @@ class Store:
 
     def watch_list(self) -> list[dict]:
         with self._conn() as conn:
-            return [dict(row) for row in conn.execute("SELECT * FROM watchlist ORDER BY added_at, ts_code").fetchall()]
+            return [dict(row) for row in conn.execute("SELECT * FROM watchlist ORDER BY sort_order, ts_code").fetchall()]
+
+    def watch_pin(self, ts_code: str) -> bool:
+        """置顶到用户序第一位（「需要留意」区之后仍由列表组装决定）。"""
+        with self._conn() as conn:
+            row = conn.execute("SELECT 1 FROM watchlist WHERE ts_code=?", (ts_code,)).fetchone()
+            if row is None:
+                return False
+            top = conn.execute("SELECT MIN(sort_order) AS m FROM watchlist").fetchone()
+            head = (top["m"] if top and top["m"] is not None else time.time()) - 1
+            conn.execute("UPDATE watchlist SET sort_order=? WHERE ts_code=?", (head, ts_code))
+            return True
+
+    def watch_reorder(self, codes: list[str]) -> bool:
+        """按传入顺序重写 sort_order。codes 须覆盖当前自选且无重复。"""
+        wanted = [str(code).strip() for code in codes if str(code).strip()]
+        if len(wanted) != len(set(wanted)):
+            return False
+        with self._conn() as conn:
+            held = [row["ts_code"] for row in conn.execute("SELECT ts_code FROM watchlist").fetchall()]
+            if set(wanted) != set(held):
+                return False
+            for index, code in enumerate(wanted):
+                conn.execute("UPDATE watchlist SET sort_order=? WHERE ts_code=?", (float(index), code))
+            return True
 
     # ------------------------------------------------------------ 提醒
     def alert_add(self, ts_code: str, side: str, price: float, confirm: str = "close", base_name: str = "", now: float | None = None) -> dict:

@@ -14,6 +14,7 @@ from app.services.volume_flow.copy import write_text
 from app.services.volume_flow.follow import follow as follow_of, refine
 from app.services.volume_flow.metrics import compute
 from app.services.volume_flow.rules import (
+    DEFAULT_WINDOW,
     DISCLAIMER_TEXT,
     FLOW_SOURCE,
     RULE_VERSION,
@@ -25,7 +26,7 @@ from app.services.volume_flow.rules import (
 FORMULA_TEXT = "相对量能 = 窗口日均成交量 ÷ 窗口之前 60 日均量（两段不重叠）；净流入率 = 大资金（超大单 + 大单）净流入 ÷ 成交额。"
 
 
-def build_detail(stock: Stock, window: int = 20, aligned: dict | None = None, today: date | None = None) -> dict:
+def build_detail(stock: Stock, window: int = DEFAULT_WINDOW, aligned: dict | None = None, today: date | None = None) -> dict:
     """不调用大模型：文字用模板，AI 解读由 app/flow_review 另外生成，路由层并进返回。"""
     if is_hk(stock):
         raise RuntimeError(f"{stock.ts_code} 是港股，暂无与 A 股相同的资金流数据")
@@ -67,6 +68,12 @@ def build_detail(stock: Stock, window: int = 20, aligned: dict | None = None, to
             "up_down_vol_ratio": metrics["price"]["up_down_vol_ratio"],
             "turnover": _ratio(metrics["price"]["turnover"]),
             "turnover_pctile": _ratio(metrics["price"]["turnover_pctile"]),
+            # 图单独用近 20 日，主窗口数字仍在 bars
+            "chart": {
+                "bars": [_bar(row) for row in (metrics.get("price_chart") or {}).get("bars") or []],
+                "vol_base": (metrics.get("price_chart") or {}).get("vol_base"),
+                "days": (metrics.get("price_chart") or {}).get("days") or 0,
+            },
         },
         "flow_by_size": {
             "rows": metrics["flow"]["rows"],
@@ -75,16 +82,16 @@ def build_detail(stock: Stock, window: int = 20, aligned: dict | None = None, to
         },
         "flow_daily": {
             "days": metrics["daily"]["days"],
+            "history": (metrics.get("history") or {}).get("days") or [],
             "trend": verdict.get("trend") or "",
         },
         "relative_strength": {
-            "bars": [_ret_bar(row) for row in (
-                metrics["relative"]["stock"],
-                metrics["relative"]["sector"],
-                metrics["relative"]["index"],
-            )],
-            "sector_flow": metrics["relative"]["sector_flow"],
-            "net_rate_vs_sector": _ratio(metrics["relative"]["net_rate_vs_sector"]),
+            **_relative_public(metrics["relative"]),
+            # 3 / 5 / 20：用来区分「本股更强」还是「板块大盘一起涨」
+            "windows": [
+                {"days": row["days"], **_relative_public(row)}
+                for row in metrics.get("relative_windows") or []
+            ],
         },
         "position_hints": {
             "items": hints,
@@ -151,6 +158,15 @@ def _ret_bar(row: dict) -> dict:
     return {**row, "ret": _ratio(row.get("ret"))}
 
 
+def _relative_public(block: dict) -> dict:
+    """相对强弱一块：主窗口和多窗口共用同一套字段。"""
+    return {
+        "bars": [_ret_bar(row) for row in (block["stock"], block["sector"], block["index"])],
+        "sector_flow": block.get("sector_flow") or "",
+        "net_rate_vs_sector": _ratio(block.get("net_rate_vs_sector")),
+    }
+
+
 def _window_row(row: dict) -> dict:
     return {**row, "ret": _ratio(row.get("ret")), "net_rate": _ratio(row.get("net_rate"))}
 
@@ -175,7 +191,7 @@ def _window(value: int) -> int:
     try:
         days = int(value)
     except (TypeError, ValueError):
-        return 20
+        return DEFAULT_WINDOW
     if days < 1:
-        return 20
+        return DEFAULT_WINDOW
     return min(days, 60)

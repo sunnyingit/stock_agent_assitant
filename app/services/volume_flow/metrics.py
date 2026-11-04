@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 _SIZES = ("super_large", "large", "medium", "small")
+# 相对强弱多窗口：短 / 一周交易日 / 主窗口常用档；和 windows.rows 里的 3、5、20 对齐
+REL_WINDOWS = (3, 5, 20)
+# 量价图展示窗口：主结论可以是 5 日，图仍看近 20 日更清楚
+CHART_WINDOW = 20
 
 
 def compute(aligned: dict, window: int) -> dict:
@@ -28,6 +32,7 @@ def compute(aligned: dict, window: int) -> dict:
     if big is not None and big > 0 and elg is not None and elg > 0:
         concentration = round(elg / big, 4)
     daily = _daily(bars[-10:], flow)
+    daily_history = _daily(bars, flow)
     return {
         "price": {
             "bars": [_bar(row) for row in chosen],
@@ -38,11 +43,30 @@ def compute(aligned: dict, window: int) -> dict:
             "turnover_pctile": _percentile(turnover, history),
             "ret": _round(_cumulative([row.get("chg") for row in chosen]), 2),
         },
+        "price_chart": _price_chart(bars),
         "flow": {"rows": flow_rows, "big": big, "concentration": concentration},
         "daily": daily,
+        "history": daily_history,
         "relative": _relative(chosen, flow, sector, index, aligned),
+        "relative_windows": [
+            {"days": days, **_relative(bars[-days:], flow, sector, index, aligned)}
+            for days in REL_WINDOWS
+        ],
         "windows": [_window_row(bars, flow, days) for days in (3, 5, 10, 20)],
         "signals": _signals(bars, concentration, elg, big, aligned.get("margin_percentile")),
+    }
+
+
+def _price_chart(bars: list[dict]) -> dict:
+    """量价图专用：固定近 CHART_WINDOW 日，和主窗口判断脱钩。"""
+    chosen = bars[-CHART_WINDOW:]
+    start = max(0, len(bars) - CHART_WINDOW)
+    prior = bars[max(0, start - 60):start]
+    vol_base = _mean([row["volume"] for row in prior]) if len(prior) >= 60 else None
+    return {
+        "bars": [_bar(row) for row in chosen],
+        "vol_base": None if vol_base is None else int(round(vol_base)),
+        "days": len(chosen),
     }
 
 
@@ -82,7 +106,13 @@ def _daily(bars: list[dict], flow: dict) -> dict:
     levels = _intensity([value or 0 for value in nets])
     days = []
     for bar, net, level in zip(bars, nets, levels):
-        days.append({"date": bar["date"], "net": net, "intensity": level})
+        days.append({
+            "date": bar["date"],
+            "net": net,
+            "intensity": level,
+            "close": bar.get("close"),
+            "chg": bar.get("chg"),
+        })
     return {
         "days": days,
         "in_days": sum(1 for value in nets if value is not None and value > 0),

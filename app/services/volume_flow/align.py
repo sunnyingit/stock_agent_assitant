@@ -94,9 +94,13 @@ def _bars(daily: pd.DataFrame, basic: pd.DataFrame, factor: pd.DataFrame) -> lis
         date = _iso(record.get("trade_date"))
         factor_value = _num(record.get("adj_factor"))
         close = _num(record.get("close"))
+        high = _num(record.get("high"))
+        low = _num(record.get("low"))
         rows.append({
             "date": date,
             "close": qfq(close, factor_value, latest) if latest else close,
+            "high": qfq(high, factor_value, latest) if latest else high,
+            "low": qfq(low, factor_value, latest) if latest else low,
             "volume": lots_to_shares(_num(record.get("vol"))),
             "amount": qian_to_yuan(_num(record.get("amount"))),
             "chg": _num(record.get("pct_chg")),

@@ -78,7 +78,7 @@ class ScriptedModel:
             if need and any(f["id"] == need for f in question["facts"]):
                 cites = [need]
                 fact = next(f for f in question["facts"] if f["id"] == need)
-            rows.append({"key": question["key"], "status": question["reference"] or "neutral", "answer": f"依据是 {fact['value']}" if fact else "无", "cites": cites})
+            rows.append({"key": question["key"], "status": question.get("reference") or "neutral", "answer": f"依据是 {fact['value']}" if fact else "无", "cites": cites})
         out = {"items": rows}
         return self.mutate(out, view) or out if self.mutate else out
 
@@ -186,86 +186,27 @@ class ReviewTest(unittest.TestCase):
         self.assertEqual([row["key"] for row in result["items"]], [f"q{i}" for i in range(1, 9)])
         self.assertGreater(len(result["facts"]), 20)
 
-    def test_model_gets_only_each_questions_own_facts(self):
+    def test_gateway_is_ignored_and_items_stay_template(self):
         model = ScriptedModel()
-        self.build(model)
-        view = json.loads(model.users[0])
-        by_key = {q["key"]: {f["id"] for f in q["facts"]} for q in view["questions"]}
-        self.assertIn("sp.p.basis", by_key["q1"])
-        self.assertNotIn("sp.s.basis", by_key["q1"])
-        self.assertNotIn("sp.driver.r2", by_key["q1"])
-        self.assertEqual(model.calls, 1)
-
-    def test_a_well_formed_answer_is_taken_from_the_model(self):
-        result = self.build(ScriptedModel())
-        self.assertTrue(any(row["source"] == "model" for row in result["items"]), result["debug"])
-
-    def test_q1_must_cite_the_basis(self):
-        def drop(out, view):
-            by(out, "q1")["cites"] = ["sp.p.name"]
-            by(out, "q1")["answer"] = "主板块是被动元件（申万行业）"
-            return out
-
-        result = self.build(ScriptedModel(mutate=drop))
-        self.assertEqual({row["key"]: row["source"] for row in result["items"]}["q1"], "template")
-        self.assertTrue(any("sp.p.basis" in item for item in result["debug"]["errors"]))
-
-    def test_a_hanging_sector_cannot_be_called_a_member(self):
-        def overreach(out, view):
-            by(out, "q1")["answer"] = "本股也属于先进封装"
-            return out
-
-        result = self.build(ScriptedModel(mutate=overreach), payload=with_hanging(two()))
-        self.assertEqual({row["key"]: row["source"] for row in result["items"]}["q1"], "template")
-        self.assertTrue(any("只挂名" in item for item in result["debug"]["errors"]))
-
-    def test_cites_outside_the_question_are_rejected(self):
-        def wander(out, view):
-            by(out, "q1")["cites"] = ["sp.p.basis", "sp.driver.r2"]
-            return out
-
-        result = self.build(ScriptedModel(mutate=wander))
-        self.assertTrue(any("不属于本题" in item for item in result["debug"]["errors"]))
-
-    def test_made_up_numbers_and_banned_words_fall_back(self):
-        def lie(out, view):
-            by(out, "q4")["answer"] = "板块解释了 93%，可以关注"
-            return out
-
-        result = self.build(ScriptedModel(mutate=lie))
-        self.assertEqual({row["key"]: row["source"] for row in result["items"]}["q4"], "template")
-        self.assertTrue(any("禁用词" in item for item in result["debug"]["errors"]))
-
-    def test_model_cannot_flip_a_guarded_status(self):
-        def flip(out, view):
-            by(out, "q7")["status"] = "support"
-            return out
-
-        result = self.build(ScriptedModel(mutate=flip), payload=two(weak_days()))
-        row = next(r for r in result["items"] if r["key"] == "q7")
-        self.assertEqual(row["status"], "warn")
-        self.assertEqual(result["debug"]["status_overridden"], ["q7"])
-
-    def test_a_failing_model_keeps_the_template(self):
-        result = self.build(ScriptedModel(fail=True))
+        result = self.build(model)
+        self.assertEqual(model.calls, 0)
         self.assertEqual(result["source"], "template")
-        self.assertTrue(result["debug"]["call_error"])
+        self.assertTrue(all(row.get("source") == "template" for row in result["items"]))
 
     def test_same_facts_hit_the_cache(self):
-        store, model = Store(":memory:"), ScriptedModel()
-        self.build(model, store=store)
-        again = self.build(model, store=store)
-        self.assertTrue(again["cached"])
-        self.assertEqual(model.calls, 1)
+        store = Store(":memory:")
+        first = self.build(store=store)
+        second = self.build(store=store)
+        self.assertEqual((first["cached"], second["cached"]), (False, True))
+        third = self.build(store=store, refresh=True)
+        self.assertFalse(third["cached"])
 
-    def test_summary_headline_uses_the_model_answer_only_when_it_wrote_it(self):
-        from app.services.verdict_view import summary_headline
-
-        self.assertIsNone(summary_headline(self.build(), "q8"))
-        result = self.build(ScriptedModel())
-        headline = summary_headline(result, "q8")
-        self.assertEqual(headline["source"], "model")
-        self.assertEqual(sorted(headline), ["source", "status", "status_text", "text"])
+    def test_summary_headline_allows_template(self):
+        result = self.build()
+        self.assertIsNone(review.headline(result))
+        shown = review.headline(result, allow_template=True)
+        self.assertEqual(shown["source"], "rule")
+        self.assertTrue(shown["text"])
 
 
 class OutcomesTest(unittest.TestCase):
@@ -294,6 +235,7 @@ class OutcomesTest(unittest.TestCase):
 
 class AttachTest(unittest.TestCase):
     def test_sector_kind_is_registered_and_starts_computing(self):
+        self.skipTest("详情已改为同步规则解读，不再 attach 等待模型")
         store, spawned = Store(":memory:"), []
         out = attach.attach(single(), stock(), store, spawn=lambda s, w: spawned.append(s.ts_code), kind="sector")
         self.assertEqual(out["review_state"], "computing")
@@ -319,21 +261,23 @@ class RouteTest(unittest.TestCase):
         for item in self.patches:
             item.stop()
 
+    def get(self):
+        return self.client.get("/api/v1/stocks/603738.SH/dimensions/sector/detail").get_json()
+
     def test_detail_response_shape(self):
-        body = self.client.get("/api/v1/stocks/603738.SH/dimensions/sector/detail").get_json()
-        self.assertEqual(sorted(body["verdict"]), ["source", "status", "status_text", "text"])
-        self.assertIsNone(body["headline"])
-        self.assertIn(body["review_state"], ("computing", "disabled"))
-        self.assertNotIn("inputs", body)
-        self.assertEqual(body["sectors"]["primary"]["code"], "850823.SI")
-
-    def test_ready_review_gives_a_model_headline(self):
-        result = review.build(stock(), store=self.store, gateway=Gateway(ScriptedModel()), now=NOW, payload=self.payload, model_tag="x")
-        self.assertTrue(result["source"] in ("model", "mixed"))
-        body = self.client.get("/api/v1/stocks/603738.SH/dimensions/sector/detail").get_json()
+        body = self.get()
         self.assertEqual(body["review_state"], "ready")
-        self.assertEqual(body["headline"]["source"], "model")
+        self.assertEqual(body["review"]["source"], "template")
+        self.assertIsNone(body.get("headline"))
+        self.assertFalse(body.get("analyst_failed"))
 
+    def test_stream_saves_template_headline(self):
+        from app.api import v1
+        with patch("app.api.v1._notify"), patch("app.synthesis.worker.get_store", return_value=self.store):
+            page = v1._sector_page(stock(), wait=True)
+            detail = v1._sector_page(stock(), wait=False)
+        self.assertEqual(page["headline"]["source"], "rule")
+        self.assertTrue(page["headline"]["text"])
+        self.assertFalse(page["analyst_failed"])
+        self.assertEqual(detail["headline"]["text"], page["headline"]["text"])
 
-if __name__ == "__main__":
-    unittest.main()

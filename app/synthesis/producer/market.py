@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from app.synthesis import policy
-
 
 def _compound(changes_pct: list) -> float | None:
     values = [value for value in changes_pct if value is not None]
@@ -21,7 +19,8 @@ def market_facts(aligned: dict | None) -> dict:
         return {}
     bars = aligned.get("bars") or []
     facts: dict = {}
-    window = policy.FLOW_WINDOW
+    # 综合判断里的 market.*_20d 固定看 20 日，和量价主窗口（FLOW_WINDOW）分开
+    window = 20
     if len(bars) >= window:
         ret = _compound([row.get("chg") for row in bars[-window:]])
         if ret is not None:

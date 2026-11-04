@@ -27,10 +27,11 @@ def follow(metrics: dict) -> dict:
     brief 是一句话（给 verdict.text 用），items[].text 是各项证据的完整说法。"""
     ret = metrics["price"].get("ret")
     if ret is None or abs(ret) < FOLLOW_MIN_MOVE:
-        return _plain("flat", "涨跌幅度很小，看不出谁在主导", "flat", [])
+        return _plain("flat", "涨跌幅度很小，看不出谁在主导", "flat", [_short_windows(metrics)])
     move = "up" if ret > 0 else "down"
     sign = 1 if ret > 0 else -1
-    items = [_volume(metrics), _updown(metrics, sign), _big(metrics, sign)]
+    # 结论仍按主窗口判；短窗对照只作依据，不参与计分
+    items = [_volume(metrics), _updown(metrics, sign), _big(metrics, sign), _short_windows(metrics)]
     scored = [item for item in items if item["status"] in {"agree", "neutral", "disagree"}]
     if len(scored) < 2:
         return _plain("unknown", "资金数据不全，看不出有没有人跟", move, items)
@@ -117,6 +118,28 @@ def _big(metrics: dict, sign: int) -> dict:
         return _item("big_money", "大资金", "neutral", "大资金流入流出各半", f"大资金近 {total} 天流入 {inflow} 天、流出 {outflow} 天{net}")
     status = "agree" if side == sign else "disagree"
     return _item("big_money", "大资金", status, brief, text)
+
+
+def _short_windows(metrics: dict) -> dict:
+    """主窗口外的对照：近 3 日看拐头，近 20 日看波段底色。"""
+    rows = {row.get("days"): row for row in metrics.get("windows") or []}
+    parts = []
+    for days in (3, 20):
+        row = rows.get(days)
+        if not row:
+            continue
+        bits = []
+        if row.get("ret") is not None:
+            bits.append(f"涨跌 {_num(row['ret'], 1)}%")
+        if row.get("rel_vol") is not None:
+            bits.append(f"相对量能 {_num(row['rel_vol'], 2)} 倍")
+        if row.get("net_rate") is not None:
+            bits.append(f"大资金净流入率 {_num(row['net_rate'], 2)}%")
+        if bits:
+            parts.append(f"近 {days} 日" + "、".join(bits))
+    if not parts:
+        return _item("short_windows", "多窗对照", "info", "", "缺少对照窗口数据")
+    return _item("short_windows", "多窗对照", "info", "多窗对照", "；".join(parts))
 
 
 def _item(key: str, name: str, status: str, brief: str, text: str) -> dict:

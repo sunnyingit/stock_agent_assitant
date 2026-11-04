@@ -26,12 +26,12 @@ def detect(d: dict, facts: list[Fact]) -> list[dict]:
     if rate is not None and abs(rate) > 1.0:
         out.append(_row("high", "资金流金额超过成交额", f"大资金净额占成交额达到 {text.get('fr.net_rate_20d', '')}，超出合理范围，数据口径可疑。", ["fr.net_rate_20d"], ids))
 
-    ret, big, rate = d.get("ret_20d"), d.get("big_net_20d"), d.get("net_rate_20d")
+    ret, big, rate = d.get("ret_5d"), d.get("big_net_5d"), d.get("net_rate_5d")
     if ret is not None and big is not None and rate is not None and abs(rate) >= 0.01:
         if ret > 0.03 and big < 0:
-            out.append(_row("high", "上涨，但大资金在净流出", f"近 20 日股价 {text['fr.ret_20d']}，大资金同期净额 {text['fr.big_net_20d']}，价格和资金方向相反。", ["fr.ret_20d", "fr.big_net_20d", "fr.net_rate_20d"], ids))
+            out.append(_row("high", "上涨，但大资金在净流出", f"近 5 日股价 {text['fr.ret_5d']}，大资金同期净额 {text['fr.big_net_5d']}，价格和资金方向相反。", ["fr.ret_5d", "fr.big_net_5d", "fr.net_rate_5d"], ids))
         elif ret < -0.03 and big > 0:
-            out.append(_row("medium", "下跌，但大资金在净流入", f"近 20 日股价 {text['fr.ret_20d']}，大资金同期净额 {text['fr.big_net_20d']}，可能有资金承接，也可能只是下跌途中的反复。", ["fr.ret_20d", "fr.big_net_20d", "fr.net_rate_20d"], ids))
+            out.append(_row("medium", "下跌，但大资金在净流入", f"近 5 日股价 {text['fr.ret_5d']}，大资金同期净额 {text['fr.big_net_5d']}，可能有资金承接，也可能只是下跌途中的反复。", ["fr.ret_5d", "fr.big_net_5d", "fr.net_rate_5d"], ids))
 
     z = d.get("last_day_z")
     if z is not None and abs(z) >= 2.5:
@@ -46,8 +46,10 @@ def detect(d: dict, facts: list[Fact]) -> list[dict]:
     hints = d.get("hints") or []
     if hints:
         out.append(_row("high" if len(hints) >= 2 else "medium", "出现位置提示：" + "、".join(hints), "这些是高位常见的风险迹象，需要结合位置一起看。", ["fr.hints", "fr.from_year_high"], ids))
-    if d.get("rel_vol") is not None and d["rel_vol"] >= 2.5:
-        out.append(_row("medium", "成交量异常放大", f"近 20 日日均成交量是此前 60 日的 {text.get('fr.rel_vol', '')}。", ["fr.rel_vol"], ids))
+    rel = d.get("rel_vol_5d") if d.get("rel_vol_5d") is not None else d.get("rel_vol")
+    rel_id = "fr.rel_vol_5d" if d.get("rel_vol_5d") is not None else "fr.rel_vol"
+    if rel is not None and rel >= 2.5:
+        out.append(_row("medium", "成交量异常放大", f"相对量能达到此前 60 日均量的 {text.get(rel_id, '')}。", [rel_id], ids))
 
     if d.get("limit_days"):
         out.append(_row("medium", "窗口内有疑似涨跌停", f"近 20 日有 {text['fr.limit_days']}涨幅或跌幅接近涨跌停，那几天的成交和资金流不能直接当常规数据看。", ["fr.limit_days", "fr.limit_last"], ids))

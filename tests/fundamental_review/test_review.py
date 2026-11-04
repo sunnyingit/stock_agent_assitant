@@ -73,6 +73,32 @@ class FactsTest(unittest.TestCase):
         self.assertEqual(groups, set(fact_sheet.GROUP_ORDER))
         self.assertEqual(d["peer_count"], 11)
 
+    def test_concepts_list_membership_and_chain_only_when_the_name_says_so(self):
+        from app.fundamental_review import data
+
+        sector_payload = {"sectors": {"candidates": [
+            {"type": "concept", "belongs": True, "name": "锂电负极材料", "score": 0.9, "business": {"share": 0.41, "items": ["负极材料"]}},
+            {"type": "concept", "belongs": True, "name": "存储芯片", "score": 0.4, "business": {"share": 0.2, "items": ["DRAM"]}},
+            {"type": "concept", "belongs": False, "name": "不该出现", "score": 5, "business": {}},
+            {"type": "industry", "belongs": True, "name": "半导体", "score": 1, "business": {}},
+        ]}}
+        concepts = data.concepts_of(sector_payload)
+        self.assertEqual([row["name"] for row in concepts], ["锂电负极材料", "存储芯片"])
+        self.assertEqual(data.chain_of(concepts), [{"name": "锂电负极材料", "position": "材料"}])
+        ctx = context()
+        ctx["sector"] = {"stage": "main", "concepts": concepts, "chain": data.chain_of(concepts)}
+        facts, derived = fact_sheet.build(payload(), ctx)
+        text = {fact.id: fact.text for fact in facts}
+        self.assertIn("锂电负极材料，业务占比 41%", text["fd.concepts"])
+        self.assertIn("存储芯片", text["fd.concepts"])
+        self.assertNotIn("不该出现", text["fd.concepts"])
+        self.assertNotIn("半导体", text["fd.concepts"])
+        self.assertEqual(text["fd.chain"], "锂电负极材料属于材料环节")
+        rows = {row["key"]: row for row in template.answers(derived, text)}
+        self.assertIn("判定属于的概念", rows["q1"]["answer"])
+        self.assertIn("fd.concepts", rows["q1"]["cites"])
+        self.assertIn("fd.chain", rows["q1"]["cites"])
+
     def test_missing_inputs_leave_facts_out_instead_of_inventing_them(self):
         facts, d = fact_sheet.build(payload(business=False), context(sector=None, news=None))
         ids = {fact.id for fact in facts}
@@ -119,15 +145,28 @@ class ScriptedModel:
         if self.fail:
             raise RuntimeError("模型不可用")
         view = json.loads(user)
-        missing = set(view["must_be_missing"])
-        answers = {"q1": "主营白酒，茅台酒占 84.2%", "q2": "估值在自己历史里是 29% 分位", "q3": "比同行中位数低 23%", "q4": "指标没有失真",
-                   "q5": "盈利和现金在同行里靠前", "q6": "没有明显弱项", "q7": "近期没有股东动作", "q8": "近期没有集中到来的压力",
-                   "q9": "板块处在主升阶段", "q10": "财报是 2026H1，同行 11 家", "q11": "整体偏正面"}
-        cites = {"q1": ["fd.biz_top"], "q2": ["fd.pctile_5y"], "q3": ["fd.vs_peer"], "q4": ["fd.distorted"], "q5": ["fd.qp_profitability"],
-                 "q6": ["fd.q_weakest"], "q7": ["fd.holders_level"], "q8": ["fd.holders_level"], "q9": ["fd.sector_stage"],
-                 "q10": ["fd.report_period", "fd.peer_count"], "q11": ["fd.pctile_5y"]}
+        answers = {
+            "q1": ("最大业务线占营收 84.2%。", ["fd.biz_top"]),
+            "q2": ("处在 29% 分位。", ["fd.pctile_5y"]),
+            "q3": ("低于同行中位数 23%。", ["fd.vs_peer"]),
+            "q4": ("利润没有让市盈率失真。", ["fd.distorted"]),
+            "q5": ("质量档位较好。", ["fd.q_level"]),
+            "q6": ("没有明显弱项。", ["fd.q_weakest"]),
+            "q7": ("近期没有股东动作。", ["fd.hold_none"]),
+            "q8": ("近期没有集中到来的压力。", ["fd.hold_none"]),
+            "q9": ("板块处在主升阶段。", ["fd.sector_stage"]),
+            "q10": ("同行 11 家。", ["fd.peer_count"]),
+            "q11": ("处在 29% 分位，整体偏正面。", ["fd.pctile_5y"]),
+        }
+        missing = set(view.get("must_be_missing") or [])
         out = {
-            "items": [{"key": k, "status": "support", "answer": text, "cites": cites[k]} for k, text in answers.items() if k not in missing],
+            "items": [
+                {"key": key, "status": "support", "answer": text, "cites": cites}
+                for key, (text, cites) in answers.items() if key not in missing
+            ],
+            "lean": "偏多",
+            "ai_text": "估值处在近 5 年偏低的位置，底子在同行里靠前。",
+            "cited_fact_ids": ["fd.pctile_5y", "fd.q_level"],
             "profile": {
                 "partners": [{"name": "某经销商", "relation": "客户", "note": "渠道销售"}],
                 "drivers_up": ["高端消费需求回升"], "drivers_down": ["政策收紧"], "link": "最大业务线受高端消费需求影响",
@@ -145,76 +184,38 @@ class ReviewTest(unittest.TestCase):
     def test_without_a_model_the_template_answers_everything_and_there_is_no_profile(self):
         result = self.build()
         self.assertEqual(result["source"], "template")
+        self.assertIsNone(result["headline"])
         self.assertEqual([row["key"] for row in result["items"]], [f"q{i}" for i in range(1, 12)])
         self.assertIsNone(result["profile"])
         self.assertEqual(result["as_of"], "2026-10-30")
         self.assertGreater(len(result["facts"]), 25)
-        for key in ("cites",):
-            self.assertIn(key, result["items"][0])
+        self.assertIn("cites", result["items"][0])
+        self.assertTrue(all(row["source"] == "template" for row in result["items"]))
 
-    def test_model_answers_replace_templates_and_profile_is_labelled(self):
-        result = self.build(ScriptedModel())
-        self.assertEqual(result["source"], "model")
-        by_key = {row["key"]: row for row in result["items"]}
-        self.assertEqual(by_key["q2"]["source"], "model")
-        self.assertEqual(by_key["q11"]["answer"], "整体偏正面")
-        profile = result["profile"]
-        self.assertEqual(profile["source"], "model")
-        self.assertIn("未经核对", profile["note"])
-        self.assertEqual(profile["partners"], [{"name": "某经销商", "relation": "客户", "note": "渠道销售"}])
-        self.assertEqual(profile["drivers_down"], ["政策收紧"])
-
-    def test_a_made_up_number_sends_only_that_item_back_to_the_template(self):
-        def lie(out, view):
-            out["items"][1]["answer"] = "估值在自己历史里是 90% 分位"
-            return out
-
-        result = self.build(ScriptedModel(mutate=lie))
-        by_key = {row["key"]: row for row in result["items"]}
-        self.assertEqual(by_key["q2"]["source"], "template")
-        self.assertEqual(by_key["q3"]["source"], "model")
-        self.assertEqual(result["source"], "mixed")
-        self.assertTrue(any("数字" in item for item in result["debug"]["errors"]))
-
-    def test_status_on_rule_questions_cannot_be_flipped_but_free_questions_can(self):
-        def flip(out, view):
-            for row in out["items"]:
-                row["status"] = "warn"      # 估值明明偏便宜，模型却写需警惕
-            return out
-
-        result = self.build(ScriptedModel(mutate=flip))
-        by_key = {row["key"]: row for row in result["items"]}
-        self.assertEqual(by_key["q2"]["status"], "support")   # 以规则为准
-        self.assertEqual(by_key["q11"]["status"], "warn")     # 总结由模型定
-        self.assertIn("q2", result["debug"]["status_overridden"])
-
-    def test_model_failure_falls_back_and_is_not_cached(self):
-        store = Store(":memory:")
-        result = self.build(ScriptedModel(fail=True), store=store)
+    def test_gateway_is_ignored_and_template_summary_can_be_headline(self):
+        model = ScriptedModel()
+        result = self.build(model)
+        self.assertEqual(model.calls, 0)
         self.assertEqual(result["source"], "template")
-        entry = store.get(attach.latest_key(TS, "fund"))
-        self.assertGreater(entry["retry_after"], entry["ts"])
-        self.assertEqual(self.build(ScriptedModel(), store=store)["source"], "model")   # 上次没缓存，这次重新调用
+        self.assertIsNone(result.get("headline"))
+        shown = review.headline_from_review(result, allow_template=True)
+        self.assertEqual(shown["source"], "rule")
+        self.assertTrue(shown["text"])
 
-    def test_same_facts_hit_the_cache_and_refresh_forces_a_call(self):
-        store, model = Store(":memory:"), ScriptedModel()
-        self.build(model, store=store)
-        again = self.build(model, store=store)
-        self.assertTrue(again["cached"])
-        self.assertEqual(model.calls, 1)
-        self.build(model, store=store, refresh=True)
-        self.assertEqual(model.calls, 2)
+    def test_same_facts_hit_the_cache_and_refresh(self):
+        store = Store(":memory:")
+        first = self.build(store=store)
+        second = self.build(store=store)
+        self.assertEqual((first["cached"], second["cached"]), (False, True))
+        third = self.build(store=store, refresh=True)
+        self.assertFalse(third["cached"])
 
     def test_prompt_carries_facts_questions_and_profile_rules(self):
-        model = ScriptedModel()
-        self.build(model)
-        view = json.loads(model.users[0])
-        self.assertIn("fd.pctile_5y", {row["id"] for row in view["facts"]})
-        self.assertEqual(view["stock"]["code"], make_stock().code)
-        self.assertIn("q9", view["by_question"])
-        self.assertIn("q11", prompt.SYSTEM)
+        self.assertIn("cited_fact_ids", prompt.SYSTEM)
         self.assertIn("profile", prompt.SYSTEM)
-        self.assertIn("不要出现任何金额、比例、日期、排名等具体数字", prompt.PROFILE_RULES)
+        self.assertIn("不要出现任何金额、比例、日期、排名等具体数字", prompt.SYSTEM)
+        result = self.build()
+        self.assertTrue(any(row["id"] == "fd.pctile_5y" for row in result["facts"]))
 
 
 class ContextTimeoutTest(unittest.TestCase):
@@ -248,33 +249,11 @@ class ContextTimeoutTest(unittest.TestCase):
         self.assertEqual(out["missing"], ["板块阶段：取不到"])
 
     def test_a_partial_review_is_regenerated_after_a_short_while(self):
-        store = Store(":memory:")
-        result = review.build(make_stock(), store=store, payload=payload(), context={**context(sector=None), "missing": ["板块阶段：数据还在整理，这次没用上"], "pending": ["sector"]}, now=NOW)
-        self.assertTrue(result["partial"])
-        ts = store.get(attach.latest_key(TS, "fund"))["ts"]
-        calls = []
-        spawn = lambda stock, where: calls.append(1)
-        meta = {"meta": {"as_of": "2026-10-30"}}
-        self.assertEqual(attach.attach(meta, make_stock(), store, now=ts + 10, spawn=spawn, kind="fund")["review_state"], "ready")
-        self.assertEqual(attach.attach(meta, make_stock(), store, now=ts + attach.PARTIAL_SECONDS + 1, spawn=spawn, kind="fund")["review_state"], "refreshing")
-        self.assertEqual(calls, [1])
-        self.assertFalse(review.build(make_stock(), store=Store(":memory:"), payload=payload(), context=context(), now=NOW)["partial"])
-
+        self.skipTest("详情不再依赖 attach 轮询模型")
 
 class PromptVersionTest(unittest.TestCase):
     def test_a_review_from_an_older_prompt_is_not_treated_as_fresh(self):
-        store = Store(":memory:")
-        result = review.build(make_stock(), store=store, payload=payload(), context=context(), now=NOW)
-        meta = {"meta": {"as_of": "2026-10-30"}}
-        ts = store.get(attach.latest_key(TS, "fund"))["ts"]
-        calls = []
-        spawn = lambda stock, where: calls.append(1)
-        self.assertEqual(attach.attach(meta, make_stock(), store, now=ts + 1, spawn=spawn, kind="fund")["review_state"], "ready")
-        with patch.object(prompt, "PROMPT_VERSION", "fund-review-next"):
-            out = attach.attach(meta, make_stock(), store, now=ts + 1, spawn=spawn, kind="fund")
-        self.assertEqual((out["review_state"], calls), ("refreshing", [1]))
-        self.assertEqual(result["debug"]["prompt_version"], "fund-review-2")
-
+        self.skipTest("详情不再依赖 attach 轮询模型")
 
 class ProfileValidationTest(unittest.TestCase):
     def test_bad_entries_are_dropped_one_by_one(self):
@@ -343,19 +322,20 @@ class RouteTest(unittest.TestCase):
     def test_detail_shows_the_same_verdict_fields_as_headline_and_hides_internals(self):
         body = self.get()
         self.assertEqual(set(body["verdict"]), {"source", "status", "status_text", "text"})
-        self.assertNotIn("inputs", body)
-        self.assertIn("cells", body)
-        self.assertEqual((body["review"], body["review_state"], body["headline"]), (None, "disabled", None))
-        self.assertIn("inputs", self.payload)   # 缓存里的完整结果没被改
-
-    def test_a_generated_review_gives_the_headline(self):
-        result = review.build(make_stock(), store=self.store, gateway=Gateway(ScriptedModel()), now=NOW, payload=self.payload, context=context(), model_tag="x")
-        body = self.get()
         self.assertEqual(body["review_state"], "ready")
-        self.assertEqual(body["headline"], {"source": "model", "status": "support", "status_text": "偏多", "text": "整体偏正面"})
-        self.assertNotIn("debug", body["review"])
-        self.assertEqual(body["review"]["profile"]["source"], "model")
-        self.assertEqual(result["source"], "model")
+        self.assertEqual(body["review"]["source"], "template")
+        self.assertIsNone(body.get("headline"))
+        self.assertFalse(body.get("analyst_failed"))
+
+    def test_stream_saves_template_headline(self):
+        from app.api import v1
+        with patch("app.api.v1._notify"), patch("app.synthesis.worker.get_store", return_value=self.store):
+            page = v1._fundamental_page(make_stock(), wait=True)
+            detail = v1._fundamental_page(make_stock(), wait=False)
+        self.assertEqual(page["headline"]["source"], "rule")
+        self.assertTrue(page["headline"]["text"])
+        self.assertFalse(page["analyst_failed"])
+        self.assertEqual(detail["headline"]["text"], page["headline"]["text"])
 
     def test_review_endpoint_returns_items_facts_and_profile(self):
         body = self.client.get(f"/api/v1/stocks/{TS}/dimensions/fundamental/review").get_json()

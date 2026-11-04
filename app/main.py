@@ -15,27 +15,34 @@ from app.synthesis.api import bp as synthesis_bp
 _ROUTES = (
     ("基本行情", "/api/stocks/basic"),
     ("日线", "/api/stocks/bars"),
-    ("资金流", "/api/stocks/moneyflow"),
-    ("资金流日序列", "/api/stocks/moneyflow/daily"),
     ("新闻", "/api/stocks/news"),
-    ("新闻分析", "/api/stocks/news/analysis"),
-    ("新闻辩论", "/api/stocks/news/debate"),
     ("美股韩股走向", "/api/stocks/peers"),
     ("基本面", "/api/stocks/fundamental"),
     ("所属板块", "/api/stocks/industry"),
     ("财务报表", "/api/stocks/financial"),
-    ("财报分析", "/api/stocks/financial/analysis"),
-    ("财报辩论", "/api/stocks/financial/debate"),
     ("板块资金", "/api/stocks/sector"),
     ("大盘", "/api/stocks/market"),
     ("融资融券", "/api/stocks/margin"),
     ("龙虎榜", "/api/stocks/toplist"),
-    ("资金流详情", "/api/v1/stocks/{ts_code}/dimensions/volume_flow/detail", "?window=20"),
+    ("资金流详情", "/api/v1/stocks/{ts_code}/dimensions/volume_flow/detail", "?window=5"),
+    ("资金流流式", "/api/v1/stocks/{ts_code}/dimensions/volume_flow/stream", "?window=5"),
     ("新闻详情", "/api/v1/stocks/{ts_code}/dimensions/news/detail", "?days=3"),
+    ("新闻流式", "/api/v1/stocks/{ts_code}/dimensions/news/stream", "?days=3"),
     ("基本面详情", "/api/v1/stocks/{ts_code}/dimensions/fundamental/detail", ""),
+    ("基本面流式", "/api/v1/stocks/{ts_code}/dimensions/fundamental/stream", ""),
     ("财报详情", "/api/v1/stocks/{ts_code}/dimensions/finance/detail", ""),
+    ("财报流式", "/api/v1/stocks/{ts_code}/dimensions/finance/stream", ""),
     ("板块详情", "/api/v1/stocks/{ts_code}/dimensions/sector/detail", ""),
+    ("板块流式", "/api/v1/stocks/{ts_code}/dimensions/sector/stream", ""),
+    ("分析师追问", "/api/v1/stocks/{ts_code}/dimensions/{dimension}/reply", "POST question"),
     ("综合判断", "/api/v1/stocks/{ts_code}/synthesis", ""),
+    ("主分析师流式", "/api/v1/stocks/{ts_code}/chief/stream", ""),
+    ("主分析师详情", "/api/v1/stocks/{ts_code}/chief/detail", ""),
+    ("主分析师追问", "/api/v1/stocks/{ts_code}/chief/reply", "POST question"),
+    ("看多流式", "/api/v1/stocks/{ts_code}/bull/stream", ""),
+    ("看多追问", "/api/v1/stocks/{ts_code}/bull/reply", "POST question"),
+    ("看空流式", "/api/v1/stocks/{ts_code}/bear/stream", ""),
+    ("看空追问", "/api/v1/stocks/{ts_code}/bear/reply", "POST question"),
     ("自选诊断", "/api/v1/watchlist", ""),
     ("资金面体检", "/api/v1/stocks/{ts_code}/dimensions/volume_flow/review", ""),
     ("基本面体检", "/api/v1/stocks/{ts_code}/dimensions/fundamental/review", ""),
@@ -47,10 +54,21 @@ _ROUTES = (
 def create_app() -> Flask:
     app = Flask(__name__)
 
+    @app.before_request
+    def _cors_preflight():
+        # 浏览器跨域 DELETE/POST 会先发 OPTIONS；缺 Allow-Methods 时删自选会被拦下
+        from flask import request
+
+        if request.method == "OPTIONS":
+            from flask import make_response
+
+            return make_response("", 204)
+
     @app.after_request
     def _cors(response):
         response.headers["Access-Control-Allow-Origin"] = "*"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
         return response
 
     app.register_blueprint(bp)
@@ -70,6 +88,9 @@ def main() -> None:
     from app.synthesis import worker
 
     worker.start()
+    from app.services import market_job
+
+    market_job.start()   # 交易日 08:30 / 15:35 的市场简报和快照
     attach.enable()   # 资金流、基本面详情里的 AI 体检在后台生成
     print(f"股票查询服务: http://localhost:{port}")
     for item in _ROUTES:

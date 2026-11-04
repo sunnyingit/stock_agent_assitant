@@ -50,6 +50,7 @@ def build(payload: dict, context: dict | None = None) -> tuple[FactSheet, dict]:
     _quality(payload, put, d)
     _holders(payload, put, d)
     _industry(payload, context, put, d)
+    _concepts(context, put, d)
     _data_quality(payload, put, d)
     return facts, d
 
@@ -172,6 +173,29 @@ def _holders(payload: dict, put, d: dict) -> None:
         put(f"fd.hold_{index}", f"股东事件 {index}", "股东行为", "text", days, text)
     if not events:
         put("fd.hold_none", "股东事件", "股东行为", "text", None, "近期没有股东动作")
+
+
+def _concepts(context: dict, put, d: dict) -> None:
+    sector = context.get("sector") or {}
+    concepts = [row for row in (sector.get("concepts") or []) if row.get("name")]
+    if not concepts:
+        return
+    d["concepts"] = concepts
+    parts = []
+    for row in concepts:
+        bit = row["name"]
+        if row.get("share") is not None:
+            bit += f"，业务占比 {_pct(row['share'], 0)}"
+        if row.get("items"):
+            bit += "，对应产品 " + "、".join(row["items"])
+        parts.append(bit)
+    put("fd.concepts", "判定属于的同花顺概念", "核心业务", "text", None, "；".join(parts))
+    chain = [row for row in (sector.get("chain") or []) if row.get("name") and row.get("position")]
+    d["chain"] = chain
+    if chain:
+        put("fd.chain", "名称里写明的产业链环节", "核心业务", "text", None, "；".join(f"{row['name']}属于{row['position']}环节" for row in chain))
+    else:
+        put("fd.chain", "名称里写明的产业链环节", "核心业务", "text", None, "这些概念的名称里没有上游、中游、下游、设备、材料这类环节词")
 
 
 def _industry(payload: dict, context: dict, put, d: dict) -> None:

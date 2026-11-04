@@ -121,17 +121,23 @@ def volume_flow(payload: dict | None, error: str = "") -> Snapshot:
     snap = _base("volume_flow", payload, error)
     if payload is None or snap.status != STATUS_OK:
         return snap
-    row20 = next((row for row in _get(payload, "windows", "rows", default=[]) if row.get("days") == policy.FLOW_WINDOW), {})
+    rows = _get(payload, "windows", "rows", default=[]) or []
+    primary = next((row for row in rows if row.get("days") == policy.FLOW_WINDOW), {})
+    row20 = next((row for row in rows if row.get("days") == 20), {})
     pattern = _get(payload, "price_volume", "pattern")
     _put(snap, "flow.view", view_text(snap))
-    _put(snap, "flow.rel_vol", _number(row20.get("rel_vol")))
+    _put(snap, "flow.rel_vol", _number(primary.get("rel_vol")))
     _put(snap, "flow.pattern", pattern if pattern else None)
     _put(snap, "flow.up_down_vol", _number(_get(payload, "price_volume", "up_down_vol_ratio")))
     _put(snap, "flow.big_trend", _get(payload, "flow_daily", "trend") or None)
-    _put(snap, "flow.net_rate", _number(row20.get("net_rate")))
+    _put(snap, "flow.net_rate", _number(primary.get("net_rate")))
     hits = [item.get("text") for item in _get(payload, "position_hints", "items", default=[]) if item.get("hit")]
     _put(snap, "flow.stall", "、".join(hits) if hits else "无")
-    index_bar = next((row for row in _get(payload, "relative_strength", "bars", default=[]) if row.get("kind") == "index"), {})
+    # 跨模块核对仍用 20 日，和 market.*_20d 同一口径；主窗口数字走 facts
+    rel = _get(payload, "relative_strength") or {}
+    win20 = next((w for w in (rel.get("windows") or []) if w.get("days") == 20), None)
+    index_bars = ((win20 or rel).get("bars") if isinstance(win20 or rel, dict) else None) or rel.get("bars") or []
+    index_bar = next((row for row in index_bars if row.get("kind") == "index"), {})
     snap.flags["window_ret"] = _number(row20.get("ret"))
     snap.flags["index_ret"] = _number(index_bar.get("ret"))
     snap.flags["stall_hits"] = len(hits)
@@ -249,7 +255,7 @@ def fundamental(payload: dict | None, error: str = "") -> Snapshot:
     near = []
     for event in payload.get("holder_events") or []:
         days_left = _number(event.get("days_left"))
-        if days_left is None or not 0 <= days_left <= policy.FLOW_WINDOW or event.get("impact") not in ("positive", "negative"):
+        if days_left is None or not 0 <= days_left <= policy.NEAR_EVENT_DAYS or event.get("impact") not in ("positive", "negative"):
             continue
         name = _HOLDER_TYPE.get(event.get("type"), "股东事件")
         text = f"{name}（{_IMPACT[event['impact']]}），{int(days_left)} 个交易日内"

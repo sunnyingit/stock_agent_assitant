@@ -2,7 +2,7 @@
 
 from flask import Blueprint, jsonify, request
 
-from app.core.response import fail, ok, shown
+from app.core.response import fail, ok
 from app.tools.stock import resolve_stock
 
 bp = Blueprint("stocks", __name__, url_prefix="/api/stocks")
@@ -58,13 +58,6 @@ def _run(stock, fn):
         return fail(stock, exc)
 
 
-def _show(stock, fn):
-    try:
-        return shown(stock, fn())
-    except Exception as exc:
-        return fail(stock, exc)
-
-
 def _side(fn):
     try:
         return fn()
@@ -95,57 +88,30 @@ def bars():
     return _run(stock, lambda: get_bars(stock, days))
 
 
-@bp.route("/moneyflow", methods=["GET", "POST"])
-def moneyflow():
-    stock, _price, err = _parse_request()
-    if err:
-        return err
-    from app.services.moneyflow import get_moneyflow
-
-    return _run(stock, lambda: get_moneyflow(stock))
-
-
-@bp.route("/moneyflow/daily", methods=["GET", "POST"])
-def moneyflow_daily():
-    days, err = _days(250, 250)
-    if err:
-        return err
-    stock, _price, err = _parse_request()
-    if err:
-        return err
-    from app.services.series import get_flow_daily
-
-    return _run(stock, lambda: get_flow_daily(stock, days))
-
-
 @bp.route("/news", methods=["GET", "POST"])
 def news():
     stock, _price, err = _parse_request()
     if err:
         return err
+    raw = request.args.get("limit", "")
+    if request.method == "POST" and raw in (None, ""):
+        raw = str((request.get_json(silent=True) or {}).get("limit") or "")
+    limit = 24
+    if raw not in (None, ""):
+        try:
+            limit = int(raw)
+        except (TypeError, ValueError):
+            return jsonify({"error": "limit 必须是正整数"}), 400
+        if limit < 1:
+            return jsonify({"error": "limit 必须是正整数"}), 400
+        limit = min(limit, 80)
+    keyword = request.args.get("keyword", "")
+    if request.method == "POST" and not str(keyword or "").strip():
+        keyword = str((request.get_json(silent=True) or {}).get("keyword") or "")
+    keyword = str(keyword or "").strip()[:80]
     from app.services.news import get_news
 
-    return _run(stock, lambda: get_news(stock))
-
-
-@bp.route("/news/analysis", methods=["GET", "POST"])
-def news_analysis():
-    stock, _price, err = _parse_request()
-    if err:
-        return err
-    from app.agents.news.graph import analyze_news
-
-    return _run(stock, lambda: analyze_news(stock))
-
-
-@bp.route("/news/debate", methods=["GET", "POST"])
-def news_debate():
-    stock, _price, err = _parse_request()
-    if err:
-        return err
-    from app.agents.news.graph import debate_news
-
-    return _show(stock, lambda: debate_news(stock))
+    return _run(stock, lambda: get_news(stock, limit, keyword=keyword))
 
 
 @bp.route("/peers", methods=["GET", "POST"])
@@ -193,26 +159,6 @@ def financial():
     from app.services.financial import get_financials
 
     return _run(stock, lambda: get_financials(stock, price))
-
-
-@bp.route("/financial/analysis", methods=["GET", "POST"])
-def financial_analysis():
-    stock, _price, err = _parse_request()
-    if err:
-        return err
-    from app.agents.financial.graph import analyze_financials
-
-    return _run(stock, lambda: analyze_financials(stock))
-
-
-@bp.route("/financial/debate", methods=["GET", "POST"])
-def financial_debate():
-    stock, _price, err = _parse_request()
-    if err:
-        return err
-    from app.agents.financial.graph import debate_financials
-
-    return _show(stock, lambda: debate_financials(stock))
 
 
 @bp.route("/sector", methods=["GET", "POST"])

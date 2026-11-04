@@ -127,7 +127,7 @@ class BuildTest(unittest.TestCase):
         self.refreshed = []
 
     def build(self, table, now=NOW, mode="rule"):
-        return watchlist.build(self.store, prices(table), mode, now, self.refreshed.append)
+        return watchlist.build(self.store, prices(table), mode, now)
 
     def add(self, code, name):
         self.store.watch_add(code, name)
@@ -181,7 +181,7 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(by_code["600002.SH"]["subtitle"]["text"], "还没有判断")
         self.assertIsNone(by_code["600002.SH"]["direction"])
         self.assertIsNone(by_code["600001.SH"]["price"])   # 行情取不到：不报错，价格为空
-        self.assertEqual(sorted(self.refreshed), ["600001.SH", "600002.SH"])   # 过期和没有判断的都排队重算
+        self.assertEqual(self.refreshed, [])   # 打开列表不排队重算
 
     def test_order_puts_what_needs_attention_first(self):
         for code, name in (("600001.SH", "状态"), ("600002.SH", "过期"), ("600003.SH", "变化"), ("600004.SH", "提醒")):
@@ -245,6 +245,23 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(self.client.delete("/api/v1/watchlist/600001.SH").status_code, 404)
         self.assertEqual(self.client.get("/api/v1/watchlist").get_json()["items"], [])
 
+    def test_delete_preflight_allows_cors(self):
+        from app.main import create_app
+
+        client = create_app().test_client()
+        response = client.open(
+            "/api/v1/watchlist/600001.SH",
+            method="OPTIONS",
+            headers={
+                "Origin": "http://127.0.0.1:8080",
+                "Access-Control-Request-Method": "DELETE",
+            },
+        )
+        self.assertIn(response.status_code, (200, 204))
+        self.assertEqual(response.headers.get("Access-Control-Allow-Origin"), "*")
+        methods = response.headers.get("Access-Control-Allow-Methods", "")
+        self.assertIn("DELETE", methods)
+
     def test_add_validation(self):
         self.assertEqual(self.client.post("/api/v1/watchlist", json={}).status_code, 400)
         self.assertEqual(self.client.post("/api/v1/watchlist", json={"q": "不存在"}).status_code, 404)
@@ -257,15 +274,17 @@ class ApiTest(unittest.TestCase):
 
     def test_alert_from_the_current_level_then_it_shows_on_the_page_and_in_the_list(self):
         self.client.post("/api/v1/watchlist", json={"q": "测试股份"})
-        page = self.client.get("/api/v1/stocks/600001.SH/synthesis").get_json()["display"]
-        self.assertEqual(page["levels"]["up"]["alert"], {"subscribed": False, "alert_id": None})
-        level = page["levels"]["down"]
+        page = self.client.get("/api/v1/stocks/600001.SH/synthesis").get_json()
+        down = next(item for item in page["watch"]["levels"] if item["side"] == "down")
+        up = next(item for item in page["watch"]["levels"] if item["side"] == "up")
+        self.assertEqual(up["alert"], {"subscribed": False, "alert_id": None})
         created = self.client.post("/api/v1/stocks/600001.SH/alerts", json={"side": "down"})
         self.assertEqual(created.status_code, 201)
         alert = created.get_json()["alert"]
-        self.assertEqual((alert["side"], alert["price"]), ("down", level["price"]))
-        page = self.client.get("/api/v1/stocks/600001.SH/synthesis").get_json()["display"]
-        self.assertEqual(page["levels"]["down"]["alert"], {"subscribed": True, "alert_id": alert["id"]})
+        self.assertEqual((alert["side"], alert["price"]), ("down", down["price"]))
+        page = self.client.get("/api/v1/stocks/600001.SH/synthesis").get_json()
+        down = next(item for item in page["watch"]["levels"] if item["side"] == "down")
+        self.assertEqual(down["alert"], {"subscribed": True, "alert_id": alert["id"]})
         self.assertEqual(len(self.client.get("/api/v1/stocks/600001.SH/alerts").get_json()["items"]), 1)
         again = self.client.post("/api/v1/stocks/600001.SH/alerts", json={"side": "down"}).get_json()["alert"]
         self.assertEqual(again["id"], alert["id"])   # 重复设置不会多出一条

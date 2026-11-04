@@ -248,6 +248,11 @@ def evaluate(sector: dict, ts_code: str) -> dict:
             "stock": cumulative([day.get("stock") for day in window]),
             "sector": cumulative([day.get("sector") for day in window]),
             "index": cumulative([day.get("index") for day in window]),
+            "today": {
+                "stock": None if not window else window[-1].get("stock"),
+                "sector": None if not window else window[-1].get("sector"),
+                "index": None if not window else window[-1].get("index"),
+            },
         },
         "rank": {
             "value": last.get("rank"),
@@ -654,7 +659,7 @@ def _sustain(sector: dict, days: list[dict], days_in_round: int, stage: str) -> 
     if pctile is None:
         crowding = {"key": "crowding", "status": "na", "text": "没有成交占比数据", "ref": None}
     elif pctile >= 0.90:
-        crowding = {"key": "crowding", "status": "warn", "text": "成交占比处在近一年高位", "ref": {"pctile_1y": pctile}}
+        crowding = {"key": "crowding", "status": "warn", "text": f"成交占比处在近一年高位（分位 {round(pctile * 100)}%）", "ref": {"pctile_1y": pctile}}
     else:
         crowding = {"key": "crowding", "status": "ok", "text": "成交占比不在近一年高位", "ref": {"pctile_1y": pctile}}
     median = sector.get("round_median")
@@ -676,7 +681,7 @@ def _sustain(sector: dict, days: list[dict], days_in_round: int, stage: str) -> 
             duration = {
                 "key": "duration",
                 "status": "warn",
-                "text": "本轮持续天数超过同类行情中位数",
+                "text": f"本轮持续天数超过同类行情中位数（已 {days_in_round} 天，中位数 {shown} 天）",
                 "ref": {"days": days_in_round, "median": median},
             }
     else:
@@ -700,9 +705,11 @@ def _sustain(sector: dict, days: list[dict], days_in_round: int, stage: str) -> 
     if index_20d is None:
         environment = {"key": "environment", "status": "na", "text": "没有大盘走势", "ref": None}
     elif index_20d < -0.03 and bearish:
-        environment = {"key": "environment", "status": "support", "text": "大盘近 20 日偏弱，和支持偏空一致", "ref": {"index_20d": round(index_20d, 4)}}
+        shown = f"{index_20d * 100:+.1f}%"
+        environment = {"key": "environment", "status": "support", "text": f"大盘近 20 日 {shown}，偏弱，和支持偏空一致", "ref": {"index_20d": round(index_20d, 4)}}
     elif index_20d < -0.03:
-        environment = {"key": "environment", "status": "warn", "text": "大盘近 20 日偏弱", "ref": {"index_20d": round(index_20d, 4)}}
+        shown = f"{index_20d * 100:+.1f}%"
+        environment = {"key": "environment", "status": "warn", "text": f"大盘近 20 日 {shown}，偏弱", "ref": {"index_20d": round(index_20d, 4)}}
     else:
         environment = {"key": "environment", "status": "ok", "text": "大盘没有明显走弱", "ref": {"index_20d": round(index_20d, 4)}}
     return [catalyst_item, crowding, duration, environment]

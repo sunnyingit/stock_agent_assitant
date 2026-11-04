@@ -21,7 +21,8 @@ TUSHARE_TOKEN = os.environ.get("TUSHARE_TOKEN", "")
 
 # 估值锚点价格（自身历史倍数 × 当前扣非每股收益）会让页面出现价格，是否涉及证券投资咨询资质还没有确认，默认关闭。
 # 确认后在环境变量或 .env 里写 ENABLE_PRICE_ANCHORS=1 打开。
-ENABLE_PRICE_ANCHORS = os.environ.get("ENABLE_PRICE_ANCHORS", "") == "1"
+ENABLE_PRICE_ANCHORS = os.environ.get("ENABLE_PRICE_ANCHORS", "").strip().lower() in {"1", "true", "yes", "on"}
+WECOM_WEBHOOK_URL = os.environ.get("WECOM_WEBHOOK_URL", "").strip()
 
 LLM_API_KEY = os.environ.get("LLM_API_KEY") or os.environ.get("DEEPSEEK_API_KEY") or ""
 LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "https://api.deepseek.com/v1")

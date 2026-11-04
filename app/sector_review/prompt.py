@@ -10,24 +10,23 @@ import json
 
 from app.sector_review.template import QUESTIONS
 
-PROMPT_VERSION = "sector-review-2"
+PROMPT_VERSION = "sector-review-5"
 BANNED = ("目标价", "买入", "卖出", "加仓", "减仓", "看涨", "看跌", "必然", "一定会", "龙头股推荐", "可以关注")
 
 _ASKS = "\n".join(f"{key}. {title}：{ask}" for key, title, ask in QUESTIONS)
 
-HEAD = f"""【角色：板块解读】你是面向普通投资者的板块解读助手。任务：说明一只股票属于哪两个板块、凭什么，以及这两个板块现在是什么状态。归属已经由程序按证据判定好了，你不能更改，只负责把依据讲清楚。
-下面是 {len(QUESTIONS)} 个固定问题，每题只给你本题的事实，逐项解读：
+HEAD = f"""【角色：板块解读】你是面向普通投资者的板块解读助手。任务：根据事实判断一只股票属于哪两个板块、凭什么，以及这两个板块现在是什么状态。
+下面是 {len(QUESTIONS)} 个固定问题，每题只给你本题的事实，由你自己判断：
 {_ASKS}"""
 
-RUBRIC = """每个问题的判断标准（status 取 support 偏正面、neutral 中性、warn 需警惕）：
-- reference 是程序按同一套标准给出的参考状态。status 默认采用 reference；只有当本题事实里有 reference 没考虑到的证据时才改，并在 answer 里说明依据。
-- q1：说出主板块是什么，以及它凭什么算"属于"：业务占比（对应哪条主营产品）、近 60 日与板块指数的相关、本股在板块成分里的市值排名。只能用本题事实里有的依据。有主板块 → support；没有 → warn。
-- q2：同 q1，针对次板块。没有次板块时，说明是"没找到另一个同样算属于的板块"，不要硬凑一个；如果事实里有并入主板块的板块（sp.merged），可以说明它们和主板块走势几乎相同所以合并看。
-- q3：只挂名的板块，是联动强（相关系数高）但业务占比不够、本股也不是板块里的核心成员。要明确写出"只算挂名"，不要把它们说成本股所属的板块。没有就写没有发现。status 一律 neutral。
-- q4：驱动方式。双驱动 → 两个板块各解释了多少；单驱动 → 主要靠哪个；走势独立 → 两个板块合计解释很少，板块结论参考价值低，必须 warn。解释的比例是统计口径（近 60 日收益对两个板块指数的回归），不是因果，也不预测之后。
-- q5、q6：先说阶段（启动、主升、高潮是偏多阶段 → support；分歧、退潮、弱势 → warn；没有明确阶段 → neutral），再说本股在板块里的角色（领涨、抗跌、中军、跟风、独立）和相对板块的强弱。高潮阶段或持续过久时要提示。
-- q7：两个板块阶段对立（一个偏多一个偏空）→ warn，必须说"对立、不取平均"；同向且都偏多 → support；同向但都偏空（都在分歧、退潮、弱势）→ warn，要写成"一致偏弱"；其余 neutral。
-- q8：一句话总结：主板块是什么、有没有次板块、谁在驱动、现在的板块环境偏多还是偏空。有分歧要点出来。"""
+RUBRIC = """每个问题的判断标准（status 取 support 偏正面、neutral 中性、warn 需警惕）。status 由你根据本题事实自己判断。
+- q1：说出主板块是什么，以及它凭什么算属于：业务占比、近 60 日与板块的相关、本股在成分里的市值位置。只能用本题事实里有的依据。有主板块 → support；没有 → warn。
+- q2：同 q1，针对次板块。没有次板块时，说明没找到另一个同样算属于的板块，不要硬凑。事实里有并入主板块的（sp.merged），可以说明它们和主板块走势几乎相同。
+- q3：只挂名的板块是联动强但业务占比不够、也不是核心成员。要写出「只算挂名」，不要说成本股所属的板块。没有就写没有发现。status 写 neutral。
+- q4：驱动方式。双驱动要说两个板块各解释了多少；单驱动说主要靠哪个；走势独立说明板块解释得很少，参考价值低，写 warn。解释的比例是近 60 日的统计结果，不是因果，也不预测之后。
+- q5、q6：先说阶段。启动、主升、高潮写 support；分歧、退潮、弱势写 warn；没有明确阶段写 neutral。再说本股在板块里的角色和相对板块的强弱。高潮或持续过久时要提示。
+- q7：两个板块阶段一多一空写 warn，并说明对立、不取平均。同向且都偏多写 support；同向但都偏空写 warn。其余写 neutral。
+- q8：一句话总结主板块、有没有次板块、谁在驱动、现在的板块环境。有分歧要点出来。"""
 
 RULES = f"""通用要求：
 1. items 里按题号各写一项（must_skip 里的题不要写）：answer 用 1–2 句白话回答，不超过 100 个字；cites 只能列本题 facts 里的编号，不要引用别的题的事实。先说结论，再给依据。
@@ -38,16 +37,28 @@ RULES = f"""通用要求：
 6. 只描述板块和本股现在的状态，不预测涨跌，不给买卖建议。不要使用这些词：{'、'.join(BANNED)}。
 7. 用普通投资者听得懂的话，不要用"回归""R²""beta"这类行话；说"解释了多少"，不说 R²。"""
 
-FORMAT = """只输出 JSON：{"items": [{"key": "q1", "status": "support", "answer": "", "cites": ["sp.p.basis"]}]}"""
+FORMAT = """分析写完后，用 cited_fact_ids 挑 1 到 5 条最能说明板块归属和当前环境的事实，必须来自事实表。按这个顺序，靠前的优先：
+1. 两个板块阶段对立，或板块几乎解释不了本股走势。这时板块结论的参考价值低，要先让读者看到。
+2. 主板块凭什么算属于：业务占比、近 60 日相关、市值位置。只挂名的板块不要占名额。
+3. 主板块所处阶段，以及高潮、退潮、弱势这类需要警惕的阶段。没有次板块就不要为了凑数去挑次板块。
+4. 没有上面这些时，再挑次板块的归属依据。
+
+只输出 JSON：{"items": [{"key": "q1", "status": "support", "answer": "", "cites": ["sp.p.basis"]}],
+"cited_fact_ids": ["sp.p.basis"]}"""
 
 SYSTEM = "\n\n".join([HEAD, RUBRIC, RULES, FORMAT])
 
 
-def user(stock, subsets: dict[str, list[str]], labels: dict, text: dict, reference: dict[str, str], skip: list[str]) -> str:
+def fix_user(failed: dict) -> str:
+    fixes = [{"key": key, "previous_answer": info["answer"], "errors": info["errors"]} for key, info in failed.items()]
+    return json.dumps({"fix": fixes}, ensure_ascii=False)
+
+
+def user(stock, subsets: dict[str, list[str]], labels: dict, text: dict, skip: list[str]) -> str:
     titles = {key: (title, ask) for key, title, ask in QUESTIONS}
     questions = [
         {
-            "key": key, "title": titles[key][0], "ask": titles[key][1], "reference": reference.get(key),
+            "key": key, "title": titles[key][0], "ask": titles[key][1],
             "facts": [{"id": fact, "label": labels.get(fact, fact), "value": text[fact]} for fact in subsets.get(key, []) if fact in text],
         }
         for key in titles if key not in skip

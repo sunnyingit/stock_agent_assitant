@@ -1,6 +1,5 @@
-"""11 个问题的模板答案：模型失败、某一项没通过校验、或没有配置模型时用它。
+"""11 个问题的模板答案。方向和顶部那句话由模型写；这些问题始终由规则按事实表回答。
 
-只用事实表里的数字，每条都带引用，判断标准和 prompt.py 的 RUBRIC 是同一套（改一处要记得改另一处）。
 状态：support 偏正面、neutral 中性、warn 需警惕、missing 数据缺失。
 """
 
@@ -20,26 +19,7 @@ QUESTIONS = [
     ("q11", "一句话总结", "用白话讲清楚现在这家公司的基本面处在什么位置"),
 ]
 TITLES = {key: title for key, title, _ in QUESTIONS}
-# 状态由事实按固定标准决定：模型的状态和参考状态正反相反时，以参考状态为准
-GUARDED = ("q2", "q3", "q5", "q6", "q7", "q8", "q10")
-
-RELEVANT = {
-    "q1": ["fd.main_business", "fd.biz_period", "fd.biz_top", "fd.biz_top_share", "fd.biz_lines"],
-    "q2": ["fd.metric", "fd.value", "fd.pctile_5y", "fd.history_span", "fd.p20", "fd.p50", "fd.p80"],
-    "q3": ["fd.metric", "fd.value", "fd.peer_median", "fd.vs_peer", "fd.peer_count"],
-    "q4": ["fd.metric", "fd.metric_reason", "fd.distorted", "fd.history_span", "fd.peer_count"],
-    "q5": [f"fd.{p}_{k}" for k in ("profitability", "growth", "solvency", "cash", "payout") for p in ("q", "qp")] + ["fd.q_level", "fd.ocf_neg_years"],
-    "q6": ["fd.q_weakest"] + [f"fd.qp_{k}" for k in ("profitability", "growth", "solvency", "cash", "payout")],
-    "q7": ["fd.holders_level", "fd.hold_1", "fd.hold_2", "fd.hold_3", "fd.hold_4", "fd.hold_5", "fd.hold_6", "fd.hold_none"],
-    "q8": ["fd.hold_1", "fd.hold_2", "fd.hold_3", "fd.hold_4", "fd.hold_5", "fd.hold_6", "fd.hold_none"],
-    "q9": ["fd.industry", "fd.sector_stage", "fd.industry_news_count"] + [f"fd.industry_news_{i}" for i in range(1, 6)],
-    "q10": ["fd.price_date", "fd.report_period", "fd.periods_behind", "fd.peer_count", "fd.history_span"],
-}
 _PRESSURE = ("解禁", "减持", "质押")
-
-
-def relevant(available: set[str]) -> dict[str, list[str]]:
-    return {key: [fact for fact in ids if fact in available] for key, ids in RELEVANT.items()}
 
 
 def _missing(key: str, what: str) -> dict:
@@ -65,6 +45,12 @@ def answers(d: dict, text: dict[str, str]) -> list[dict]:
         if has("fd.biz_top"):
             parts.append(f"最大的业务线是{text['fd.biz_top']}")
             cites.append("fd.biz_top")
+        if has("fd.concepts"):
+            parts.append(f"判定属于的概念：{text['fd.concepts']}")
+            cites.append("fd.concepts")
+        if has("fd.chain"):
+            parts.append(text["fd.chain"])
+            cites.append("fd.chain")
         out.append(_item("q1", "neutral", "；".join(parts) + "。", cites))
 
     # q2 估值

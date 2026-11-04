@@ -352,6 +352,8 @@ class FundamentalAssembleTest(unittest.TestCase):
         self.assertEqual(set(shown["verdict"]), {"source", "status", "status_text", "text"})
         self.assertNotIn("inputs", shown)
         self.assertIn("cells", shown)
+        if (payload.get("inputs") or {}).get("business"):
+            self.assertEqual(shown["business"]["main_business"], payload["inputs"]["business"]["main_business"])
         self.assertIsNone(public({"verdict": None, "meta": {}})["verdict"])
 
 

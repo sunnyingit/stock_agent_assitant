@@ -49,9 +49,9 @@ class AdapterTest(unittest.TestCase):
         self.assertEqual(snap.status, STATUS_OK)
         self.assertEqual((snap.lean, snap.level), ("bullish", 2))
         self.assertEqual(snap.facts["flow.pattern"], "up_vol_up")
-        self.assertAlmostEqual(snap.facts["flow.rel_vol"], 2.0)
+        self.assertAlmostEqual(snap.facts["flow.rel_vol"], 1.6)
         self.assertIn("flow.view", snap.facts)
-        self.assertEqual(snap.flags["index_ret"], 0.0202)
+        self.assertAlmostEqual(snap.flags["index_ret"], 0.0202)
 
     def test_other_dimensions(self):
         news = adapters.adapt("news", news_payload())

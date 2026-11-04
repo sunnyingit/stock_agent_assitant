@@ -65,7 +65,9 @@ def make_aligned(closes=None, last_volume=2_000_000.0, big_buy=2e6) -> dict:
 
 
 def volume_payload(aligned: dict | None = None, stock=None) -> dict:
-    return volume_flow_detail(stock or make_stock(), 20, aligned=aligned or make_aligned(), today=TODAY)
+    from app.services.volume_flow.rules import DEFAULT_WINDOW
+
+    return volume_flow_detail(stock or make_stock(), DEFAULT_WINDOW, aligned=aligned or make_aligned(), today=TODAY)
 
 
 def news_payload(impact="positive", priced="not_yet", state="ok", lean="bullish", level=2) -> dict:

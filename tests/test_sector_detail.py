@@ -158,7 +158,7 @@ class SectorDetailTest(unittest.TestCase):
         self.assertEqual(payload["disclaimer_text"], DISCLAIMER)
         verdict = payload["verdict"]
         self.assertEqual((verdict["lean"], verdict["level"], verdict["certainty"]), ("bullish", 3, "medium"))
-        self.assertIn("本轮持续天数超过同类行情中位数", verdict["certainty_reasons"])
+        self.assertTrue(any("本轮持续天数超过同类行情中位数（已 3 天，中位数 2 天）" in item for item in verdict["certainty_reasons"]))
         self.assertEqual((verdict["source"], verdict["status"], verdict["status_text"]), ("rule", "support", "偏多"))
         self.assertIn("不过", verdict["text"])
         self.assertLessEqual(len(verdict["text"]), 90)

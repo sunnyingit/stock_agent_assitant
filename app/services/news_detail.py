@@ -10,7 +10,7 @@ from threading import Lock
 from zoneinfo import ZoneInfo
 
 from app import config
-from app.agents.news.clean import annotate, clean_news
+from app.agents.news.clean import _mentions, annotate, clean_news
 from app.agents.news.score import score_news
 from app.services.verdict_view import STATUS_OF_LEAN, model_fields, rule_fields, slim
 from app.tools import cache
@@ -123,27 +123,28 @@ def _payload(stock, days, today, stats, scored, events, bars, sector, copy, read
         if item.get("in_window") and item.get("scope") == "公司" and item.get("direction") in {"利好", "利空"}
     ]
     current = [item for item in events if item.get("in_window") and item.get("scope") == "公司"]
-    if not effective:
-        scored = {"score": 0, "verdict": {"lean": "", "lean_level": 0, "certainty": "", "certainty_note": ""}}
     # no_news 只表示窗口里没有公司自己的事件；有事件但方向都是中性，是"有消息、看不出方向"，状态仍是 ok
     state = "ok" if current else "no_news"
-    key_events, others = _pick(events, scored["verdict"])
-    primary = _primary(events, scored["verdict"])
+    # 搜到并留下的新闻都进同一份列表，每条都带 scope；整篇的利好/利空不看这些标签的加权分
+    listed = _list_events(events, scored["verdict"] if effective else {"lean": ""})
+    primary = _primary(events, scored["verdict"] if effective else {"lean": ""})
     meta = _meta(days, today, stats, len(events), bars, ready, state)
     if meta["state"] == "computing":
         return _shell(stock, days, "computing", today)
-    verdict, model_text = _verdict(scored, events, key_events, others, copy, stock, days, effective)
+    verdict, model_text = _verdict((copy or {}).get("lean") or "", events, copy, stock, days)
+    headline = model_fields(STATUS_OF_LEAN[verdict["lean"]][0], model_text)
+    if headline is not None:
+        headline["facts"] = (copy or {}).get("focus_facts") or []
     return {
         "ts_code": stock.ts_code,
         "stock_name": stock.name,
         "meta": meta,
         "verdict": verdict,
         # 模型写成了结论才有；方向仍由代码打分决定，模型只写这句话
-        "headline": model_fields(STATUS_OF_LEAN[verdict["lean"]][0], model_text),
-        "reaction": _reaction_block(primary, key_events, bars, sector, today),
-        "timeline": _timeline(bars, sector, events, key_events),
-        "key_events": [_event_row(item, ready) for item in key_events],
-        "other_news": {"total": len(others), "items": [_other(item) for item in others]},
+        "headline": headline,
+        "reaction": _reaction_block(primary, listed, bars, sector, today),
+        "timeline": _timeline(bars, sector, events, listed),
+        "key_events": [_event_row(item, ready) for item in listed],
         "heat": _heat(events, stats),
         "watch_next": _watch(verdict["lean"], any(item.get("source_grade") == "A" for item in current)),
         "disclaimer_text": _disclaimer(events),
@@ -154,6 +155,55 @@ def public(payload: dict) -> dict:
     """对外响应：verdict 只留和 headline 同一套的四个字段；lean/level/certainty 只给综合判断读。"""
     verdict = payload.get("verdict")
     return {**payload, "verdict": None if verdict is None else slim(verdict)}
+
+
+def analyst_message(payload: dict) -> dict:
+    """群聊里新闻分析师的一条发言。只带分析师结论，不把规则 verdict 灌进气泡。"""
+    from app.services.analyst_reply import analysis_message
+
+    headline = payload.get("headline") if isinstance(payload, dict) else None
+    if not headline or not headline.get("text"):
+        return analysis_message("news", "新闻分析师", None)
+    return analysis_message("news", "新闻分析师", headline)
+
+
+def _rule_headline(payload: dict) -> dict | None:
+    """用规则 verdict 作新闻分析师结论（详情不调模型）。"""
+    verdict = (payload or {}).get("verdict") or {}
+    if not verdict.get("text"):
+        return None
+    return {
+        "source": "rule",
+        "status": verdict.get("status") or "neutral",
+        "status_text": verdict.get("status_text") or "不明",
+        "text": verdict.get("text") or "",
+        "facts": [],
+    }
+
+
+def stream_events(stock: Stock, days: int = 3):
+    """先告知开始，再算规则新闻详情，把规则结论落库并推出去。不调模型。"""
+    from app.services import news_analyst_concl as analyst_concl
+    from app.synthesis.worker import get_store
+
+    yield {"event": "start", "data": {"dimension": "news", "name": "新闻分析师"}}
+    try:
+        payload = public(build_detail(stock, days, model=False))
+    except Exception as exc:
+        yield {"event": "error", "data": {"dimension": "news", "error": str(exc)}}
+        return
+    store = get_store()
+    # 还在整理时不要落失败标记，否则详情会误回退规则/卡住
+    if (payload.get("meta") or {}).get("state") == "computing":
+        payload["headline"] = analyst_concl.load(store, stock.ts_code)
+        payload["analyst_failed"] = analyst_concl.failed(store, stock.ts_code)
+    else:
+        shown = _rule_headline(payload)
+        analyst_concl.save(store, stock.ts_code, shown)
+        payload["headline"] = shown
+        payload["analyst_failed"] = shown is None
+    yield {"event": "message", "data": analyst_message(payload)}
+    yield {"event": "done", "data": {"dimension": "news"}}
 
 
 def _shell(stock: Stock, days: int, state: str, today: date) -> dict:
@@ -175,7 +225,6 @@ def _shell(stock: Stock, days: int, state: str, today: date) -> dict:
         "reaction": None,
         "timeline": None,
         "key_events": None,
-        "other_news": None,
         "heat": None,
         "watch_next": None,
         "disclaimer_text": None,
@@ -210,29 +259,12 @@ def _meta(days, today, stats, event_count, bars, ready: bool, state: str = "ok")
     }
 
 
-def _verdict(scored, events, key_events, others, copy, stock, days, effective) -> tuple[dict, str | None]:
-    """规则结论（四个字段 + 给综合判断读的 lean/level/certainty），和模型写的那句话。"""
-    raw = scored["verdict"]
-    if not effective:
-        lean, level, certainty = "unclear", 0, None
-    else:
-        lean = _LEAN.get(raw.get("lean"), "unclear")
-        level = raw.get("lean_level") or 1
-        certainty = _CERTAINTY.get(raw.get("certainty"), "low")
-        if not _official_fact(effective) or _only_forecast(effective):
-            certainty = "low"
-    template, model_text = _copy(events, key_events, others, copy, stock, days)
-    return {**rule_fields(lean, template), "lean": lean, "level": level, "certainty": certainty}, model_text
-
-
-def _official_fact(events) -> bool:
-    return any(item.get("source_grade") in {"A", "B"} and item.get("basis") == "事实" for item in events)
-
-
-def _only_forecast(events) -> bool:
-    return bool(events) and all(
-        item.get("basis") in {"预测", "传闻"} or item.get("category") == "观点" for item in events
-    )
+def _verdict(model_lean: str, events, copy, stock, days) -> tuple[dict, str | None]:
+    """整篇利好/利空采用模型给出的 lean。没有这份结论时为不明，不再用事件加权分。"""
+    lean = {"利好": "bullish", "利空": "bearish"}.get(model_lean, "unclear")
+    level = 1 if lean in {"bullish", "bearish"} else 0
+    template, model_text = _copy(events, copy, stock, days)
+    return {**rule_fields(lean, template), "lean": lean, "level": level, "certainty": None}, model_text
 
 
 def _reaction_block(primary, key_events, bars, sector, today: date | None = None) -> dict:
@@ -370,32 +402,22 @@ def _event_row(item: dict, ready: bool = False) -> dict:
     }
 
 
-def _other(item: dict) -> dict:
-    reaction = item.get("reaction") or {}
-    day = reaction.get("day_excess")
-    row = {
-        "event_id": item["event_id"],
-        "title": item.get("title") or "",
-        "url": item.get("url") or "",
-        "source_grade": item.get("source_grade") or "",
-        "published_at": _published(item.get("time")),
-        "impact": _impact(item.get("direction")),
-        "scope": _enum(item.get("scope"), _SCOPE_EN),
-        "category": _enum(item.get("category"), _CATEGORY_EN),
-        "in_window": bool(item.get("in_window")),
-        "magnitude_text": item.get("magnitude_text") or "",
-        "sources_count": int(item.get("sources_count") or 1),
-        "is_rumor": item.get("basis") == "传闻" or item.get("source_grade") == "E",
-    }
-    if reaction:
-        row["reaction"] = {
-            "priced_in": _priced(item),
-            "day_excess": None if day is None else round(float(day) / 100, 6),
-            "text": _reaction_text(item),
-        }
-        if item.get("evidence"):
-            row["evidence"] = item.get("evidence")
-    return row
+def _list_events(events, verdict) -> list[dict]:
+    """全部事件按权重排列。窗口内的公司反方只标一条，其余都算主列表，不另开 other_news。"""
+    lean = verdict.get("lean")
+    opposite = "利空" if lean == "偏多" else "利好"
+    ordered = sorted(events, key=lambda item: (item.get("weight") or 0, str(item.get("time") or "")), reverse=True)
+    counter = next((
+        item for item in ordered
+        if item.get("scope") == "公司" and item.get("in_window") and item.get("direction") == opposite
+    ), None)
+    counter_id = counter.get("event_id") if counter else None
+    for rank, item in enumerate(ordered, start=1):
+        if item.get("scope") not in {"公司", "行业", "市场"}:
+            item["scope"] = "市场"
+        item["rank"] = rank
+        item["role"] = "counter" if item.get("event_id") == counter_id else "main"
+    return ordered
 
 
 def _heat(events, stats) -> dict:
@@ -430,31 +452,6 @@ def _disclaimer(events) -> str:
             labels.append(_GRADE_LABEL[grade])
     source = " · ".join(labels) if labels else "公开新闻"
     return f"来源：{source}。以上为基于公开新闻的研究分析，不构成投资建议。"
-
-
-def _pick(events, verdict) -> tuple[list[dict], list[dict]]:
-    lean = verdict.get("lean")
-    main = "利好" if lean == "偏多" else "利空"
-    opposite = "利空" if main == "利好" else "利好"
-    pool = [item for item in events if item.get("scope") == "公司" and item.get("in_window")]
-    ordered = sorted(pool, key=lambda item: item.get("weight") or 0, reverse=True)
-    primary = [item for item in ordered if item.get("direction") == main]
-    counter = next((item for item in ordered if item.get("direction") == opposite), None)
-    chosen = []
-    for item in primary:
-        if len(chosen) >= (2 if counter else 3):
-            break
-        chosen.append(item)
-    if counter and len(chosen) < 3:
-        chosen.append(counter)
-    chosen.sort(key=lambda item: item.get("weight") or 0, reverse=True)
-    for rank, item in enumerate(chosen, start=1):
-        item["rank"] = rank
-        item["role"] = "counter" if item.get("direction") == opposite else "main"
-    chosen_ids = {item["event_id"] for item in chosen}
-    others = [item for item in events if item["event_id"] not in chosen_ids]
-    others.sort(key=lambda item: str(item.get("time") or ""), reverse=True)
-    return chosen, others
 
 
 def _primary(events, verdict) -> dict | None:
@@ -579,16 +576,16 @@ def _amount(value, text: str):
 
 
 MAX_ARTICLES = 20   # 一次最多交给模型的新闻条数：窗口内的优先，再看来源等级和时间；超出的记为 over_limit
-EXTRACT_VERSION = "news-extract-3"   # 改提示词要升版本，旧缓存随之失效
+EXTRACT_VERSION = "news-extract-11"   # 改提示词要升版本，旧缓存随之失效
 EXTRACT_TTL = 24 * 3600   # 缓存键里带了新闻内容：同一批新闻直接沿用上一次的判断（方向不会来回变），有新新闻键就变，自然重判
-_SKIP_REASONS = {"无关": "irrelevant", "行情播报": "market_recap", "例行披露": "routine", "重复": "duplicate"}
+_SKIP_REASONS = {"无关": "irrelevant", "行情播报": "market_recap", "重复": "duplicate"}
 
 
 def _judge(articles, model, live: bool, stock: Stock):
     """整批新闻交给模型：合并同一件事的重复报道、挑出无关或例行的、给每个事件打标签，并写一句结论。
     返回（保留的新闻，事件，{ai_text}，清洗统计）；模型不可用、调用失败、或结果完全不可用时返回 None（由规则兜底）。
-    去掉的每一条都带原因：irrelevant 无关 / market_recap 行情播报 / routine 例行披露 / duplicate 重复并入 / not_extracted 模型没处理 / over_limit 超出条数。
-    权重和方向分数仍由 score_news 按模型给的标签计算。"""
+    去掉的每一条都带原因：irrelevant 无关 / market_recap 行情播报 / duplicate 重复并入 / not_extracted 模型没处理 / over_limit 超出条数。例行披露不丢。
+    整篇利好或利空采用模型输出的 lean，不再按事件标签加权打分。"""
     writer = _writer(model, live)
     if not writer or not articles:
         return None
@@ -612,7 +609,8 @@ def _judge(articles, model, live: bool, stock: Stock):
             cache.set(key, data, EXTRACT_TTL)
     if not isinstance(data, dict):
         return None
-    facts = _accepted_facts(data.get("events"), sent)
+    facts = _accepted_facts(data.get("events"), sent, stock)
+    facts.extend(_routine_facts(data.get("skipped"), sent, facts))
     primary = {str(fact["article_id"]): fact for fact in facts}
     merged = {other: str(fact["article_id"]) for fact in facts for other in fact.get("also_in") or []}
     skipped = _accepted_skips(data.get("skipped"), sent, set(primary) | set(merged))
@@ -642,11 +640,41 @@ def _judge(articles, model, live: bool, stock: Stock):
         "heat": articles[0].get("heat_count") or 0,
         "dropped": dropped,
     }
-    return kept, facts, _checked_sentence(data, sent), stats
+    sentence = _checked_sentence(data, sent)
+    lean = str(data.get("lean") or "").strip()
+    if lean not in {"利好", "利空", "中性"}:
+        lean = ""
+    if lean:
+        sentence = {**sentence, "lean": lean}
+    drivers = [str(item) for item in data.get("lean_driver_ids") or [] if str(item) in by_id]
+    if drivers:
+        sentence = {**sentence, "lean_driver_ids": drivers}
+    focus = _focus_articles(data, sent)
+    if focus:
+        sentence = {**sentence, "focus_facts": focus}
+    return kept, facts, sentence, stats
 
 
 def _dropped_row(article, reason: str) -> dict:
     return {"title": article.get("title") or "", "reason": reason, "time": article.get("time") or ""}
+
+
+def _routine_facts(rows, articles, facts) -> list[dict]:
+    """例行披露不丢：模型标成例行的，仍按原文收成事件。"""
+    taken = {str(fact.get("article_id")) for fact in facts}
+    taken.update(str(other) for fact in facts for other in fact.get("also_in") or [])
+    by_id = {str(article.get("id")): article for article in articles}
+    extra = []
+    for row in rows or []:
+        if not isinstance(row, dict) or str(row.get("reason") or "").strip() != "例行披露":
+            continue
+        key = str(row.get("article_id") or "")
+        article = by_id.get(key)
+        if article is None or key in taken:
+            continue
+        taken.add(key)
+        extra.append(_fact_from_article(article, key))
+    return extra
 
 
 def _accepted_skips(rows, articles, taken: set) -> dict:
@@ -663,7 +691,7 @@ def _accepted_skips(rows, articles, taken: set) -> dict:
     return skipped
 
 
-def _accepted_facts(rows, articles) -> list[dict]:
+def _accepted_facts(rows, articles, stock: Stock | None = None) -> list[dict]:
     """模型给的事件逐条核对：新闻编号要存在、一条新闻只留一个事件；金额和数字要出现在正文里。
     类别、方向这些标签原样交给 score_news（不在取值范围里的，它会按"无效"处理）。"""
     by_id = {str(article.get("id")): article for article in articles}
@@ -684,14 +712,23 @@ def _accepted_facts(rows, articles) -> list[dict]:
                 also.append(other)
         seen.update(also)
         text = f"{article.get('title') or ''} {article.get('summary') or ''}".replace(",", "")
-        event = str(row.get("event") or article.get("title") or "").strip()
+        scope = str(row.get("scope") or "")
+        mentioned = stock is not None and _mentions(f"{article.get('title') or ''} {article.get('summary') or ''}", stock)
+        if mentioned:
+            scope = "公司"
+        elif scope not in {"公司", "行业", "市场"}:
+            scope = "市场"
+        event = str(row.get("summary") or row.get("event") or article.get("title") or "").strip()
+        raw_evidence = row.get("evidence")
+        evidence = "" if raw_evidence in (None, "null") else str(raw_evidence).strip()[:30]
         facts.append({
             "id": f"F{key}",
             "article_id": article.get("id"),
             "event": event[:80],
             "summary": event[:40],
+            "evidence": evidence,
             "category": str(row.get("category") or ""),
-            "scope": str(row.get("scope") or ""),
+            "scope": scope,
             "basis": str(row.get("basis") or ""),
             "direction": str(row.get("direction") or ""),
             "persistence": str(row.get("persistence") or ""),
@@ -730,14 +767,32 @@ def _checked_sentence(data, articles) -> dict:
     text = str(data.get("ai_text") or "").strip()
     cited = [str(item) for item in data.get("cited_article_ids") or []]
     by_id = {str(article.get("id")): article for article in articles}
-    if not text or len(text) > 90 or "不过" not in text or any(word in text for word in _BANNED):
+    if not text or len(text) > 90 or any(word in text for word in _BANNED):
         return {}
     if not cited or any(item not in by_id for item in cited):
         return {}
-    source = " ".join(f"{by_id[item].get('title') or ''} {by_id[item].get('summary') or ''}" for item in cited)
-    if any(number not in source for number in _NUMBER.findall(text)):
-        return {}
     return {"ai_text": text}
+
+
+def _focus_articles(data, articles) -> list[dict]:
+    """模型点名的特别需要关注的新闻。编号对不上的丢掉，最多 5 条。没点名时用结论引用的新闻。"""
+    if not isinstance(data, dict):
+        return []
+    by_id = {str(article.get("id")): article for article in articles}
+    raw = data.get("focus_article_ids")
+    ids = [str(item) for item in raw or []] or [str(item) for item in data.get("cited_article_ids") or []]
+    picked, seen = [], set()
+    for article_id in ids:
+        article = by_id.get(article_id)
+        if article is None or article_id in seen:
+            continue
+        seen.add(article_id)
+        title = str(article.get("title") or "")
+        summary = str(article.get("summary") or "").strip()
+        picked.append({"id": article_id, "label": title, "text": summary or title, "value": None})
+        if len(picked) >= 5:
+            break
+    return picked
 
 
 def _fact_from_article(article: dict, index: int) -> dict:
@@ -804,17 +859,22 @@ def _second_amount(text: str) -> str:
     return found[1] if len(found) > 1 else ""
 
 
-def _copy(events, key_events, others, model_copy, stock, days) -> tuple[str, str | None]:
+def _copy(events, model_copy, stock, days) -> tuple[str, str | None]:
     """返回（规则模板写的一句话，模型写的一句话或 None）。"""
-    template = _template(key_events, others, stock, days)
+    template = _template(events, stock, days)
     return template, (model_copy or {}).get("ai_text") or None
 
 
-def _template(key_events, others, stock, days) -> str:
+def _template(events, stock, days) -> str:
     name = stock.name or "该公司"
-    if not key_events:
-        recent = [item for item in others if item.get("scope") == "公司" and item.get("in_window")]
-        stale = [item for item in others if item.get("scope") == "公司" and not item.get("in_window")]
+    directional = [
+        item for item in events
+        if item.get("scope") == "公司" and item.get("in_window") and item.get("direction") in {"利好", "利空"}
+    ]
+    directional.sort(key=lambda item: item.get("weight") or 0, reverse=True)
+    if not directional:
+        recent = [item for item in events if item.get("scope") == "公司" and item.get("in_window")]
+        stale = [item for item in events if item.get("scope") == "公司" and not item.get("in_window")]
         if recent:
             latest = _latest_company(recent)
             text = (
@@ -830,7 +890,7 @@ def _template(key_events, others, stock, days) -> str:
                 f"{_impact_phrase(latest.get('direction'))}。"
             )
             return text[:90]
-        industry = next((item for item in others if item.get("scope") == "行业"), None)
+        industry = next((item for item in events if item.get("scope") == "行业"), None)
         if industry:
             text = (
                 f"近 {days} 天主要是行业层面的消息（{_event_kind(industry.get('title') or '')}），"
@@ -839,9 +899,10 @@ def _template(key_events, others, stock, days) -> str:
         else:
             text = f"近 {days} 天没有{name}自己的公告。不过还要等公司自己的公告。"
         return text[:90]
-    lead = key_events[0]
-    counter = next((item for item in key_events if item.get("role") == "counter"), None)
-    official = any(item.get("source_grade") in {"A", "B"} for item in key_events)
+    lead = directional[0]
+    opposite = "利空" if lead.get("direction") == "利好" else "利好"
+    counter = next((item for item in directional if item.get("direction") == opposite), None)
+    official = any(item.get("source_grade") in {"A", "B"} for item in directional)
     kind = _event_kind(lead.get("title") or "")
     if official:
         body = f"近 {days} 天有{name}的{kind}。"
@@ -1141,36 +1202,130 @@ def _px(value) -> str:
         return str(value)
 
 
-_SYSTEM = (
-    "你是新闻事件抽取员。给你一只股票和一批新闻，由你完成筛选、合并和判断。只根据给定新闻，不要补充新闻里没有的信息，只输出 JSON："
-    "{\"events\": [{\"article_id\": \"\", \"also_in\": [], \"event\": \"\", \"category\": \"\", \"scope\": \"\", \"basis\": \"\", "
-    "\"direction\": \"\", \"persistence\": \"\", \"magnitude\": \"\", \"amount\": \"\", \"base\": \"\", "
-    "\"numbers\": [], \"reason\": \"\"}], \"skipped\": [{\"article_id\": \"\", \"reason\": \"\"}], "
-    "\"ai_text\": \"\", \"cited_article_ids\": []}。\n"
-    "【筛选与合并】每条新闻要么进 events，要么进 skipped，要么作为重复报道写进某个事件的 also_in，不能漏掉。\n"
-    "- 报道同一件事的新闻（同一份公告被多家转载、标题略有不同的重复稿）合并成一个事件：article_id 选最权威的一条（公告 > 官方 > 媒体 > 研报 > 热榜），其余的编号写进 also_in。\n"
-    "- skipped 的 reason 只能是：无关（和这只股票、它所在行业都无关，包括综述、汇总、晚间新闻精选、只是顺带提到这家公司的稿子）、"
-    "行情播报（只讲股价涨跌、资金流向，没有新信息）、例行披露（纯程序性文件，如核查意见、法律意见书、会议通知，没有实质信息）。\n"
-    "- 判断是否相关要看内容，不要只看标题有没有公司名：标题只写“AI龙头”“该公司”，但内容讲的就是这家公司的，要抽取，不要当无关。\n"
-    "【events】一个事件一个对象，article_id 必须是输入里的 id。event 用一句话写清发生了什么。\n"
-    "category 只能是：业绩、经营、资本、风险与治理、政策与行业、宏观与市场、观点、传闻与澄清。"
-    "scope 只能是：公司（这条新闻的主角就是这家公司）、行业、市场。"
-    "basis 只能是：事实（公告或官方披露）、计划、预测、传闻；研报、评级、目标价写预测，category 写观点；没有公告印证的传闻写传闻。\n"
-    "direction 只能是：利好、利空、中性，指对公司未来盈利或估值的影响方向，不是股价已经涨跌。"
-    "先看数字的方向：净利润、营收同比增长是利好，同比减少或下滑是利空；几项指标方向相反或幅度很小，写中性。"
-    "董事会决议、薪酬方案、股东户数这类没有新信息的，写中性，magnitude 写小。\n"
-    "amount：这条新闻讲的核心金额，必须带单位，如“30亿元”。base：和 amount 同口径、可以直接比较的基数，如上年同期、公司营收、总市值，同样必须是带单位的金额。"
-    "找不到同口径的基数就留空，不要用日期、户数、股数或别的数字凑。numbers 只写正文里出现的数字，正文没有的不要补。"
-    "magnitude 写大、中、小：有可比的 amount 和 base 时按占比判断，没有就写小。persistence 只能是：一次性、可持续。reason 用一句话说明为什么是这个方向。\n"
-    "示例（只展示写法，别照搬）：\n"
-    "- “公司拟回购不超过30亿元股份” → category 资本，scope 公司，basis 计划，direction 利好，amount “30亿元”，base 留空，magnitude 小。\n"
-    "- “前三季度净利润644.67亿元，同比减少0.25%；营收同比增长1.96%” → category 业绩，scope 公司，basis 事实，direction 中性（营收增、净利微降，方向相反），amount “644.67亿元”，base 留空，magnitude 小。\n"
-    "- “董事会审议通过高管薪酬兑现方案” → category 风险与治理，scope 公司，basis 事实，direction 中性，magnitude 小。\n"
-    "【ai_text】面向普通投资者的一句话结论，不超过 90 个字：先说整体是偏多、偏空还是看不出方向，再写最要紧的依据。必须包含“不过”：有反方报道或不确定的地方就写出来；"
-    "没有就写“不过目前没有看到明确的反方报道”，不要为了凑转折编造细节。只能使用新闻里出现的数字，不要自己计算，不要出现买入、卖出、建仓等建议。"
-    "cited_article_ids 填 ai_text 用到的新闻 id，必须来自输入。"
-)
+_SYSTEM = '''你是新闻事件抽取员。给你一只股票和一批新闻，由你完成筛选、合并和判断。只根据给定新闻，不要补充新闻里没有的信息，只输出 JSON。
 
+## 一、新闻去处
+每条新闻必须有去处：放进 events，放进 skipped，或者作为重复报道写进某个事件的 also_in。
+同一件事被多家转载，合并成一个事件。article_id 选最权威的一条，顺序是公告、官方、媒体、研报、热榜，其余编号写进 also_in。
+
+## 二、skipped
+skipped 的原因只能是以下两种。是否相关看内容，不看标题里有没有公司名。
+
+1. 无关：和这只股票、它所在行业都无关。综述、汇总、晚间新闻精选里只点了名字、没有讲这家公司的事，算无关。
+   - 热点、八卦、传闻、点评，只要写到这家公司，不要放进 skipped，放进 events，scope 写公司。
+   - 宏观新闻不算无关，以下情况要保留：利率、汇率、财政政策、贸易政策、大宗商品价格，对本行业有直接影响的。
+   - 与本行业没有直接传导的泛宏观新闻算无关。
+2. 行情播报：只讲股价涨跌、资金流向、龙虎榜，没有新信息。
+例行披露不要放入 skipped，保留为事件：direction 写中性，magnitude 写小。包括核查意见、法律意见书、会议通知、董事会决议。
+
+## 三、事件字段
+每个事件要写清发生了什么。
+
+- category 只能是：业绩、经营、资本、风险与治理、政策与行业、宏观与市场、观点、传闻与澄清。
+- scope 只能是：公司、行业、市场。
+  - 公司：新闻在讲这家公司。公告、经营、资本事项算公司；这家公司的热点、八卦、传闻、点评也算公司。只要和这家公司有关系，scope 就写公司。
+  - 行业：没有写到这家公司，只讲所在行业、产业链或同行。
+  - 市场：没有写到这家公司，只讲大盘、指数或宏观。
+- basis 只能是：事实、计划、预测、传闻。
+  - 研报、评级、目标价：basis 写预测，category 写观点。
+  - 没有公告印证的传闻：basis 写传闻。
+  - 计划类（拟、预计、计划）尚未落地的：basis 写计划。
+- evidence：摘录支撑方向判断的原文，不超过 30 字。
+
+## 四、方向判断 direction
+direction 只能是利好、利空、中性。它指对未来盈利或估值的影响，不看股价已经怎么走。
+
+### 业绩类，按顺序判断
+1. 新闻明确写了超预期、不及预期、高于或低于指引的，以此为准。新闻没写的，不要自己判断预期。
+2. 否则依次看扣非净利润、归母净利润、营收的同比变化：增长写利好，减少或下滑写利空。
+3. 扭亏、亏损收窄写利好；增亏、由盈转亏写利空。
+4. 增长主要来自非经常性损益（资产出售、政府补助、公允价值变动、投资收益）的，方向不变，持续性写一次性，量级降一档。
+5. 以下情况写中性：指标方向相反；变动幅度很小；新闻强调同比增长但环比大幅下滑或增速明显放缓。
+
+### 非业绩事件，按默认方向
+新闻中有明确相反信息的，可以推翻默认，依据写进 evidence。
+
+- 回购、控股股东或董监高增持：默认利好。
+- 减持计划、大比例解禁：默认利空。
+- 定增、配股：默认中性。募资明确用于扩产或收购盈利资产，写利好；主要用于补流或还债，写利空。
+- 中标、大额订单、新产品获批、产能投产：默认利好。
+- 并购重组：默认中性。新闻写明标的盈利且对价合理，写利好；高溢价或标的亏损，写利空。
+- 立案调查、行政处罚、重大诉讼、审计非标意见、债务违约：默认利空。
+- 高比例质押、股份冻结、平仓风险：默认利空。
+- 高管或实控人变动：默认中性。伴随违规、留置或突然离任，写利空。
+- 分红：默认中性。分红率显著提高，写利好。
+- 评级上调、首次覆盖给出买入或增持、目标价上调：默认利好。
+- 维持原评级：默认中性。
+- 评级或目标价下调：默认利空。
+- 澄清公告否认利好传闻：默认利空。
+- 澄清公告否认利空传闻：默认利好。
+- 薪酬方案、股东户数、例行人事：默认中性，量级写小。
+- 行业、政策、宏观事件：视传导。必须能从新闻中说明本公司受益还是受损；说明不了写中性。
+
+## 五、金额与量级
+- 金额必须带单位。
+- 基数要和金额同口径，例如订单金额对营收，回购金额对市值或总股本对应金额。
+- 找不到金额或基数就留空，不要用日期、户数、股数凑。
+- numbers 只写正文里出现的数字。
+
+量级只能是大、中、小：
+- 金额和基数都有时，按比例分档：30% 及以上为大；10% 到 30% 为中；10% 以下为小。
+- 没有可比金额，但性质严重的事件，量级写大。例如立案调查、实控人被留置、债务违约、重大资产重组、主营产品被禁。
+- 其余没有可比金额和基数的，量级写小。
+
+持续性只能是一次性或可持续。
+
+## 六、整批结论 lean
+lean 是整批新闻的最后结论，只能是利好、利空、中性。程序直接采用这个字段。按以下规则汇总：
+
+1. 只看 scope 为公司或行业的事件。scope 为市场的事件不单独决定 lean。
+2. 以量级最大的事实类事件为主。
+3. basis 为传闻或预测的事件，不能单独决定 lean，只能在事实类事件方向一致时加强结论。
+4. 利好和利空事件量级相当，或者只有小量级事件时，写中性。
+5. lean_driver_ids 填决定 lean 的事件对应的 article_id。
+
+## 七、结论文本 ai_text
+- 不超过 90 个字，方向必须和 lean 一致。
+- 不得引入新闻中没有的风险。
+- 不要出现买入、卖出、建仓。
+- cited_article_ids 填这句话用到的新闻编号。
+- focus_article_ids 挑出 1 到 5 条特别需要关注的新闻，按下面顺序，靠前的优先。必须是这次交给你的新闻。
+  1. 会改变公司控制权、生存或诚信的：实控人或董事长被留置、调查、失联，立案、重大处罚、债务违约、审计非标、退市风险。
+  2. 会明显改变盈利或估值的公司事件：业绩远超或远差于已有说法、重大订单或合同、回购、增减持、并购、大比例解禁。
+  3. 会直接打到这家公司主业的外部冲击。先看它靠什么赚钱，再判断新闻有没有传导。石油公司遇到战争、制裁、油价剧变要选；芯片公司遇到出口管制要选。和主业没有传导的泛宏观、其他行业的热点，不要选。
+  4. 股东户数、程序性董事会决议、法律意见书、行情播报，只有前面三类都没有时才可以选。
+
+## 八、输出格式
+只输出以下 JSON，没有值的字段填 null：
+
+{
+  "events": [
+    {
+      "article_id": "",
+      "also_in": [],
+      "summary": "",
+      "category": "",
+      "scope": "",
+      "basis": "",
+      "direction": "",
+      "evidence": "",
+      "amount": null,
+      "base": null,
+      "numbers": [],
+      "magnitude": "",
+      "persistence": ""
+    }
+  ],
+  "skipped": [
+    {"article_id": "", "reason": ""}
+  ],
+  "lean": "",
+  "lean_driver_ids": [],
+  "ai_text": "",
+  "cited_article_ids": [],
+  "focus_article_ids": []
+}
+'''
 
 def _user(articles, stock: Stock) -> str:
     import json

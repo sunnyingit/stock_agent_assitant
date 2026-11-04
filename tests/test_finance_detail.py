@@ -163,8 +163,10 @@ class MetricsEdgeCaseTest(unittest.TestCase):
         m = metrics(Q3, snap)
         self.assertIsNone(m["growth"]["q_np_yoy"])
         self.assertTrue(m["growth"]["loss_prior"])
+        self.assertFalse(m["growth"]["loss_now"])
         self.assertGreater(m["growth"]["loss_change"], 0)
-        self.assertEqual(rules.growth_level(m), "loss")
+        self.assertEqual(rules.growth_level(m), "up")                   # 去年同期亏损、本期已盈利，是扭亏不是仍在亏损
+        self.assertIn("本期盈利", rules._growth_note(m))
 
     def test_restatement_needs_two_versions_that_disagree(self):
         snap = snapshot()
@@ -191,6 +193,55 @@ class MetricsEdgeCaseTest(unittest.TestCase):
             self.assertEqual(config.thresholds("general")["ded_to_np_support_min"], 0.70)
         finally:
             config.OVERRIDES["realestate"] = original
+
+    def test_a_later_restatement_wins_over_an_earlier_correction(self):
+        rows = [
+            {"end_date": "20241231", "ann_date": "20250430", "update_flag": "1", "revenue": 100.0},
+            {"end_date": "20241231", "ann_date": "20250301", "update_flag": "1", "revenue": 80.0},
+            {"end_date": "20241231", "ann_date": "20250430", "update_flag": "0", "revenue": 70.0},
+        ]
+        self.assertEqual(M._by_end(rows)["20241231"]["revenue"], 100.0)
+
+    def test_reaction_day_one_is_only_the_disclosure_session(self):
+        snap = snapshot()
+        snap["bars"] = [
+            {"trade_date": "20260825", "pct_chg": 1.0, "amount": 1.0e6},
+            {"trade_date": "20260826", "pct_chg": -2.0, "amount": 1.0e6},
+            {"trade_date": "20260827", "pct_chg": 9.0, "amount": 1.0e6},
+        ]
+        snap["sector"] = {"name": "测试", "rows": [
+            {"trade_date": "20260825", "pct_change": 0.0},
+            {"trade_date": "20260826", "pct_change": 0.0},
+            {"trade_date": "20260827", "pct_change": 0.0},
+        ]}
+        reaction = M._reaction(snap, date(2026, 8, 26), date(2026, 8, 27))
+        self.assertAlmostEqual(reaction["after"][1]["stock"], -0.02, places=6)
+        self.assertAlmostEqual(reaction["after"][1]["stock"] * 100, -2.0, places=4)
+
+    def test_receivables_financing_is_part_of_receivables(self):
+        snap = snapshot()
+        for row in snap["balance"]:
+            if row["end_date"] == "20260930":
+                row["receiv_financing"] = 1_000_000_000.0
+        widened = metrics(Q3, snap)["balance"]["ar"]
+        base = metrics(Q3)["balance"]["ar"]
+        self.assertAlmostEqual(widened - base, 1_000_000_000.0, delta=1)
+
+    def test_turnaround_is_not_described_as_still_losing_money(self):
+        from app.finance_review import facts as fact_sheet
+        from app.finance_review import template
+
+        snap = snapshot()
+        for row in snap["income_q"] + snap["income_c"]:
+            if row["end_date"] == "20250930":
+                row["n_income_attr_p"] = -50_000_000.0
+        m = metrics(Q3, snap)
+        facts, d = fact_sheet.build(m)
+        text = {fact.id: fact.text for fact in facts}
+        row = next(item for item in template.answers(d, text) if item["key"] == "q2")
+        self.assertIn("本期已盈利", row["answer"])
+        self.assertNotIn("处在亏损中", row["answer"])
+        self.assertEqual(row["status"], "support")
 
 
 if __name__ == "__main__":

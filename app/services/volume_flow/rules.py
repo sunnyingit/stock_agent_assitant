@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-RULE_VERSION = "volume_price-2"
+RULE_VERSION = "volume_price-4"
+DEFAULT_WINDOW = 5              # A 股短线主窗口；接口不传 window 时用这个
 FLOW_SOURCE = "东方财富"
 DISCLAIMER_TEXT = "以上为基于公开资金流数据的研究分析，不构成投资建议"
 

@@ -104,8 +104,14 @@ def _state(facts: FactSheet, d: dict, tag: str, group: str, label: str, block: d
     if rank.get("value") and rank.get("total"):
         _put(facts, f"{p}.sw_rank", f"{label}近 20 日涨幅在{rank.get('level_text') or '申万行业'}里的名次", group, "rank", rank["value"], f"{rank['value']}/{rank['total']}")
     hint = block.get("position_hint") or {}
-    if hint.get("climax") or hint.get("overdue"):
-        _put(facts, f"{p}.warn", f"{label}的位置提示", group, "text", True, "高潮阶段" if hint.get("climax") else "这一轮持续天数已超过同类行情的中位数")
+    items = (block.get("sustain") or {}).get("items") or block.get("sustain_items") or []
+    warns = [item.get("text") for item in items if item.get("status") == "warn" and item.get("text")]
+    if hint.get("climax") or hint.get("overdue") or warns:
+        bits = ["高潮阶段"] if hint.get("climax") else []
+        bits.extend(text for text in warns if text not in bits)
+        if not bits and hint.get("overdue"):
+            bits.append("这一轮持续天数已超过同类行情的中位数")
+        _put(facts, f"{p}.warn", f"{label}的位置提示", group, "text", True, "；".join(bits))
 
 
 def build(payload: dict) -> tuple[FactSheet, dict]:

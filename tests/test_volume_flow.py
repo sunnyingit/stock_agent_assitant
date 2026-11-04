@@ -82,6 +82,8 @@ class VolumeFlowTest(unittest.TestCase):
         self.assertEqual(metrics["flow"]["rows"][0]["size"], "super_large")
         self.assertEqual(metrics["relative"]["sector"]["name"], "白酒Ⅱ")
         self.assertAlmostEqual(metrics["relative"]["net_rate_vs_sector"], -1.9)
+        self.assertEqual([row["days"] for row in metrics["relative_windows"]], [3, 5, 20])
+        self.assertEqual(metrics["relative_windows"][0]["sector"]["name"], "白酒Ⅱ")
 
     def test_quiet_volume_has_no_pattern(self):
         changes = [1.0] * 75 + [1.0, 1.0, 1.0, -0.2, 1.0]
@@ -165,9 +167,11 @@ class VolumeFlowTest(unittest.TestCase):
         self.assertNotIn("status", payload)
         self.assertEqual(payload["meta"]["window"], 3)
         self.assertEqual(payload["meta"]["state"], "ok")
-        self.assertEqual(payload["meta"]["rule_version"], "volume_price-2")
+        self.assertEqual(payload["meta"]["rule_version"], "volume_price-4")
         self.assertIn("+08:00", payload["meta"]["updated_at"])
         self.assertTrue(payload["meta"]["status_text"].startswith("昨收"))
+        self.assertEqual(len(payload["price_volume"]["bars"]), 3)
+        self.assertEqual(payload["price_volume"]["chart"]["days"], 3)  # 样本只有 3 根，图跟着缩
         self.assertEqual(payload["price_volume"]["bars"][0]["chg"], 0.01)
         self.assertEqual(payload["verdict"]["lean"], "unclear")
         self.assertEqual(payload["verdict"]["level"], 0)
@@ -278,6 +282,15 @@ class VolumeFlowTest(unittest.TestCase):
         self.assertEqual(payload["follow"]["level"], "yes")
         self.assertEqual(set(payload["follow"]), {"level", "label", "move", "items"})
         self.assertEqual(set(payload["follow"]["items"][0]), {"key", "name", "status", "text"})
+        by_key = {item["key"]: item for item in payload["follow"]["items"]}
+        self.assertEqual(by_key["short_windows"]["status"], "info")
+        self.assertIn("近 3 日", by_key["short_windows"]["text"])
+        self.assertIn("近 20 日", by_key["short_windows"]["text"])
+        self.assertEqual([row["days"] for row in payload["relative_strength"]["windows"]], [3, 5, 20])
+        self.assertEqual(len(payload["relative_strength"]["windows"][0]["bars"]), 3)
+        self.assertEqual(payload["price_volume"]["chart"]["days"], 20)
+        self.assertEqual(len(payload["price_volume"]["chart"]["bars"]), 20)
+        self.assertEqual(len(payload["price_volume"]["bars"]), 20)  # 本用例主窗口也是 20
         # 对外响应里 verdict 和 headline 同一套字段；lean/level/certainty 只给综合判断
         self.assertEqual(set(public(payload)["verdict"]), {"source", "status", "status_text", "text"})
         self.assertIn("有人跟", verdict["text"])
@@ -307,15 +320,15 @@ class VolumeFlowRouteTest(unittest.TestCase):
         response = self.client.get("/api/v1/stocks/000000.SH/dimensions/volume_flow/detail")
         self.assertEqual(response.status_code, 404)
 
-    @patch("app.services.volume_flow.build_detail", return_value={"status": "ok", "meta": {"window": 20}, "verdict": {"source": "rule", "status": "neutral", "status_text": "不明", "text": "x", "lean": "unclear", "level": 0, "certainty": None}})
+    @patch("app.services.volume_flow.build_detail", return_value={"status": "ok", "meta": {"window": 5}, "verdict": {"source": "rule", "status": "neutral", "status_text": "不明", "text": "x", "lean": "unclear", "level": 0, "certainty": None}})
     @patch("app.api.v1.resolve_stock")
     def test_detail_ok(self, resolve, build):
         resolve.return_value = Stock("600519.SH", "600519", "贵州茅台", "1.600519", "SH600519")
-        response = self.client.get("/api/v1/stocks/600519.SH/dimensions/volume_flow/detail?window=20")
+        response = self.client.get("/api/v1/stocks/600519.SH/dimensions/volume_flow/detail?window=5")
         body = response.get_json()
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(body["meta"]["window"], 20)
-        self.assertEqual(build.call_args.args[1], 20)
+        self.assertEqual(body["meta"]["window"], 5)
+        self.assertEqual(build.call_args.args[1], 5)
         self.assertEqual(set(body["verdict"]), {"source", "status", "status_text", "text"})
 
 

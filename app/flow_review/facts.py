@@ -19,28 +19,48 @@ _PATTERN = {
     "up_vol_up": "价涨量增", "up_vol_down": "价涨量缩", "down_vol_up": "价跌量增",
     "down_vol_down": "价跌量缩", "none": "无明显形态",
 }
+_HINT_FACT = {
+    "pv_top_divergence": ("fr.hint_pv", "前高是否缩量（量价顶背离）"),
+    "indicator_top_divergence": ("fr.hint_ind", "MACD 或 RSI 是否低于前高（指标顶背离）"),
+    "high_volume_stall": ("fr.hint_stall", "是否高位放量滞涨"),
+    "record_volume": ("fr.hint_record", "当日成交量是否创比较区间新高"),
+}
 
 
 # ---- 对外展示：每条事实属于哪一组、什么类型。前端可以按 group 做卡片（如"龙虎榜""融资融券"）
 GROUP_ORDER = ("价格与量能", "资金分档", "持续性与强度", "板块与大盘", "龙虎榜", "融资融券", "大宗交易", "数据失真", "位置提示", "数据质量")
 META = {
-    "fr.ret_20d": ("价格与量能", "pct"), "fr.ret_5d": ("价格与量能", "pct"), "fr.rel_vol": ("价格与量能", "ratio"),
+    "fr.ret_20d": ("价格与量能", "pct"), "fr.ret_5d": ("价格与量能", "pct"), "fr.ret_3d": ("价格与量能", "pct"),
+    "fr.rel_vol": ("价格与量能", "ratio"), "fr.rel_vol_5d": ("价格与量能", "ratio"),
     "fr.up_down_vol": ("价格与量能", "ratio"), "fr.turnover_pctile": ("价格与量能", "share"),
     "fr.pattern": ("价格与量能", "text"), "fr.from_year_high": ("价格与量能", "pct"),
+    "fr.high_vol_down": ("价格与量能", "days"), "fr.close_pos": ("价格与量能", "share"),
+    "fr.big_net_5d": ("资金分档", "yi"), "fr.elg_net_5d": ("资金分档", "yi"), "fr.lg_net_5d": ("资金分档", "yi"),
+    "fr.md_net_5d": ("资金分档", "yi"), "fr.sm_net_5d": ("资金分档", "yi"),
     "fr.big_net_20d": ("资金分档", "yi"), "fr.retail_net_20d": ("资金分档", "yi"), "fr.elg_net_20d": ("资金分档", "yi"),
     "fr.lg_net_20d": ("资金分档", "yi"), "fr.md_net_20d": ("资金分档", "yi"), "fr.sm_net_20d": ("资金分档", "yi"),
-    "fr.net_rate_20d": ("资金分档", "pct"), "fr.net_rate_5d": ("资金分档", "pct"), "fr.concentration": ("资金分档", "share"),
+    "fr.net_rate_20d": ("资金分档", "pct"), "fr.net_rate_5d": ("资金分档", "pct"), "fr.net_rate_3d": ("资金分档", "pct"),
+    "fr.concentration": ("资金分档", "share"),
     "fr.circ_mv": ("资金分档", "yi_abs"), "fr.net_to_circ": ("资金分档", "pct"),
     "fr.last_day_net": ("持续性与强度", "yi"), "fr.last_day_rate": ("持续性与强度", "pct"),
-    "fr.last_day_z": ("持续性与强度", "sigma"), "fr.streak": ("持续性与强度", "days"),
+    "fr.last_day_z": ("持续性与强度", "sigma"), "fr.last_share_5d": ("持续性与强度", "share"),
+    "fr.streak": ("持续性与强度", "days"),
     "fr.in_out_days": ("持续性与强度", "days"), "fr.trend": ("持续性与强度", "text"), "fr.flow_pctile": ("持续性与强度", "share"),
     "fr.sector_ret": ("板块与大盘", "pct"), "fr.index_ret": ("板块与大盘", "pct"), "fr.sector_flow": ("板块与大盘", "text"),
-    "fr.net_rate_vs_sector": ("板块与大盘", "pct"), "fr.sector_rank": ("板块与大盘", "rank"), "fr.market_turnover": ("板块与大盘", "pct"),
+    "fr.net_rate_vs_sector": ("板块与大盘", "pct"),
+    "fr.sector_ret_3d": ("板块与大盘", "pct"), "fr.index_ret_3d": ("板块与大盘", "pct"),
+    "fr.sector_flow_3d": ("板块与大盘", "text"), "fr.net_rate_vs_sector_3d": ("板块与大盘", "pct"),
+    "fr.sector_ret_20d": ("板块与大盘", "pct"), "fr.index_ret_20d": ("板块与大盘", "pct"),
+    "fr.sector_flow_20d": ("板块与大盘", "text"), "fr.net_rate_vs_sector_20d": ("板块与大盘", "pct"),
+    "fr.sector_rank": ("板块与大盘", "rank"), "fr.market_turnover": ("板块与大盘", "pct"),
     "fr.toplist_days": ("龙虎榜", "days"), "fr.toplist_net": ("龙虎榜", "yi"), "fr.toplist_inst_net": ("龙虎榜", "yi"),
     "fr.margin_buy_pct": ("融资融券", "share"), "fr.margin_change_10d": ("融资融券", "pct"),
+    "fr.margin_pctile": ("融资融券", "share"),
     "fr.block_trade": ("大宗交易", "count"),
     "fr.limit_days": ("数据失真", "days"), "fr.limit_last": ("数据失真", "days"), "fr.zero_volume_days": ("数据失真", "days"),
     "fr.hints": ("位置提示", "text"),
+    "fr.hint_pv": ("位置提示", "text"), "fr.hint_ind": ("位置提示", "text"),
+    "fr.hint_stall": ("位置提示", "text"), "fr.hint_record": ("位置提示", "text"),
     "fr.data_lag": ("数据质量", "days"), "fr.coverage": ("数据质量", "count"),
 }
 # 值的约定：pct、share 是小数（0.082 = 8.2%）；yi 是带符号的亿元，yi_abs 是不带符号的亿元；days 是天数（streak 为负表示净流出）
@@ -100,26 +120,34 @@ def _sum(rows: list[dict | None], size: str) -> float | None:
 def build(payload: dict, aligned: dict, extra: dict, stock, now) -> tuple[FactSheet, dict]:
     bars = aligned.get("bars") or []
     flow_by = {row["date"]: row for row in aligned.get("flow") or [] if row.get("date")}
-    window = bars[-20:]
+    window20 = bars[-20:]
+    window5 = bars[-5:]
     d: dict = {"limit_days": 0}
     facts = FactSheet()
-    if not window:
+    if not window5:
         return facts, d
 
-    # ---- 价格与量能
-    ret_20 = _compound([row.get("chg") for row in window])
-    ret_5 = _compound([row.get("chg") for row in bars[-5:]])
-    d["ret_20d"], d["ret_5d"] = ret_20, ret_5
-    _put(facts, "fr.ret_20d", "近 20 日涨跌幅", ret_20, _pct(ret_20) if ret_20 is not None else "")
+    # ---- 价格与量能（主结论近 5 日；3 / 20 作对照）
+    ret_20 = _compound([row.get("chg") for row in window20]) if window20 else None
+    ret_5 = _compound([row.get("chg") for row in window5])
+    ret_3 = _compound([row.get("chg") for row in bars[-3:]])
+    d["ret_20d"], d["ret_5d"], d["ret_3d"] = ret_20, ret_5, ret_3
     _put(facts, "fr.ret_5d", "近 5 日涨跌幅", ret_5, _pct(ret_5) if ret_5 is not None else "")
+    _put(facts, "fr.ret_3d", "近 3 日涨跌幅", ret_3, _pct(ret_3) if ret_3 is not None else "")
+    _put(facts, "fr.ret_20d", "近 20 日涨跌幅", ret_20, _pct(ret_20) if ret_20 is not None else "")
     price = payload.get("price_volume") or {}
-    row20 = next((row for row in (payload.get("windows") or {}).get("rows") or [] if row.get("days") == 20), {})
+    win_rows = {row.get("days"): row for row in (payload.get("windows") or {}).get("rows") or []}
+    row5 = win_rows.get(5) or {}
+    row20 = win_rows.get(20) or {}
+    rel_vol_5 = row5.get("rel_vol")
     rel_vol = row20.get("rel_vol")
-    d["rel_vol"] = rel_vol
+    d["rel_vol_5d"], d["rel_vol"] = rel_vol_5, rel_vol
+    if rel_vol_5 is not None:
+        _put(facts, "fr.rel_vol_5d", "近 5 日相对量能（相对此前 60 日均量）", rel_vol_5, f"{rel_vol_5:.2f} 倍")
     if rel_vol is not None:
         _put(facts, "fr.rel_vol", "近 20 日相对量能（相对此前 60 日均量）", rel_vol, f"{rel_vol:.2f} 倍")
     if price.get("up_down_vol_ratio") is not None:
-        _put(facts, "fr.up_down_vol", "上涨日与下跌日的成交量比", price["up_down_vol_ratio"], f"{price['up_down_vol_ratio']:.2f} 倍")
+        _put(facts, "fr.up_down_vol", "上涨日与下跌日的成交量比（主窗口）", price["up_down_vol_ratio"], f"{price['up_down_vol_ratio']:.2f} 倍")
     if price.get("turnover_pctile") is not None:
         _put(facts, "fr.turnover_pctile", "换手率在近 250 日的分位", price["turnover_pctile"], _share(price["turnover_pctile"]))
     pattern = price.get("pattern")
@@ -131,15 +159,51 @@ def build(payload: dict, aligned: dict, extra: dict, stock, now) -> tuple[FactSh
         gap = closes[-1] / max(closes) - 1
         d["from_year_high"] = gap
         _put(facts, "fr.from_year_high", "收盘价距一年高点（负数表示在高点下方）", gap, _pct(gap))
+    down_days = {
+        item.get("date") for item in (price.get("annotations") or [])
+        if item.get("kind") == "high_vol_down" and item.get("date") in {row.get("date") for row in window5}
+    }
+    d["high_vol_down"] = len(down_days)
+    _put(facts, "fr.high_vol_down", "近 5 日放量下跌的天数", len(down_days), f"{len(down_days)} 天")
+    positions = []
+    for bar in window5:
+        high, low, close = bar.get("high"), bar.get("low"), bar.get("close")
+        if high is None or low is None or close is None or high <= low:
+            continue
+        positions.append((float(close) - float(low)) / (float(high) - float(low)))
+    if len(positions) >= 3:
+        pos = sum(positions) / len(positions)
+        d["close_pos"] = pos
+        _put(facts, "fr.close_pos", "近 5 日收盘在当日振幅中的位置（越高越收在高位）", pos, f"{pos * 100:.0f}%")
 
-    # ---- 资金：20 日窗口
-    rows20 = [flow_by.get(row["date"]) for row in window]
-    covered = sum(1 for row in rows20 if row and (row.get("super_large") is not None or row.get("large") is not None))
-    d["flow_coverage"] = covered / len(window)
-    elg, large = _sum(rows20, "super_large"), _sum(rows20, "large")
-    medium, small = _sum(rows20, "medium"), _sum(rows20, "small")
-    big = None if elg is None and large is None else (elg or 0) + (large or 0)
-    retail = None if medium is None and small is None else (medium or 0) + (small or 0)
+    # ---- 资金：主窗口 5 日 + 背景 20 日
+    def _flow_window(chosen: list[dict], tag: str) -> tuple:
+        rows = [flow_by.get(row["date"]) for row in chosen]
+        elg, large = _sum(rows, "super_large"), _sum(rows, "large")
+        medium, small = _sum(rows, "medium"), _sum(rows, "small")
+        big = None if elg is None and large is None else (elg or 0) + (large or 0)
+        retail = None if medium is None and small is None else (medium or 0) + (small or 0)
+        amount = sum(row.get("amount") or 0 for row, flow in zip(chosen, rows) if flow)
+        rate = None if big is None or not amount else big / amount
+        covered = sum(1 for row in rows if row and (row.get("super_large") is not None or row.get("large") is not None))
+        return rows, elg, large, medium, small, big, retail, rate, covered
+
+    _rows5, elg5, lg5, md5, sm5, big5, _retail5, net_rate_5, _covered5 = _flow_window(window5, "5d")
+    d["big_net_5d"] = None if big5 is None else big5 / 1e8
+    d["net_rate_5d"] = net_rate_5
+    if big5 is not None:
+        _put(facts, "fr.big_net_5d", "近 5 日大资金（超大单加大单）净额", big5 / 1e8, _yi(big5 / 1e8))
+    for key, name, value in (("elg", "超大单", elg5), ("lg", "大单", lg5), ("md", "中单", md5), ("sm", "小单", sm5)):
+        d[f"{key}_net_5d"] = None if value is None else value / 1e8
+        if value is not None:
+            _put(facts, f"fr.{key}_net_5d", f"近 5 日{name}净额", value / 1e8, _yi(value / 1e8))
+    if net_rate_5 is not None:
+        _put(facts, "fr.net_rate_5d", "近 5 日大资金净额占成交额", net_rate_5, _pct(net_rate_5))
+    if elg5 is not None and big5 and big5 > 0 and elg5 > 0:
+        _put(facts, "fr.concentration", "超大单占大资金净流入的比例（近 5 日）", elg5 / big5, _share(elg5 / big5))
+
+    rows20, elg, large, medium, small, big, retail, net_rate, covered = _flow_window(window20, "20d") if window20 else ([], None, None, None, None, None, None, None, 0)
+    d["flow_coverage"] = covered / len(window20) if window20 else 0.0
     d["big_net_20d"], d["retail_net_20d"] = (None if big is None else big / 1e8), (None if retail is None else retail / 1e8)
     if big is not None:
         _put(facts, "fr.big_net_20d", "近 20 日大资金（超大单加大单）净额", big / 1e8, _yi(big / 1e8))
@@ -149,30 +213,27 @@ def build(payload: dict, aligned: dict, extra: dict, stock, now) -> tuple[FactSh
         d[f"{key}_net_20d"] = None if value is None else value / 1e8
         if value is not None:
             _put(facts, f"fr.{key}_net_20d", f"近 20 日{name}净额", value / 1e8, _yi(value / 1e8))
-    amount_20 = sum(row.get("amount") or 0 for row, flow in zip(window, rows20) if flow)
-    net_rate = None if big is None or not amount_20 else big / amount_20
     d["net_rate_20d"] = net_rate
     if net_rate is not None:
         _put(facts, "fr.net_rate_20d", "近 20 日大资金净额占成交额", net_rate, _pct(net_rate))
-    rows5 = [flow_by.get(row["date"]) for row in bars[-5:]]
-    big5 = _sum([{"v": (row.get("super_large") or 0) + (row.get("large") or 0)} for row in rows5 if row], "v")
-    amount_5 = sum(row.get("amount") or 0 for row, flow in zip(bars[-5:], rows5) if flow)
-    if big5 is not None and amount_5:
-        _put(facts, "fr.net_rate_5d", "近 5 日大资金净额占成交额", big5 / amount_5, _pct(big5 / amount_5))
-    if elg is not None and big and big > 0 and elg > 0:
-        _put(facts, "fr.concentration", "超大单占大资金净流入的比例", elg / big, _share(elg / big))
+    row3 = win_rows.get(3) or {}
+    if row3.get("net_rate") is not None:
+        d["net_rate_3d"] = row3["net_rate"]
+        _put(facts, "fr.net_rate_3d", "近 3 日大资金净额占成交额", row3["net_rate"], _pct(row3["net_rate"]))
     circ = (extra.get("circ") or {}).get("circ_mv_yi")
     if circ:
         _put(facts, "fr.circ_mv", "流通市值", circ, f"{circ:.0f} 亿元")
-        if big is not None:
-            _put(facts, "fr.net_to_circ", "近 20 日大资金净额占流通市值", big / 1e8 / circ, _pct(big / 1e8 / circ))
+        if big5 is not None:
+            _put(facts, "fr.net_to_circ", "近 5 日大资金净额占流通市值", big5 / 1e8 / circ, _pct(big5 / 1e8 / circ))
 
     # ---- 资金：逐日、持续性、单日异常
     nets = []
+    last_flow_date = None
     for bar in bars[-60:]:
         row = flow_by.get(bar["date"])
         if row and bar.get("amount"):
             nets.append(((row.get("super_large") or 0) + (row.get("large") or 0), bar["amount"]))
+            last_flow_date = bar["date"]
     if nets:
         rates = [net / amount for net, amount in nets]
         last_net, last_amount = nets[-1]
@@ -194,6 +255,10 @@ def build(payload: dict, aligned: dict, extra: dict, stock, now) -> tuple[FactSh
         if streak:
             more = "以上" if abs(streak) == len(nets) else ""   # 回看只有 60 天：整个回看期都同向，实际可能更久
             _put(facts, "fr.streak", "大资金连续净流入（正）或净流出（负）的天数", streak, f"连续净{'流入' if streak > 0 else '流出'} {abs(streak)} 天{more}")
+        if last_flow_date == (window5[-1].get("date") if window5 else None) and d.get("big_net_5d"):
+            share = d["last_day_net"] / d["big_net_5d"]
+            d["last_share_5d"] = share
+            _put(facts, "fr.last_share_5d", "最近一日大资金净额占近 5 日净额", share, _day_share(share))
         last10 = [net for net, _a in nets[-10:]]
         d["in_days_10"], d["out_days_10"] = sum(1 for v in last10 if v > 0), sum(1 for v in last10 if v < 0)
         _put(facts, "fr.in_out_days", "最近 10 天大资金净流入天数", d["in_days_10"], f"{d['in_days_10']} 天流入，{d['out_days_10']} 天流出")
@@ -210,20 +275,40 @@ def build(payload: dict, aligned: dict, extra: dict, stock, now) -> tuple[FactSh
         d["flow_pctile"] = sum(1 for v in year_rates if v < d["last_day_rate"]) / len(year_rates)
         _put(facts, "fr.flow_pctile", "最近一天大资金净流入率在近一年里的分位", d["flow_pctile"], _share(d["flow_pctile"]))
 
-    # ---- 相对强弱：板块、大盘、板块资金排名、两市成交额
+    # ---- 相对强弱：主窗口（近 5 日）+ 3 / 20 日对照
     rel = payload.get("relative_strength") or {}
     by_kind = {row.get("kind"): row for row in rel.get("bars") or []}
     sector_ret, index_ret = (by_kind.get("sector") or {}).get("ret"), (by_kind.get("index") or {}).get("ret")
     d["sector_ret"], d["index_ret"] = sector_ret, index_ret
     if sector_ret is not None:
-        _put(facts, "fr.sector_ret", "同期所属板块涨跌幅", sector_ret, _pct(sector_ret))
+        _put(facts, "fr.sector_ret", "近 5 日所属板块涨跌幅", sector_ret, _pct(sector_ret))
     if index_ret is not None:
-        _put(facts, "fr.index_ret", "同期沪深300 涨跌幅", index_ret, _pct(index_ret))
+        _put(facts, "fr.index_ret", "近 5 日沪深300 涨跌幅", index_ret, _pct(index_ret))
     d["sector_flow"] = rel.get("sector_flow")
     if rel.get("sector_flow"):
-        _put(facts, "fr.sector_flow", "同期所属板块资金方向", rel["sector_flow"], "净流入" if rel["sector_flow"] == "in" else "净流出")
+        _put(facts, "fr.sector_flow", "近 5 日所属板块资金方向", rel["sector_flow"], "净流入" if rel["sector_flow"] == "in" else "净流出")
     if rel.get("net_rate_vs_sector") is not None:
-        _put(facts, "fr.net_rate_vs_sector", "本股大资金净流入率减板块", rel["net_rate_vs_sector"], _pct(rel["net_rate_vs_sector"]))
+        _put(facts, "fr.net_rate_vs_sector", "近 5 日本股大资金净流入率减板块", rel["net_rate_vs_sector"], _pct(rel["net_rate_vs_sector"]))
+    for win in rel.get("windows") or []:
+        days = win.get("days")
+        if days not in (3, 20):
+            continue
+        kinds = {row.get("kind"): row for row in win.get("bars") or []}
+        sec = (kinds.get("sector") or {}).get("ret")
+        idx = (kinds.get("index") or {}).get("ret")
+        d[f"sector_ret_{days}d"], d[f"index_ret_{days}d"] = sec, idx
+        if sec is not None:
+            _put(facts, f"fr.sector_ret_{days}d", f"近 {days} 日所属板块涨跌幅", sec, _pct(sec))
+        if idx is not None:
+            _put(facts, f"fr.index_ret_{days}d", f"近 {days} 日沪深300 涨跌幅", idx, _pct(idx))
+        flow = win.get("sector_flow")
+        d[f"sector_flow_{days}d"] = flow
+        if flow:
+            _put(facts, f"fr.sector_flow_{days}d", f"近 {days} 日所属板块资金方向", flow, "净流入" if flow == "in" else "净流出")
+        gap = win.get("net_rate_vs_sector")
+        if gap is not None:
+            d[f"net_rate_vs_sector_{days}d"] = gap
+            _put(facts, f"fr.net_rate_vs_sector_{days}d", f"近 {days} 日本股大资金净流入率减板块", gap, _pct(gap))
     rank = extra.get("sector_rank")
     if rank:
         d["sector_rank"] = rank
@@ -262,33 +347,60 @@ def build(payload: dict, aligned: dict, extra: dict, stock, now) -> tuple[FactSh
             change = balances[-1] / balances[-11] - 1
             d["margin_change_10d"] = change
             _put(facts, "fr.margin_change_10d", "融资余额 10 日变化", change, _pct(change))
+    pctile = aligned.get("margin_percentile")
+    if pctile is not None:
+        d["margin_pctile"] = pctile
+        _put(facts, "fr.margin_pctile", "融资余额 10 日增幅在全市场的分位（越高越靠前）", pctile, f"高于全市场 {round(pctile * 100)}% 的股票")
     block = extra.get("block")
     if block is not None:
         d["block_count"] = block["count"]
         _put(facts, "fr.block_trade", "近 30 日大宗交易", block["count"], f"{block['count']} 笔，合计 {block['amount_yi']:.2f} 亿元" if block["count"] else "无")
 
-    # ---- 失真：涨跌停、停牌
+    # ---- 失真：涨跌停、停牌（质量回看仍用近 20 日）
     limit = _limit_of(stock.ts_code)
-    limit_rows = [row for row in window if row.get("chg") is not None and abs(row["chg"]) >= limit - 0.3]
-    zero = [row for row in window if not row.get("volume")]
+    quality = window20 or window5
+    limit_rows = [row for row in quality if row.get("chg") is not None and abs(row["chg"]) >= limit - 0.3]
+    zero = [row for row in quality if not row.get("volume")]
     d["limit_days"], d["zero_volume_days"] = len(limit_rows), len(zero)
     _put(facts, "fr.limit_days", "近 20 日疑似涨跌停的天数（按涨跌幅判断）", len(limit_rows), f"{len(limit_rows)} 天")
     _put(facts, "fr.zero_volume_days", "近 20 日没有成交的天数（疑似停牌）", len(zero), f"{len(zero)} 天")
     if limit_rows:
-        gap = len(window) - 1 - window.index(limit_rows[-1])   # 按日线根数算，不受节假日影响
+        gap = len(quality) - 1 - quality.index(limit_rows[-1])   # 按日线根数算，不受节假日影响
         _put(facts, "fr.limit_last", "最近一次疑似涨跌停距今", gap, "就在最近一个交易日" if gap == 0 else f"{gap} 个交易日前")
 
     # ---- 位置提示、数据质量
     hits = [item.get("text") for item in (payload.get("position_hints") or {}).get("items") or [] if item.get("hit")]
     d["hints"] = hits
     _put(facts, "fr.hints", "命中的位置提示（滞涨、顶背离、天量等）", "、".join(hits) if hits else "无", "、".join(hits) if hits else "无")
+    by_type = {item.get("type"): item for item in (payload.get("position_hints") or {}).get("items") or []}
+    for key, (fact_id, label) in _HINT_FACT.items():
+        item = by_type.get(key)
+        if item is None:
+            continue
+        hit = bool(item.get("hit"))
+        d[fact_id] = hit
+        answer = "是" if hit else "否"
+        detail = str(item.get("detail_text") or "").strip()
+        text = f"{answer}。{detail}" if detail else answer
+        _put(facts, fact_id, label, answer, text)
     as_of = parse_day((aligned.get("as_of") or (bars[-1].get("date"))))
     lag = workday_gap(as_of, last_close_date(now)) if as_of else None
     d["data_lag"] = lag
     if lag is not None:
         _put(facts, "fr.data_lag", "资金流数据落后最近收盘日的工作日数", lag, "最新" if lag == 0 else f"{lag} 个工作日")
-    _put(facts, "fr.coverage", "近 20 日里有资金流数据的天数", covered, f"{covered} / {len(window)} 天")
+    _put(facts, "fr.coverage", "近 20 日里有资金流数据的天数", covered, f"{covered} / {len(quality)} 天")
     return facts, d
+
+
+def _day_share(share: float) -> str:
+    pct = f"{share * 100:.0f}%"
+    if share < 0:
+        return f"最近一日与近 5 日净额方向相反（相当于 {pct}）"
+    if share > 1:
+        return f"最近一日净额是近 5 日净额的 {share:.1f} 倍，其余几天方向相反"
+    if share >= 0.8:
+        return f"最近一日占近 5 日净额的 {pct}，主要集中在这一天"
+    return f"最近一日占近 5 日净额的 {pct}"
 
 
 def _compound(changes: list) -> float | None:
