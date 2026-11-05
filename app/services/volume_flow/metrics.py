@@ -44,7 +44,7 @@ def compute(aligned: dict, window: int) -> dict:
             "ret": _round(_cumulative([row.get("chg") for row in chosen]), 2),
         },
         "price_chart": _price_chart(bars),
-        "flow": {"rows": flow_rows, "big": big, "concentration": concentration},
+        "flow": {"rows": flow_rows, "big": big, "concentration": concentration, **_rate_context(bars, flow, window)},
         "daily": daily,
         "history": daily_history,
         "relative": _relative(chosen, flow, sector, index, aligned),
@@ -55,6 +55,34 @@ def compute(aligned: dict, window: int) -> dict:
         "windows": [_window_row(bars, flow, days) for days in (3, 5, 10, 20)],
         "signals": _signals(bars, concentration, elg, big, aligned.get("margin_percentile")),
     }
+
+
+REF_POINTS = 200        # 拿自己过去最多这么多个窗口（逐日滑动）做参照
+MIN_REF = 30            # 参照窗口少于这个数就不给强弱（新股、资金流缺数据）
+MIN_INDEPENDENT = 6     # 逐日滑动的窗口互相重叠；至少要有这么多段互不重叠的历史，标准差才靠得住
+
+
+def _rate_context(bars: list[dict], flow: dict, window: int) -> dict:
+    """窗口净流入率，放到这只股票自己过去的同长度窗口里比：高于平时多少个标准差。
+    参照窗口全都在当前窗口之前、不和它重叠。大单净额的绝对值和正负都不能直接比（大单净卖本来就是常态），要和自己比。"""
+    current = _stock_rate(bars[-window:], flow)
+    ref: list[float] = []
+    for stop in range(len(bars) - window, window - 1, -1):
+        rate = _stock_rate(bars[stop - window:stop], flow)
+        if rate is not None:
+            ref.append(rate)
+        if len(ref) >= REF_POINTS:
+            break
+    out = {"rate": _round(current, 2), "rate_z": None, "rate_pctile": None, "rate_n": len(ref)}
+    if current is None or len(ref) < max(MIN_REF, MIN_INDEPENDENT * window):
+        return out
+    mean = sum(ref) / len(ref)
+    std = (sum((value - mean) ** 2 for value in ref) / len(ref)) ** 0.5
+    if std == 0:
+        return out
+    out["rate_z"] = round((current - mean) / std, 2)
+    out["rate_pctile"] = round(sum(1 for value in ref if value <= current) / len(ref), 4)
+    return out
 
 
 def _price_chart(bars: list[dict]) -> dict:
@@ -166,11 +194,13 @@ def _window_row(bars: list[dict], flow: dict, days: int) -> dict:
     current = _mean([row["volume"] for row in chosen])
     base = _mean([row["volume"] for row in prior]) if len(prior) >= 60 else None
     rel = None if current is None or not base else round(current / base, 2)
+    context = _rate_context(bars, flow, days)
     return {
         "days": days,
         "ret": _round(_cumulative([row.get("chg") for row in chosen]), 2),
         "rel_vol": rel,
         "net_rate": _round(_stock_rate(chosen, flow), 2),
+        "net_rate_z": context["rate_z"],
     }
 
 

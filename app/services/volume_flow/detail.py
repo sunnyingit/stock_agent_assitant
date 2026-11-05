@@ -23,7 +23,7 @@ from app.services.volume_flow.rules import (
     position_hints,
 )
 
-FORMULA_TEXT = "相对量能 = 窗口日均成交量 ÷ 窗口之前 60 日均量（两段不重叠）；净流入率 = 大资金（超大单 + 大单）净流入 ÷ 成交额。"
+FORMULA_TEXT = "相对量能 = 窗口日均成交量 ÷ 窗口之前 60 日均量（两段不重叠）；净流入率 = 大资金（超大单 + 大单）净流入 ÷ 成交额；强弱 = 净流入率和这只股票自己过去同长度窗口比，高于平时几个标准差。"
 
 
 def build_detail(stock: Stock, window: int = DEFAULT_WINDOW, aligned: dict | None = None, today: date | None = None) -> dict:
@@ -79,6 +79,11 @@ def build_detail(stock: Stock, window: int = DEFAULT_WINDOW, aligned: dict | Non
             "rows": metrics["flow"]["rows"],
             "concentration": metrics["flow"]["concentration"],
             "pattern": verdict.get("flow_pattern") or "",
+            # 净流入率和自己过去的同长度窗口比：z 是高于平时几个标准差，state 是据此分的五档
+            "rate": _ratio(metrics["flow"].get("rate")),
+            "rate_z": metrics["flow"].get("rate_z"),
+            "rate_pctile": metrics["flow"].get("rate_pctile"),
+            "state": verdict.get("flow_state") or "",
         },
         "flow_daily": {
             "days": metrics["daily"]["days"],

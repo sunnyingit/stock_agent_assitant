@@ -36,13 +36,13 @@ class FactsTest(unittest.TestCase):
     def test_numbers_are_computed_by_code_in_yi_yuan_and_percent(self):
         _items, d, text = sheet()
         self.assertEqual(text["fr.ret_20d"], "+22.0%")
-        self.assertEqual(text["fr.big_net_20d"], "+0.60 亿元")
+        self.assertEqual(text["fr.big_net_20d"], "+1.20 亿元")
         self.assertEqual(text["fr.pattern"], "价涨量增")
         self.assertEqual(text["fr.streak"], "连续净流入 60 天以上")
         self.assertEqual(text["fr.data_lag"], "最新")
         self.assertEqual(text["fr.limit_days"], "0 天")
         window = make_aligned()["bars"][-20:]
-        self.assertAlmostEqual(d["net_rate_20d"], 20 * 3e6 / sum(row["amount"] for row in window), places=4)
+        self.assertAlmostEqual(d["net_rate_20d"], 20 * 6e6 / sum(row["amount"] for row in window), places=4)
         self.assertEqual(d["flow_coverage"], 1.0)
 
     def test_extra_data_adds_facts_and_missing_data_adds_none(self):
@@ -63,7 +63,7 @@ class FactsTest(unittest.TestCase):
         }
         _items, d, text = sheet(extra=extra)
         self.assertEqual(text["fr.circ_mv"], "100 亿元")
-        self.assertEqual(text["fr.net_to_circ"], "+0.1%")
+        self.assertEqual(text["fr.net_to_circ"], "+0.3%")
         self.assertEqual((text["fr.toplist_days"], text["fr.toplist_net"], text["fr.toplist_inst_net"]), ("2 天", "+1.00 亿元", "+1.50 亿元"))
         self.assertEqual(text["fr.margin_buy_pct"], "8%")
         self.assertEqual(text["fr.sector_rank"], "第 3 位（共 90 个行业板块）")
@@ -331,7 +331,7 @@ class PromptTest(unittest.TestCase):
 
         for key in (f"q{i}" for i in range(1, 11)):
             self.assertIn(f"- {key}：", prompt.RUBRIC)
-        for threshold in ("不少于 3 天", "5%", "80% 分位", "3 个百分点", "0.5 亿元", "不到 10%"):
+        for threshold in ("不少于 3 天", "1.5 个标准差", "0.8 到 1.5", "3 个百分点", "0.5 亿元", "不到 10%", "绝对净额的正负不能直接当信号"):
             self.assertIn(threshold, prompt.RUBRIC)
         self.assertIn("不要对事件日下任何结论", prompt.RUBRIC)
         self.assertNotIn("一字板、事件日", prompt.SYSTEM)

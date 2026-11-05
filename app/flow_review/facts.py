@@ -40,6 +40,8 @@ META = {
     "fr.big_net_20d": ("资金分档", "yi"), "fr.retail_net_20d": ("资金分档", "yi"), "fr.elg_net_20d": ("资金分档", "yi"),
     "fr.lg_net_20d": ("资金分档", "yi"), "fr.md_net_20d": ("资金分档", "yi"), "fr.sm_net_20d": ("资金分档", "yi"),
     "fr.net_rate_20d": ("资金分档", "pct"), "fr.net_rate_5d": ("资金分档", "pct"), "fr.net_rate_3d": ("资金分档", "pct"),
+    "fr.vs_self_5d": ("持续性与强度", "sigma"), "fr.vs_self_3d": ("持续性与强度", "sigma"), "fr.vs_self_10d": ("持续性与强度", "sigma"),
+    "fr.vs_self_20d": ("持续性与强度", "sigma"),
     "fr.concentration": ("资金分档", "share"),
     "fr.circ_mv": ("资金分档", "yi_abs"), "fr.net_to_circ": ("资金分档", "pct"),
     "fr.last_day_net": ("持续性与强度", "yi"), "fr.last_day_rate": ("持续性与强度", "pct"),
@@ -220,6 +222,15 @@ def build(payload: dict, aligned: dict, extra: dict, stock, now) -> tuple[FactSh
     if row3.get("net_rate") is not None:
         d["net_rate_3d"] = row3["net_rate"]
         _put(facts, "fr.net_rate_3d", "近 3 日大资金净额占成交额", row3["net_rate"], _pct(row3["net_rate"]))
+    # 和这只股票自己过去同长度窗口比：大单净流出本来就是常态（约六成窗口），绝对净额的正负不能直接当信号
+    from app.services.volume_flow.rules import STATE_TEXT, flow_state
+
+    for days in (3, 5, 10, 20):
+        z = (win_rows.get(days) or {}).get("net_rate_z")
+        state = flow_state(z)
+        if state:
+            d[f"vs_self_{days}d"] = {"z": z, "state": state}
+            _put(facts, f"fr.vs_self_{days}d", f"近 {days} 日大资金净流入率和这只股票自己平时比", z, f"{STATE_TEXT[state]}（{z:+.1f} 个标准差）")
     circ = (extra.get("circ") or {}).get("circ_mv_yi")
     if circ:
         _put(facts, "fr.circ_mv", "流通市值", circ, f"{circ:.0f} 亿元")

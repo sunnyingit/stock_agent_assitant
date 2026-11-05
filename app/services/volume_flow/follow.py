@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.services.volume_flow.rules import FLOW_EDGE, FOLLOW_MIN_MOVE, RATIO_EDGE, REL_LOUD, REL_QUIET
+from app.services.volume_flow.rules import FLOW_EDGE, FLOW_Z_EDGE, FOLLOW_MIN_MOVE, RATIO_EDGE, REL_LOUD, REL_QUIET
 
 _LEVELS = {
     "up": {
@@ -103,21 +103,34 @@ def _updown(metrics: dict, sign: int) -> dict:
 
 
 def _big(metrics: dict, sign: int) -> dict:
+    """大资金：近主窗口的净流入率，和这只股票自己过去的同长度窗口比。历史不够比时，退回数天数。"""
     daily = metrics["daily"]
-    total = daily["in_days"] + daily["out_days"]
     big = metrics["flow"].get("big")
-    if not total or big is None:
+    if big is None:
+        return _item("big_money", "大资金", "unknown", "", "缺少大资金（超大单 + 大单）的逐日数据")
+    window = len(metrics["price"]["bars"])
+    net = f"近 {window} 天合计净{'流入' if big > 0 else '流出'} {_num(abs(big) / 1e8, 1)} 亿元"
+    z = metrics["flow"].get("rate_z")
+    if z is not None:
+        if z >= FLOW_Z_EDGE:
+            side, brief, text = 1, "大资金比平时明显更流入", f"{net}，净流入率比这只股票自己平时高（{_num(z, 1)} 个标准差）"
+        elif z <= -FLOW_Z_EDGE:
+            side, brief, text = -1, "大资金比平时明显更流出", f"{net}，净流入率比这只股票自己平时低（{_num(abs(z), 1)} 个标准差）"
+        else:
+            return _item("big_money", "大资金", "neutral", "大资金和平时差不多", f"{net}，净流入率和这只股票自己平时差不多")
+        return _item("big_money", "大资金", "agree" if side == sign else "disagree", brief, text)
+    total = daily["in_days"] + daily["out_days"]
+    if not total:
         return _item("big_money", "大资金", "unknown", "", "缺少大资金（超大单 + 大单）的逐日数据")
     inflow, outflow = daily["in_days"], daily["out_days"]
-    net = f"，近 {len(metrics['price']['bars'])} 天合计净{'流入' if big > 0 else '流出'} {_num(abs(big) / 1e8, 1)} 亿元"
+    net = f"，{net}"
     if inflow / total >= FLOW_EDGE and big > 0:
-        side, brief, text = 1, f"大资金 {total} 天里 {inflow} 天流入", f"大资金近 {total} 天有 {inflow} 天净流入{net}"
+        side, brief, text = 1, f"大资金 {total} 天里 {inflow} 天流入", f"大资金近 {total} 天有 {inflow} 天净流入{net}（历史太短，还没法和自己平时比）"
     elif outflow / total >= FLOW_EDGE and big < 0:
-        side, brief, text = -1, f"大资金 {total} 天里 {outflow} 天流出", f"大资金近 {total} 天有 {outflow} 天净流出{net}"
+        side, brief, text = -1, f"大资金 {total} 天里 {outflow} 天流出", f"大资金近 {total} 天有 {outflow} 天净流出{net}（历史太短，还没法和自己平时比）"
     else:
         return _item("big_money", "大资金", "neutral", "大资金流入流出各半", f"大资金近 {total} 天流入 {inflow} 天、流出 {outflow} 天{net}")
-    status = "agree" if side == sign else "disagree"
-    return _item("big_money", "大资金", status, brief, text)
+    return _item("big_money", "大资金", "agree" if side == sign else "disagree", brief, text)
 
 
 def _short_windows(metrics: dict) -> dict:

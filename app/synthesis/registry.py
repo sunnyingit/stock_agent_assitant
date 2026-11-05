@@ -10,6 +10,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from app.synthesis import policy
+
 _NUMBER = re.compile(r"\d+(?:\.\d+)?")
 
 
@@ -52,15 +54,17 @@ _VALUATION = _enum(("cheap", "偏便宜"), ("fair", "合理"), ("expensive", "�
 _QUALITY = _enum(("strong", "较好"), ("medium", "中等"), ("weak", "偏弱"))
 _HOLDERS = _enum(("positive", "偏多"), ("offset", "相抵"), ("negative", "偏空"), ("quiet", "没有动作"))
 _VIEW_NOTE = "该维度自己的结论"
+_FLOW_STATE = _enum(("in_strong", "比自己平时明显更流入"), ("in", "比自己平时偏流入"), ("normal", "和自己平时差不多"), ("out", "比自己平时偏流出"), ("out_strong", "比自己平时明显更流出"))
 
 _DEFS = (
     # 量价资金
     FactDef("flow.view", "volume_flow", f"量价资金：{_VIEW_NOTE}", "text"),
-    FactDef("flow.rel_vol", "volume_flow", "近 20 日相对量能（相对此前 60 日均量）", "ratio"),
+    FactDef("flow.rel_vol", "volume_flow", f"近 {policy.FLOW_WINDOW} 日相对量能（相对此前 60 日均量）", "ratio"),
     FactDef("flow.pattern", "volume_flow", "量价形态", "enum", _PATTERN),
     FactDef("flow.up_down_vol", "volume_flow", "上涨日与下跌日的成交量比", "ratio"),
     FactDef("flow.big_trend", "volume_flow", "大资金近期趋势", "enum", _BIG_TREND),
-    FactDef("flow.net_rate", "volume_flow", "近 20 日大资金净流入占成交额", "pct"),
+    FactDef("flow.net_rate", "volume_flow", f"近 {policy.FLOW_WINDOW} 日大资金净流入占成交额", "pct"),
+    FactDef("flow.vs_self", "volume_flow", f"近 {policy.FLOW_WINDOW} 日大资金净流入率和这只股票自己平时比", "enum", _FLOW_STATE),
     FactDef("flow.stall", "volume_flow", "命中的涨不动迹象", "text"),
     # 新闻
     FactDef("news.view", "news", f"新闻：{_VIEW_NOTE}", "text"),

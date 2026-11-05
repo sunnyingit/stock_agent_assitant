@@ -50,9 +50,10 @@ def make_aligned(closes=None, last_volume=2_000_000.0, big_buy=2e6) -> dict:
             "date": dates[i], "close": round(close, 4), "volume": volume,
             "amount": close * volume, "chg": round(chg, 4), "turnover": 1.0,
         })
+        wobble = 1 + 0.1 * ((i * 7) % 5 - 2)      # 平时的大单净额有小幅波动：没有波动，就没有「和自己平时比」
         flow.append({
             "date": dates[i],
-            "super_large": big_buy if recent else 1e6, "large": big_buy / 2 if recent else 5e5,
+            "super_large": big_buy * 2 if recent else 1e6 * wobble, "large": big_buy if recent else 5e5 * wobble,     # 近 20 天放量的同时，大单净额占成交额也明显更高
             "medium": -5e5 if recent else -1e5, "small": -1e5,
         })
         sector.append({"date": dates[i], "chg": 0.2, "net": 100.0, "rate": 2.0})

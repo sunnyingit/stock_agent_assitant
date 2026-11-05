@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-RULE_VERSION = "volume_price-4"
+RULE_VERSION = "volume_price-5"   # 5：形态要涨跌够 1%；资金按净流入率和自己过去比（z）确认，不再数天数；对立不再看「大单净卖」（那是常态）
 DEFAULT_WINDOW = 5              # A 股短线主窗口；接口不传 window 时用这个
 FLOW_SOURCE = "东方财富"
 DISCLAIMER_TEXT = "以上为基于公开资金流数据的研究分析，不构成投资建议"
@@ -13,6 +13,9 @@ REL_QUIET = 0.8
 REL_LOUD = 1.2
 RATIO_EDGE = 1.2
 FLOW_EDGE = 0.8
+PATTERN_MIN_MOVE = 1.0  # 窗口涨跌不到 1% 不算「价涨」或「价跌」，量价形态不判
+FLOW_Z_EDGE = 0.8       # 净流入率比自己平时高/低这么多个标准差，才算资金在确认或反对
+FLOW_Z_STRONG = 1.5
 STALL_RET = 1.0
 STALL_VOL = 1.5
 FOLLOW_MIN_MOVE = 1.0   # 窗口涨跌不到 1% 时不判断有没有人跟
@@ -40,7 +43,7 @@ _HINTS = (
 
 def price_pattern(ret, rel_vol) -> str:
     """形态只看窗口涨跌和相对量能。涨跌日量比不参与。"""
-    if ret is None or rel_vol is None or ret == 0:
+    if ret is None or rel_vol is None or abs(ret) < PATTERN_MIN_MOVE:
         return "none"
     if REL_QUIET <= rel_vol <= REL_LOUD:
         return "none"
@@ -50,6 +53,8 @@ def price_pattern(ret, rel_vol) -> str:
 
 
 def flow_pattern(rows: list[dict]) -> str:
+    """只用来展示。四档净额加起来恒为 0（有买就有卖），所以结果只可能是「大单买、中小单卖」或反过来，
+    且大单净卖是常态（约六成窗口）。它不进方向和把握度的判断，强弱看 flow_state。"""
     nets = {row["size"]: row.get("net") or 0 for row in rows}
     big = nets.get("super_large", 0) + nets.get("large", 0)
     retail = nets.get("medium", 0) + nets.get("small", 0)
@@ -88,6 +93,24 @@ def flow_trend(days: list[dict]) -> str:
     if older < 0 and newer < 0 and newer < older:
         return "accelerating_out"
     return "mixed"
+
+
+STATE_TEXT = {"in_strong": "比自己平时明显更流入", "in": "比自己平时偏流入", "normal": "和自己平时差不多", "out": "比自己平时偏流出", "out_strong": "比自己平时明显更流出"}
+
+
+def flow_state(z) -> str:
+    """大资金净流入率相对这只股票自己过去的强弱。z 取不到（历史太短）返回空串。"""
+    if z is None:
+        return ""
+    if z >= FLOW_Z_STRONG:
+        return "in_strong"
+    if z >= FLOW_Z_EDGE:
+        return "in"
+    if z <= -FLOW_Z_STRONG:
+        return "out_strong"
+    if z <= -FLOW_Z_EDGE:
+        return "out"
+    return "normal"
 
 
 def annotations(bars: list[dict], vol_base) -> list[dict]:
@@ -151,7 +174,8 @@ def judge(metrics: dict, *, stale: bool) -> dict:
     flow_kind = flow_pattern(metrics["flow"]["rows"])
     hints = position_hints(metrics["signals"])
     lean, level = _direction(pattern, metrics)
-    opposite = _opposite(lean, flow_kind)
+    state = flow_state(metrics["flow"].get("rate_z"))
+    opposite = _opposite(lean, state)
     concentration = metrics["signals"].get("concentration")
     certainty = _certainty(pattern, opposite, concentration)
     return {
@@ -160,6 +184,7 @@ def judge(metrics: dict, *, stale: bool) -> dict:
         "certainty": certainty,
         "pattern": pattern,
         "flow_pattern": flow_kind,
+        "flow_state": state,
         "trend": flow_trend(metrics["daily"]["days"]),
         "annotations": annotations(metrics["price"]["bars"], metrics["price"].get("vol_base")),
         "hints": hints,
@@ -176,21 +201,15 @@ def _direction(pattern: str, metrics: dict) -> tuple[str, int]:
         level += 1
     if not bullish and ratio is not None and ratio <= 1 / RATIO_EDGE:
         level += 1
-    daily = metrics["daily"]
-    total = daily["in_days"] + daily["out_days"]
-    if total and bullish and daily["in_days"] / total >= FLOW_EDGE:
-        level += 1
-    if total and not bullish and daily["out_days"] / total >= FLOW_EDGE:
+    z = metrics["flow"].get("rate_z")          # 和自己过去比：按金额，不数天数
+    if z is not None and ((bullish and z >= FLOW_Z_EDGE) or (not bullish and z <= -FLOW_Z_EDGE)):
         level += 1
     return ("bullish" if bullish else "bearish"), min(level, 3)
 
 
-def _opposite(lean: str, flow_kind: str) -> bool:
-    if lean == "bullish" and flow_kind in {"big_sell_retail_buy", "all_sell"}:
-        return True
-    if lean == "bearish" and flow_kind in {"big_buy_retail_sell", "all_buy"}:
-        return True
-    return False
+def _opposite(lean: str, state: str) -> bool:
+    """资金和方向相反：看多但大资金比平时明显更流出，或看空但比平时明显更流入。"""
+    return (lean == "bullish" and state in {"out", "out_strong"}) or (lean == "bearish" and state in {"in", "in_strong"})
 
 
 def _certainty(pattern: str, opposite: bool, concentration) -> str | None:

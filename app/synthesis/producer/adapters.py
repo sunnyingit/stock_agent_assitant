@@ -131,6 +131,7 @@ def volume_flow(payload: dict | None, error: str = "") -> Snapshot:
     _put(snap, "flow.up_down_vol", _number(_get(payload, "price_volume", "up_down_vol_ratio")))
     _put(snap, "flow.big_trend", _get(payload, "flow_daily", "trend") or None)
     _put(snap, "flow.net_rate", _number(primary.get("net_rate")))
+    _put(snap, "flow.vs_self", _get(payload, "flow_by_size", "state") or None)
     hits = [item.get("text") for item in _get(payload, "position_hints", "items", default=[]) if item.get("hit")]
     _put(snap, "flow.stall", "、".join(hits) if hits else "无")
     # 跨模块核对仍用 20 日，和 market.*_20d 同一口径；主窗口数字走 facts
