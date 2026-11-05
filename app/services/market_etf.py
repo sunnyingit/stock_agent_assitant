@@ -79,11 +79,8 @@ def detail(code: str, days: int = 60, today: date | None = None) -> dict:
         raise KeyError(code)
     today = today or date.today()
     days = days if days in RANGES else 60
-    start = tape._ymd_offset(today, 400)
-    shares = _share_rows(code, start, today)
-    bars = tape.cached(f"fdpct:{code}:{start}", lambda: tape.pro().fund_daily(
-        ts_code=code, start_date=start, end_date=tape._ymd(today), fields="trade_date,close,pct_chg",
-    ))
+    shares = tape.fund_share_rows(code, today)
+    bars = tape.fund_bar_rows(code, today)
     points = series_of(shares, bars)
     if len(points) < 2:
         return {"code": code, "name": names[code], "ok": False}

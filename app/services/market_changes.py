@@ -10,6 +10,7 @@ VERDICT_DETAIL = {
     "有钱没热度": "钱在进，热度或杠杆还没跟上",
     "只热不增": "热度还在，但 ETF 在被卖：情绪驱动，可交易不可持有",
     "在流出": "ETF 在被赎回，增量为负",
+    "没方向": "钱进出不明显，价格也没方向",
 }
 STAGE_DETAIL = {
     "冰点": "亏钱效应集中，追涨要谨慎",
@@ -98,7 +99,9 @@ def diff(prev: dict, cur: dict, snaps: list[dict] | None = None) -> list[dict]:
                              "信号变化会改变总档位", tone, {"money": "fund", "team": "team", "mood": "mood"}[key]))
     for name, verdict in cur["sectors"].items():
         old = prev["sectors"].get(name)
-        if old and old != verdict:
+        # 「没方向」和别的状态来回切换是常态，不提醒；只有变成或离开「三层同向」才值得说
+        quiet = "没方向" in (old, verdict) and "三层同向" not in (old, verdict)
+        if old and old != verdict and not quiet:
             out.append(_item("sector", f"{name}：{old} → {verdict}", since(lambda s, n=name: s["sectors"].get(n)) + " 起", VERDICT_DETAIL.get(verdict, ""),
                              {"三层同向": "good", "有钱没热度": "good", "在流出": "bad"}.get(verdict, "warn"), "sector"))
     if cur.get("stage") and prev.get("stage") and cur["stage"] != prev["stage"]:
@@ -107,7 +110,7 @@ def diff(prev: dict, cur: dict, snaps: list[dict] | None = None) -> list[dict]:
     if new_broken:
         out.append(_item("index", "、".join(new_broken) + "跌破前低", "第 1 天", "连续几天都在前低下面，再加上两融加速减少，结论会变差", "bad", "mood"))
     if prev["margin"].get("label") in DOWN_MARGIN and cur["margin"].get("label") not in DOWN_MARGIN and cur["margin"].get("label"):
-        out.append(_item("margin_turn", "两融止跌回升", "今天", f"4 周变化回到 {cur['margin'].get('label')}，借钱炒股的人不再减少", "good", "fund"))
+        out.append(_item("margin_turn", "两融止跌回升", "今天", f"30 日变化回到 {cur['margin'].get('label')}，借钱炒股的人不再减少", "good", "fund"))
     if prev.get("team") != cur.get("team") and cur.get("team") and prev.get("team"):
         out.append(_item("team", f"国家队：{prev['team']} → {cur['team']}", "今天", "只看 ETF 份额，不确认是谁", {"在出手": "good", "可能在卖": "bad"}.get(cur["team"], "flat"), "team"))
     if prev["macro"].get("policy") != cur["macro"].get("policy"):

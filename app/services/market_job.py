@@ -30,11 +30,30 @@ def is_trading_day(day: date) -> bool:
         return day.weekday() < 5
 
 
+def refresh_holdings() -> list[str]:
+    """持仓和想买里的票，每个交易日盘前让综合判断重算一次，研判记录才连得起来。出错不影响简报。"""
+    try:
+        from app.services import holdings_calc
+        from app.services.holdings_store import get_store
+        from app.synthesis import worker
+
+        store = get_store()
+        held, _notes = holdings_calc.positions(store.trades())
+        codes = sorted(set(held) | {wish["ts_code"] for wish in store.wishes()})
+        for code in codes:
+            worker.request(code, "holdings", delay=5.0)
+        return codes
+    except Exception:
+        return []
+
+
 def run_session(session: str, now: datetime | None = None, push=None) -> dict:
     """重算一遍，存快照和事件；简报开着就推一条。"""
     now = now or datetime.now(_ZONE)
     market_page.refresh(now.date())
     summary = market_page.build_summary(now.date())
+    if session == "pre":
+        refresh_holdings()
     conf = market_notify.settings()
     if conf["push"] and conf[f"brief_{session}"]:
         snaps = get_store().snapshots()

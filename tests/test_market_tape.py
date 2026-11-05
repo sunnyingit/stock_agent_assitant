@@ -1,5 +1,8 @@
 import unittest
+from datetime import date
+from unittest import mock
 
+from app.services import market_tape
 from app.services.market_page import conclusion
 from app.services.market_tape import (
     format_breadth,
@@ -10,9 +13,12 @@ from app.services.market_tape import (
     format_supply,
     format_turnover,
     judge_etf,
+    judge_etf_spans,
     judge_margin,
+    judge_margin_spans,
     judge_pulse,
     judge_turnover,
+    judge_turnover_spans,
 )
 
 
@@ -21,6 +27,14 @@ class MarketTapeRuleTest(unittest.TestCase):
         self.assertEqual(judge_turnover(-0.12), "冷清")
         self.assertEqual(judge_turnover(0.02), "平时")
         self.assertEqual(judge_turnover(0.08), "活跃")
+
+    def test_spans_need_more_than_the_five_day_number(self):
+        self.assertEqual(judge_turnover_spans({1: 0.08, 3: -0.02, 5: -0.08, 30: -0.11}), "平时")
+        self.assertEqual(judge_turnover_spans({1: -0.08, 3: -0.08, 5: -0.08, 30: -0.02}), "冷清")
+        self.assertEqual(judge_etf_spans({5: 0.02, 30: 0.03, 60: 0.04}, 4), "净流入")
+        self.assertEqual(judge_etf_spans({5: 0.02, 30: -0.02, 60: 0.04}, 4), "基本没变")
+        self.assertEqual(judge_margin_spans({30: -0.06, 60: -0.01}), "在降")
+        self.assertEqual(judge_margin_spans({30: -0.06, 60: -0.08}), "加速下降")
 
     def test_etf_needs_both_size_and_four_buy_days(self):
         self.assertEqual(judge_etf(0.012, 4), "净流入")
@@ -92,6 +106,51 @@ class MarketTapeRuleTest(unittest.TestCase):
         ])
         self.assertIn("涨停 1", limits["text"])
         self.assertIn("最高连板 3", limits["text"])
+
+
+class PulseTest(unittest.TestCase):
+    def test_pulse_uses_the_judged_labels_not_words_in_the_text(self):
+        turnover = format_turnover(
+            [{"trade_date": f"2026{(i // 28) + 1:02d}{i % 28 + 1:02d}", "amount": 20000.0} for i in range(70)]
+        )
+        self.assertEqual(turnover["metrics"]["label"], "平时")
+        self.assertIn("冷清", turnover["text"])   # 说明文字里固定写着「改冷清或活跃」，从文字里抓标签会抓成冷清
+        docs = {
+            "_turnover": market_tape._from("turnover", turnover),
+            "_etf": market_tape._doc("etf", [{"id": "x", "text": "判定 净流入"}], "判定 净流入", {"label": "净流入"}),
+            "_margin": market_tape._doc("margin", [{"id": "x", "text": "判定 加速下降"}], "判定 加速下降", {"label": "加速下降"}),
+        }
+        with mock.patch.multiple(market_tape, **{name: mock.Mock(return_value=doc) for name, doc in docs.items()}):
+            out = market_tape.build("pulse", date(2026, 11, 5))
+        self.assertIn("短期判定 在进", out["text"])
+        self.assertIn("成交 平时", out["text"])
+
+    def test_pulse_says_none_when_a_part_has_no_label(self):
+        empty = market_tape._doc("turnover", [], "没有取到足够的全市场成交额")
+        etf = market_tape._doc("etf", [{"id": "x", "text": "y"}], "y", {"label": "净流入"})
+        margin = market_tape._doc("margin", [{"id": "x", "text": "y"}], "y", {"label": "持平"})
+        with mock.patch.multiple(market_tape, _turnover=mock.Mock(return_value=empty), _etf=mock.Mock(return_value=etf), _margin=mock.Mock(return_value=margin)):
+            out = market_tape.build("pulse", date(2026, 11, 5))
+        self.assertIn("成交 没有", out["text"])
+
+
+class BoardLimitTest(unittest.TestCase):
+    def test_board_limits(self):
+        from app.services.market_tape import board_limit, scaled_pct
+
+        self.assertEqual([board_limit(code) for code in ("600519.SH", "000001.SZ", "300750.SZ", "301001.SZ", "688981.SH", "830001.BJ")], [10, 10, 20, 20, 20, None])
+        self.assertAlmostEqual(scaled_pct(10.0, "300750.SZ"), 5.0)
+        self.assertAlmostEqual(scaled_pct(10.0, "600519.SH"), 10.0)
+        self.assertIsNone(scaled_pct(10.0, "830001.BJ"))
+
+    def test_format_limits_ignores_beijing_and_scales_follow(self):
+        rows = [{"ts_code": "600001.SH", "limit": "U", "limit_times": 2}, {"ts_code": "830001.BJ", "limit": "U", "limit_times": 5}, {"ts_code": "300001.SZ", "limit": "D"}]
+        prev = [{"ts_code": "600001.SH", "limit": "U"}, {"ts_code": "300001.SZ", "limit": "U"}, {"ts_code": "830001.BJ", "limit": "U"}]
+        today = {"600001.SH": 4.0, "300001.SZ": 10.0, "830001.BJ": 30.0}
+        out = format_limits(rows, today, prev)["metrics"]
+        self.assertEqual((out["up"], out["down"], out["height"]), (1, 1, 2))     # 北交所的 5 板不算
+        self.assertEqual(out["follow_count"], 2)
+        self.assertAlmostEqual(out["follow"], (4.0 + 5.0) / 2)                   # 20cm 的 10% 折成 5%
 
 
 class MarketPageTest(unittest.TestCase):

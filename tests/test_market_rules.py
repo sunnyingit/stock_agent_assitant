@@ -59,7 +59,8 @@ class SectorLayerTest(unittest.TestCase):
         closes = [{"trade_date": f"2026110{day}", "close": 2.0} for day in range(1, 6)]
         out = flows(shares, closes)
         self.assertAlmostEqual(out[3], 3 * 100 * 2.0 / 10000)
-        self.assertIsNone(out[20])
+        self.assertIsNone(out[5])
+        self.assertIsNone(out[30])
 
     def test_heat_is_today_turnover_over_own_average(self):
         shares = [{"trade_date": "20260101", "fd_share": 1000}]
@@ -177,5 +178,268 @@ class SummaryTest(unittest.TestCase):
             self.assertIn("title", tab_of(name, parts, date(2026, 11, 4)))
 
 
+def _row(name, ma60, ma20, ret3=0.0, ret5=0.0):
+    return {"name": name, "above_ma60": ma60, "above_ma20": ma20, "ret3": ret3, "ret5": ret5}
+
+
+class TrendVoteTest(unittest.TestCase):
+    def test_follows_the_sixty_day_line(self):
+        up = [_row(n, True, True) for n in ("上证指数", "沪深300", "中证1000", "创业板指")]
+        self.assertEqual((rules.trend_vote(up)["word"], rules.trend_vote(up)["score"]), ("向上", 1))
+        down = [_row(n, False, False) for n in ("上证指数", "沪深300", "中证1000", "创业板指")]
+        self.assertEqual((rules.trend_vote(down)["word"], rules.trend_vote(down)["score"]), ("向下", -1))
+        mixed = [_row("上证指数", True, True), _row("沪深300", True, True), _row("中证1000", False, False), _row("创业板指", False, False)]
+        self.assertEqual(rules.trend_vote(mixed)["word"], "震荡")
+        self.assertIsNone(rules.trend_vote([{"name": "上证指数", "above_ma60": None}]))
+
+    def test_a_rebound_that_reclaims_the_twenty_day_line_is_not_still_falling(self):
+        rebound = [_row("上证指数", False, True), _row("沪深300", False, True), _row("中证1000", False, True), _row("创业板指", False, False)]
+        vote = rules.trend_vote(rebound)
+        self.assertEqual((vote["word"], vote["score"], vote["kind"]), ("震荡", 0, "收复"))
+
+    def test_a_plunge_counts_even_above_the_sixty_day_line(self):
+        up = [_row("上证指数", True, True, ret3=-0.045), _row("沪深300", True, True), _row("中证1000", True, True), _row("创业板指", True, True)]
+        vote = rules.trend_vote(up)
+        self.assertEqual((vote["word"], vote["score"], vote["kind"]), ("向下", -1, "急跌"))
+        five_day = [_row("沪深300", True, True, ret5=-0.065)] + [_row(n, True, True) for n in ("上证指数", "中证1000", "创业板指")]
+        self.assertEqual(rules.trend_vote(five_day)["kind"], "急跌")
+        # 创业板自己急跌不算（只看上证和沪深 300 这两个大盘）
+        self.assertEqual(rules.trend_vote([_row("创业板指", True, True, ret3=-0.09)] + [_row(n, True, True) for n in ("上证指数", "沪深300", "中证1000")])["word"], "向上")
+
+    def test_mood_signal_uses_the_vote_and_explains_it(self):
+        indexes = [_row("上证指数", False, True), _row("沪深300", False, True), _row("中证1000", False, True), _row("创业板指", False, True)]
+        out = rules.mood_signal(indexes, {"up": 4800, "down": 600}, {"follow": 0.8, "broken_rate": 0.2})
+        self.assertEqual(out["score"], 2)
+        self.assertEqual(out["tier"], "顺")                  # 震荡 0 + 普涨 +1 + 追涨 +1
+        self.assertIn("已收复 20 日线", out["reasons"][0])
+        plunge = [_row("上证指数", True, True, ret3=-0.05)] + [_row(n, True, True) for n in ("沪深300", "中证1000", "创业板指")]
+        self.assertIn("急跌", rules.mood_signal(plunge, {}, {})["reasons"][0])
+
+
+class VolumeTest(unittest.TestCase):
+    PRIOR = [100.0] * 20
+
+    def test_words(self):
+        self.assertEqual(rules.volume_state(125.0, self.PRIOR, 0.5)["word"], "放量")
+        self.assertEqual(rules.volume_state(75.0, self.PRIOR, 0.5)["word"], "缩量")
+        self.assertEqual(rules.volume_state(100.0, self.PRIOR, 0.5)["word"], "平稳")
+        self.assertEqual(rules.volume_state(75.0, self.PRIOR, 0.05)["word"], "地量")     # 近一年最低 10%
+        self.assertEqual(rules.volume_state(125.0, self.PRIOR, 0.95)["word"], "天量")
+        self.assertAlmostEqual(rules.volume_state(150.0, self.PRIOR, None)["ratio"], 1.5)
+
+    def test_not_enough_data(self):
+        self.assertIsNone(rules.volume_state(None, self.PRIOR, 0.5))
+        self.assertIsNone(rules.volume_state(100.0, [], 0.5))
+
+
+class MoodNotesTest(unittest.TestCase):
+    def indexes(self, move=0.3):
+        return [{"name": "上证指数", "above_ma60": False, "above_ma20": False, "pct": move}] + [
+            {"name": n, "above_ma60": False, "above_ma20": False} for n in ("沪深300", "中证1000", "创业板指")]
+
+    def test_volume_changes_how_a_drop_and_a_rebound_read(self):
+        from app.services.market_page import _mood_notes
+
+        heavy, light = {"word": "放量"}, {"word": "缩量"}
+        drop = self.indexes(move=-1.5)
+        self.assertIn("放量下跌", " ".join(_mood_notes(drop, {"up": 800, "down": 4500}, {}, {}, heavy)))
+        self.assertIn("缩量下跌", " ".join(_mood_notes(drop, {"up": 800, "down": 4500}, {}, {}, light)))
+        rebound = self.indexes()
+        self.assertIn("放量反抽", " ".join(_mood_notes(rebound, {"up": 4800, "down": 600}, {}, {}, heavy)))
+        self.assertIn("缩量反弹", " ".join(_mood_notes(rebound, {"up": 4800, "down": 600}, {}, {}, light)))
+
+    def test_extreme_volume_and_ice_with_volume(self):
+        from app.services.market_page import _mood_notes
+
+        self.assertIn("地量见地价", " ".join(_mood_notes(self.indexes(), {}, {}, {}, {"word": "地量"})))
+        self.assertIn("天量之后常有分歧", " ".join(_mood_notes(self.indexes(), {}, {}, {}, {"word": "天量"})))
+        ice = {"stage": "冰点", "last": {"down": 30}}
+        self.assertIn("缩量，抛压在衰竭", " ".join(_mood_notes(self.indexes(), {}, {}, ice, {"word": "缩量"})))
+        self.assertIn("放量，恐慌还在释放", " ".join(_mood_notes(self.indexes(), {}, {}, ice, {"word": "放量"})))
+
+    def test_theme_break_and_theme_words(self):
+        from app.services.market_page import _mood_notes, _theme_view
+
+        last = {"themes": [{"name": "半导体", "n": 19}, {"name": "贵金属", "n": 11}, {"name": "元件", "n": 7}], "theme_share": 0.32, "theme_follow": -2.0, "theme_n": 14}
+        self.assertEqual(_theme_view(last)["word"], "主线在退")
+        self.assertIn("半导体 19 家、贵金属 11 家、元件 7 家", _theme_view(last)["detail"])
+        self.assertEqual(_theme_view({**last, "theme_follow": 1.0, "theme_share": 0.4})["word"], "有主线")
+        self.assertEqual(_theme_view({**last, "theme_follow": None, "theme_share": 0.18})["word"], "没主线")
+        self.assertEqual(_theme_view({**last, "theme_follow": 0.5})["word"], "一般")
+        self.assertIsNone(_theme_view({"themes": []}))
+        self.assertIn("主线大面", " ".join(_mood_notes(self.indexes(), {}, {}, {"last": last})))
+
+
 if __name__ == "__main__":
     unittest.main()
+
+
+class SectorMathTest(unittest.TestCase):
+    def rows(self, shares, closes):
+        days = [f"2026110{i + 1}" for i in range(len(shares))]
+        return ([{"trade_date": d, "fd_share": s * 1e4} for d, s in zip(days, shares)],
+                [{"trade_date": d, "close": c} for d, c in zip(days, closes)])
+
+    def test_daily_flow_and_split_guard(self):
+        from app.services import market_sector as ms
+
+        shares, bars = self.rows([100, 110, 120], [2.0, 2.0, 2.0])
+        out = ms.daily_flows(shares, bars)
+        self.assertEqual(len(out), 2)
+        self.assertAlmostEqual(out[0][1], (110e4 - 100e4) * 2.0 / 10000)
+        # 1 拆 2：份额翻倍、价格减半，不是申购
+        shares, bars = self.rows([100, 200, 205], [2.0, 1.0, 1.0])
+        out = ms.daily_flows(shares, bars)
+        self.assertEqual(out[0], ("20261102", 0.0))
+        self.assertAlmostEqual(out[1][1], (205e4 - 200e4) * 1.0 / 10000)
+        # 价格没变而份额翻倍：真的是巨额申购，要算
+        shares, bars = self.rows([100, 200], [2.0, 2.0])
+        self.assertGreater(ms.daily_flows(shares, bars)[0][1], 0)
+
+    def test_money_z_compares_with_own_history(self):
+        from app.services import market_sector as ms
+
+        calm = [1.0, -1.0] * 40
+        self.assertIsNone(ms.money_z([1.0] * 10))                                   # 样本不够
+        self.assertGreater(ms.money_z(calm + [5.0] * 5), 1.0)                       # 近 5 日明显比平时多
+        self.assertLess(ms.money_z(calm + [-5.0] * 5), -1.0)
+        self.assertIsNone(ms.money_z([1.0] * 80))                                   # 平时一点波动都没有，没法比
+
+    def test_return_amount_ratio_and_position(self):
+        from app.services import market_sector as ms
+
+        closes = [(f"d{i}", 100.0 + i) for i in range(70)]
+        self.assertAlmostEqual(ms.window_return(closes, 5), 169 / 164 - 1)
+        self.assertIsNone(ms.window_return(closes[:3], 5))
+        self.assertEqual(ms.position(closes), 1.0)                                  # 一路新高
+        self.assertAlmostEqual(ms.position([(f"d{i}", 200.0 - i) for i in range(70)]), 1 / 60)
+        amounts = [(f"d{i}", 10.0) for i in range(60)] + [(f"e{i}", 20.0) for i in range(5)]
+        self.assertAlmostEqual(ms.amount_ratio(amounts), 20.0 / ((10.0 * 55 + 20.0 * 5) / 60))
+        self.assertIsNone(ms.amount_ratio(amounts[:10]))
+
+    def test_lever_is_relative_to_the_median_industry(self):
+        from app.services import market_sector as ms
+
+        member = {"A": "银行", "B": "煤炭", "C": "汽车"}
+        now = [{"ts_code": "A", "rzye": 90.0}, {"ts_code": "B", "rzye": 100.0}, {"ts_code": "C", "rzye": 110.0}]
+        then = [{"ts_code": "A", "rzye": 100.0}, {"ts_code": "B", "rzye": 100.0}, {"ts_code": "C", "rzye": 100.0}]
+        out = ms.lever_by_l1(now, then, member)
+        self.assertAlmostEqual(out["煤炭"], 0.0)            # 中位数行业，相对为 0
+        self.assertAlmostEqual(out["银行"], 0.9 - 1)
+        self.assertAlmostEqual(out["汽车"], 0.1)
+        self.assertIsNone(out["钢铁"])                      # 没有数据的行业
+
+    def test_stock_maps_to_the_most_specific_sector(self):
+        from app.services import market_sector as ms
+
+        self.assertEqual(ms.sector_for("电子", "半导体", "数字芯片设计"), "芯片")
+        self.assertEqual(ms.sector_for("电子", "消费电子", "品牌消费电子"), "消费电子")
+        self.assertEqual(ms.sector_for("电子", "元件", "被动元件"), "电子")                 # 没有 ETF 代表的，回到一级行业自己的板块
+        self.assertEqual(ms.sector_for("食品饮料", "白酒Ⅱ", "白酒Ⅲ"), "白酒")
+        self.assertEqual(ms.sector_for("食品饮料", "饮料乳品", "乳品"), "食品饮料")
+        self.assertEqual(ms.sector_for("电力设备", "光伏设备", "逆变器"), "光伏")
+        self.assertEqual(ms.sector_for("电力设备", "电机Ⅱ", "电机Ⅲ"), "电网设备")            # 一级行业的默认板块
+        self.assertEqual(ms.sector_for("医药生物", "化学制药", "原料药"), "创新药")
+        self.assertEqual(ms.sector_for("非银金融", "保险Ⅱ", "保险Ⅲ"), "保险")
+        self.assertEqual(ms.sector_for("银行", "股份制银行Ⅱ", "股份制银行Ⅲ"), "银行")
+        self.assertIsNone(ms.sector_for("", "", ""))
+
+    def test_every_first_level_industry_is_covered(self):
+        from app.services import market_sector as ms
+
+        for l1, item in ms.coverage().items():
+            self.assertTrue(item["etf"] or item["estimated"], l1)
+        self.assertEqual(len(ms.L1_CODES), 31)
+        names = [row[0] for row in ms.UNIVERSE] + [row[0] for row in ms.BASE]
+        self.assertEqual(len(names), len(set(names)))
+
+
+class SectorPhaseTest(unittest.TestCase):
+    def phase(self, mz, ex5, heat, pos=0.5, lever="走平"):
+        return rules.sector_phase(mz, ex5, heat, pos, lever, 0.01)
+
+    def test_money_in_with_price_and_heat_is_the_main_rise(self):
+        out = self.phase(1.5, 0.05, 1.8)
+        self.assertEqual((out["phase"], out["bucket"], out["verdict"]), ("主升", "main", "三层同向"))
+        self.assertEqual(self.phase(1.5, 0.05, 1.8, pos=0.9)["phase"], "主升·高位")
+        self.assertEqual(self.phase(1.5, 0.05, 1.8, lever="下降")["verdict"], "有钱没热度")   # 杠杆在撤，不算三层同向
+
+    def test_money_in_but_not_yet_hot_is_a_candidate_for_the_next_one(self):
+        self.assertEqual(self.phase(1.2, 0.05, 1.0)["phase"], "温和上行")
+        self.assertEqual(self.phase(1.2, 0.0, 0.9)["phase"], "潜伏")
+        self.assertEqual(self.phase(1.2, 0.0, 1.5, pos=0.9)["phase"], "高位分歧")        # 高位放量不涨，钱进来也要小心
+
+    def test_money_in_while_price_falls_is_bottom_fishing_not_confirmation(self):
+        calm, loud = self.phase(1.2, -0.05, 0.9), self.phase(1.2, -0.05, 1.6)
+        self.assertEqual((calm["phase"], calm["bucket"]), ("逆势申购", "dip"))
+        self.assertEqual(loud["phase"], "抄底拉锯")
+        self.assertIn("接飞刀", calm["meaning"])
+
+    def test_hot_without_money_is_not_a_hotspot_to_chase(self):
+        out = self.phase(-1.2, 0.06, 1.8)
+        self.assertEqual((out["phase"], out["bucket"], out["verdict"]), ("只热不增", "hot_only", "只热不增"))
+        self.assertEqual(self.phase(0.0, 0.06, 1.8)["phase"], "只热不增")                 # 钱没动、价涨、放量：钱没跟上
+        self.assertEqual(self.phase(-1.2, 0.06, 1.0)["phase"], "涨势没钱")
+
+    def test_money_out_and_falling_is_the_ebb(self):
+        out = self.phase(-1.5, -0.05, 0.8, pos=0.1)
+        self.assertEqual((out["phase"], out["bucket"], out["verdict"]), ("退潮", "out", "在流出"))
+        self.assertIn("抛压在衰竭", out["why"])
+        self.assertEqual(self.phase(-1.5, 0.0, 1.0)["phase"], "钱在撤")
+
+    def test_neutral_money_is_split_by_price(self):
+        self.assertEqual(self.phase(0.1, 0.05, 1.0)["phase"], "跟涨")
+        self.assertEqual(self.phase(0.1, -0.05, 1.0)["phase"], "弱势")
+        out = self.phase(0.1, 0.0, 1.0)
+        self.assertEqual((out["phase"], out["verdict"]), ("观望", "没方向"))
+
+    def test_missing_history_says_so(self):
+        out = rules.sector_phase(None, 0.05, 1.5, 0.5)
+        self.assertEqual((out["phase"], out["verdict"]), ("没数据", None))
+
+    def test_every_bucket_has_a_title_and_tone(self):
+        keys = [item[0] for item in rules.BUCKETS]
+        for mz, ex5, heat in ((1.5, 0.05, 1.8), (1.2, 0.0, 0.9), (1.2, -0.05, 0.9), (-1.2, 0.06, 1.8), (-1.5, -0.05, 0.8), (0.1, 0.0, 1.0)):
+            self.assertIn(self.phase(mz, ex5, heat)["bucket"], keys)
+
+    def test_watch_action_for_no_direction(self):
+        self.assertEqual(rules.watch_action("没方向", "bullish")[0], "看个股判断")
+
+
+class SectorPageTest(unittest.TestCase):
+    def sectors(self):
+        def row(name, bucket, phase, z, flow, source="etf"):
+            return {"name": name, "code": "x", "industry": "", "group": "科技", "source": source, "flow": {5: flow}, "flow_rate": None, "size": None,
+                    "money_z": z, "ret5": 0.0, "ret20": 0.0, "ex5": 0.0, "ex20": 0.0, "heat": 1.0, "position": 0.5, "lever": None, "lever_word": "—",
+                    "verdict": "有钱没热度", "tone": "good", "phase": phase, "bucket": bucket, "why": "why"}
+        return {"rows": [row("A", "flat", "观望", 0.1, 0.0), row("B", "out", "退潮", -2.0, -3.0), row("C", "main", "主升", 1.2, 5.0),
+                         row("D", "main", "主升", 2.0, 8.0), row("E", "hot_only", "只热不增", -1.0, -1.0, "industry")], "conclusion_days": 5}
+
+    def test_rows_are_ordered_by_bucket_then_by_money(self):
+        from app.services.market_page import _sector_buckets, _sector_headline, _sector_rows
+
+        rows = _sector_rows(self.sectors())
+        self.assertEqual([row["name"] for row in rows], ["D", "C", "E", "B", "A"])
+        self.assertEqual(rows[0]["meaning"], "钱、价、热度同向，是现在最强的一类。")
+        self.assertEqual([item["key"] for item in _sector_buckets(rows)], ["main", "hot_only", "out", "flat"])
+        headline = _sector_headline(rows)
+        self.assertIn("有钱又热：D、C", headline)
+        self.assertIn("涨着但没新钱，别追：E", headline)
+        self.assertIn("钱在撤：B", headline)
+        self.assertNotIn("观望", headline)
+
+    def test_empty_and_quiet_headlines(self):
+        from app.services.market_page import _sector_headline
+
+        self.assertEqual(_sector_headline([]), "没有取到板块数据")
+        self.assertIn("没有拉开差距", _sector_headline([{"name": "A", "bucket": "flat"}]))
+
+    def test_sector_changes_do_not_nag_about_no_direction(self):
+        from app.services import market_changes as ch
+
+        def snap(verdicts):
+            return {"day": "2026-11-05", "level": "中性", "tilt": "", "gate": "", "headline": "", "signals": {}, "etf": {}, "margin": {}, "stage": None,
+                    "broke_low": [], "sectors": verdicts, "macro": {}, "team": None, "watch": {}}
+        before, after = snap({"芯片": "没方向", "银行": "有钱没热度", "白酒": "有钱没热度"}), snap({"芯片": "有钱没热度", "银行": "没方向", "白酒": "三层同向"})
+        titles = [item["title"] for item in ch.diff(before, after)]
+        self.assertEqual(titles, ["白酒：有钱没热度 → 三层同向"])

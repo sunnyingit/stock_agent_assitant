@@ -6,6 +6,7 @@ etf_share_size、rt_etf_k、limit_step、yc_cb 没有权限，不在这里。
 
 from __future__ import annotations
 
+import threading
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -111,6 +112,64 @@ def judge_margin(ratio_4w) -> str:
     return "持平"
 
 
+def _window(windows: dict, n: int):
+    if not isinstance(windows, dict):
+        return None
+    if n in windows:
+        return windows[n]
+    return windows.get(str(n))
+
+
+def judge_turnover_spans(windows: dict) -> str:
+    """1 / 3 / 5 / 30 日各按 ±5% 对 60 日均打一档。三档冷清才叫冷清，三档活跃才叫活跃。"""
+    votes = [judge_turnover(_window(windows, n)) for n in (1, 3, 5, 30)]
+    votes = [item for item in votes if item != "没有"]
+    if not votes:
+        return "没有"
+    if sum(item == "冷清" for item in votes) >= 3:
+        return "冷清"
+    if sum(item == "活跃" for item in votes) >= 3:
+        return "活跃"
+    return "平时"
+
+
+def judge_etf_spans(windows: dict, buy_days: int) -> str:
+    """净流入要 5 日超过 +1% 且至少 4 天在买，同时 30 日、60 日也都超过 +1%。净流出要 5 日和 30 日都低于 −1%。"""
+    day5, day30, day60 = _window(windows, 5), _window(windows, 30), _window(windows, 60)
+    if day5 is None:
+        return "没有"
+    longer_in = (day30 is None or day30 >= 0.01) and (day60 is None or day60 >= 0.01)
+    if day5 >= 0.01 and buy_days >= 4 and longer_in:
+        return "净流入"
+    if day5 <= -0.01 and (day30 is None or day30 <= -0.01):
+        return "净流出"
+    return "基本没变"
+
+
+def judge_margin_spans(windows: dict) -> str:
+    """加速下降要 30 日和 60 日都低于 −5%。在降、在升看 30 日，60 日有数时在升还要 60 日不降。"""
+    day30, day60 = _window(windows, 30), _window(windows, 60)
+    if day30 is None:
+        return "没有"
+    if day30 < -0.05 and (day60 is None or day60 < -0.05):
+        return "加速下降"
+    if day30 < -0.02:
+        return "在降"
+    if day30 > 0.02 and (day60 is None or day60 > 0):
+        return "在升"
+    return "持平"
+
+
+SPANS = (1, 3, 5, 30, 60)
+
+
+def _ago(days: list, n: int):
+    """往前 n 个交易日；样本不够时用手里最早的一天，避免短样本把每个窗口都空着。"""
+    if len(days) <= 1:
+        return None
+    return days[-1 - n] if len(days) > n else days[0]
+
+
 def judge_pulse(turnover: str, etf: str, margin: str) -> str:
     if etf == "净流入" and turnover != "冷清":
         return "在进"
@@ -125,12 +184,10 @@ def format_turnover(rows: list[dict], index_pct: dict[str, float] | None = None)
     if len(rows) < 6:
         return _body([], "没有取到足够的全市场成交额")
     latest = rows[-1]
-    avg5 = _mean(rows[-5:], "amount")
     avg60 = _mean(rows[-60:], "amount")
-    avg20 = _mean(rows[-20:], "amount")
-    ratio5 = None if not avg60 else avg5 / avg60 - 1
-    ratio20 = None if not avg60 else avg20 / avg60 - 1
-    label = judge_turnover(ratio5)
+    windows = {n: None if not avg60 else _mean(rows[-n:], "amount") / avg60 - 1 for n in SPANS}
+    ratio5 = windows[5]
+    label = judge_turnover_spans(windows)
     year = rows[-240:]
     amounts = [_num(row.get("amount")) for row in year]
     amounts = [item for item in amounts if item is not None]
@@ -141,8 +198,8 @@ def format_turnover(rows: list[dict], index_pct: dict[str, float] | None = None)
         if pct is not None and pct < 0:
             down += 1
     facts = [
-        {"id": "mkt.turnover", "text": f"{_iso(latest.get('trade_date'))} 沪深成交额 {_yi_plain(_num(latest.get('amount')))}，近 5 日相对过去 60 日 {_pct(ratio5)}，判定 {label}"},
-        {"id": "mkt.turnover_20", "text": f"近 20 日相对过去 60 日 {_pct(ratio20)}"},
+        {"id": "mkt.turnover", "text": f"{_iso(latest.get('trade_date'))} 沪深成交额 {_yi_plain(_num(latest.get('amount')))}，1 / 3 / 5 / 30 日相对 60 日均，三档同向才改冷清或活跃，判定 {label}"},
+        {"id": "mkt.turnover_windows", "text": "相对过去 60 日：" + "，".join(f"{n} 日 {_pct(windows[n])}" for n in SPANS)},
         {"id": "mkt.turnover_pctile", "text": f"成交额处在近一年 {'' if pctile is None else str(round(pctile * 100)) + '%'} 分位"},
     ]
     if down:
@@ -151,7 +208,8 @@ def format_turnover(rows: list[dict], index_pct: dict[str, float] | None = None)
         "date": _iso(latest.get("trade_date")),
         "amount": _num(latest.get("amount")),
         "ratio5": ratio5,
-        "ratio20": ratio20,
+        "avg60": avg60,
+        "windows": windows,
         "pctile": pctile,
         "label": label,
         "down_days": down,
@@ -189,12 +247,15 @@ def format_etf(shares: dict[str, list[dict]], closes: dict[str, list[dict]]) -> 
             if price is not None:
                 groups[group] += delta * price / 10000
                 group_known[group] = True
-    buy_days = sum(1 for value in list(day_net.values())[-5:] if value > 0)
+    buy_days = sum(1 for day in sorted(day_net)[-5:] if day_net[day] > 0)
     if not counted or start_share <= 0:
         return _body([], "没有取到宽基 ETF 份额。etf_share_size 没有权限，这里用的是 fund_share")
     ratio = end_share / start_share - 1
-    label = judge_etf(ratio, buy_days)
     money = sum(groups.values())
+    series = _etf_series(shares)
+    windows = series.get("windows") or {n: None for n in SPANS}
+    windows[5] = ratio
+    label = judge_etf_spans(windows, buy_days)
     bits = [
         f"9 只名单里取到 {counted} 只，份额变化 {_pct(ratio)}，判定 {label}",
         f"近 5 个交易日里篮子净申购的天数 {buy_days}",
@@ -209,7 +270,7 @@ def format_etf(shares: dict[str, list[dict]], closes: dict[str, list[dict]]) -> 
     metrics = {
         "ratio": ratio, "buy_days": buy_days, "label": label, "money": money,
         "groups": groups, "counted": counted,
-        **_etf_series(shares),
+        **series, "windows": windows,
     }
     return _body([{"id": "mkt.etf", "text": text}], text, metrics)
 
@@ -229,16 +290,19 @@ def _etf_series(shares: dict[str, list[dict]]) -> dict:
     if len(days) < 2:
         return {"series": [], "total": None, "day_change": None, "ratio20": None, "pctile": None, "latest_date": ""}
     totals = [sum(by_day[day].values()) / 1e4 for day in days]
-    series = [
-        {"date": _iso(day), "value": total, "delta": 0.0 if index == 0 else total - totals[index - 1]}
-        for index, (day, total) in enumerate(zip(days, totals))
-    ]
-    ratio20 = _growth(totals[-1], totals[-21]) if len(totals) > 20 else None
+    series = []
+    for index, (day, total) in enumerate(zip(days, totals)):
+        gap = 0 if index == 0 else _day_gap(days[index - 1], day)
+        # 中间缺了交易日时，两头相减是好几天的变化，不能画成一根单日柱。
+        delta = 0.0 if index == 0 or gap > 4 else total - totals[index - 1]
+        series.append({"date": _iso(day), "value": total, "delta": delta})
+    windows = {n: _growth(totals[-1], totals[-1 - n]) if len(totals) > n else None for n in SPANS}
+    last_gap = _day_gap(days[-2], days[-1])
     return {
         "series": series[-60:],
         "total": totals[-1],
-        "day_change": totals[-1] - totals[-2],
-        "ratio20": ratio20,
+        "day_change": None if last_gap > 4 else totals[-1] - totals[-2],
+        "windows": windows,
         "pctile": _pctile(totals[-240:], totals[-1]),
         "latest_date": _iso(days[-1]),
         "items": [_etf_item(code, shares.get(code) or []) for code in codes],
@@ -272,17 +336,17 @@ def format_margin(rows: list[dict], turnover: float | None = None) -> dict:
         return _body([], "没有取到全市场两融")
     latest = by_day[days[-1]]
     prev = by_day[days[-2]]
-    base5 = by_day[days[-6]]
-    week = days[-21] if len(days) >= 21 else days[0]
-    ratio_day = _growth(latest["rzye"], prev["rzye"])
-    ratio5 = _growth(latest["rzye"], by_day[days[-6]]["rzye"])
-    ratio4 = _growth(latest["rzye"], by_day[week]["rzye"])
-    label = judge_margin(ratio4)
+    windows = {n: _growth(latest["rzye"], by_day[_ago(days, n)]["rzye"]) if _ago(days, n) else None for n in SPANS}
+    ratio_day = windows[1]
+    ratio5 = windows[5]
+    ratio30 = windows[30]
+    label = judge_margin_spans(windows)
     net = latest["rzmre"] - latest["rzche"]
     share = None if not turnover else latest["rzmre"] / (turnover * 1e8)
     text = (
-        f"{_iso(days[-1])} 融资余额 {_yuan_yi(latest['rzye'])}，当日 {_pct(ratio_day)}，"
-        f"5 日 {_pct(ratio5)}，约 4 周 {_pct(ratio4)}，判定 {label}。"
+        f"{_iso(days[-1])} 融资余额 {_yuan_yi(latest['rzye'])}，"
+        + "，".join(f"{n} 日 {_pct(windows[n])}" for n in SPANS)
+        + f"，判定 {label}。"
         f"当日融资买入 {_yuan_yi(latest['rzmre'])}，偿还 {_yuan_yi(latest['rzche'])}，净买入 {_yuan_yi(net)}"
     )
     if share is not None:
@@ -293,7 +357,8 @@ def format_margin(rows: list[dict], turnover: float | None = None) -> dict:
         "balance": latest["rzye"] / 1e8,
         "ratio_day": ratio_day,
         "ratio5": ratio5,
-        "ratio4": ratio4,
+        "ratio4": ratio30,
+        "windows": windows,
         "label": label,
         "buy": latest["rzmre"] / 1e8,
         "repay": latest["rzche"] / 1e8,
@@ -371,6 +436,7 @@ def format_south(hsgt: list[dict], ggt: list[dict]) -> dict:
     ]
     sums5 = [sum(item[1] for item in nets[index - 5:index]) for index in range(5, len(nets) + 1)]
     sums20 = [sum(item[1] for item in nets[index - 20:index]) for index in range(20, len(nets) + 1)]
+    south_windows = {n: sum(item[1] for item in nets[-n:]) if len(nets) >= n else None for n in SPANS}
     return _body([{"id": "mkt.south", "text": text}], text, {
         "date": _iso(latest.get("trade_date")),
         "level": level,
@@ -380,6 +446,7 @@ def format_south(hsgt: list[dict], ggt: list[dict]) -> dict:
         "ggt_net": net,
         "net5": sums5[-1] if sums5 else None,
         "net20": sums20[-1] if sums20 else None,
+        "windows": south_windows,
         "five_avg": (sum(sums5) / len(sums5)) if sums5 else None,
         "pctile20": _pctile(sums20[-240:], sums20[-1]) if sums20 else None,
         "series": [{"date": _iso(day), "value": value} for day, value in nets[-60:]],
@@ -438,12 +505,12 @@ def format_supply(trades: list[dict], buybacks: list[dict]) -> dict:
     repo = sum(item[1] for item in latest_repo.values())
     if not buy_known and not sell_known and not repo:
         return _body([], "没有取到增减持和回购金额")
-    net = buy + repo - sell
-    label = "在拿走" if net < 0 else "有人在接"
+    # 回购公告是累计金额，不能加进这 28 天的增减持净额，否则会把「在拿走」说成「有人在接」。
+    net = buy - sell
+    label = "在拿走" if net < 0 else "有人在接" if net > 0 else "基本没变"
     text = (
-        f"公告区间增持 {_yuan_yi(buy)}，减持 {_yuan_yi(sell)}，回购 {_yuan_yi(repo)}，"
-        f"增持 + 回购 − 减持 = {_yuan_yi(net)}，判定 {label}。"
-        "回购按公司只保留最新一条实施公告，金额是公告里的累计回购，不是这段时间的增量。"
+        f"公告区间增持 {_yuan_yi(buy)}，减持 {_yuan_yi(sell)}，增持 − 减持 = {_yuan_yi(net)}，判定 {label}。"
+        f"回购累计 {_yuan_yi(repo)}，按公司只留最新一条实施公告，是累计金额，不算进上面的净额。"
         "定增和再融资没有全市场日接口，没有算进去。"
     )
     return _body([{"id": "mkt.supply", "text": text}], text, {
@@ -539,8 +606,24 @@ def format_breadth(today_rows: list[dict], history: dict[str, list[float]]) -> d
     return _body([{"id": "mkt.breadth", "text": text}], text, {"up": up, "down": down, "flat": flat, "highs": highs, "lows": lows})
 
 
+def board_limit(ts_code: str) -> int | None:
+    """涨跌停幅度（%）：主板 10，创业板和科创板 20。北交所 30，返回 None：它不进涨跌停数，也不进接力。ST 本来就不在名单里。"""
+    code = str(ts_code or "")
+    if code.endswith(".BJ"):
+        return None
+    return 20 if code[:3] in ("688", "689", "300", "301") else 10
+
+
+def scaled_pct(pct: float, ts_code: str) -> float | None:
+    """把涨跌幅折成「按 10cm 算」：20cm 的涨 10% 只算涨停的一半，和主板的 5% 一样。"""
+    limit = board_limit(ts_code)
+    return None if limit is None else pct * 10 / limit
+
+
 def format_limits(rows: list[dict], today_pct: dict[str, float] | None = None, prev_rows: list[dict] | None = None) -> dict:
-    """rows 是当天涨跌停名单；prev_rows 是前一交易日的名单，今天的涨跌幅 today_pct 用来算昨涨停今日表现。"""
+    """rows 是当天涨跌停名单；prev_rows 是前一交易日的名单，今天的涨跌幅 today_pct 用来算昨涨停今日表现。
+    北交所（30cm）不算；20cm 的涨跌幅折成 10cm 再平均，免得创业板、科创板把赚钱效应拉高。"""
+    rows = [row for row in rows if board_limit(row.get("ts_code")) is not None]
     counts = {"U": 0, "D": 0, "Z": 0}
     height = 0
     for row in rows:
@@ -555,16 +638,16 @@ def format_limits(rows: list[dict], today_pct: dict[str, float] | None = None, p
     follow = None
     follow_count = 0
     if today_pct and prev_rows:
-        vals = [today_pct[str(row.get("ts_code") or "")] for row in prev_rows
-                if str(row.get("limit") or "") == "U" and str(row.get("ts_code") or "") in today_pct]
+        vals = [scaled_pct(today_pct[code], code) for code in (str(row.get("ts_code") or "") for row in prev_rows if str(row.get("limit") or "") == "U")
+                if code in today_pct and board_limit(code) is not None]
         if vals:
             follow = sum(vals) / len(vals)
             follow_count = len(vals)
     tried = counts["U"] + counts["Z"]
     broken_rate = counts["Z"] / tried if tried else None
-    text = f"涨停 {counts['U']}，跌停 {counts['D']}，炸板 {counts['Z']}，最高连板 {height}。不含 ST。"
+    text = f"涨停 {counts['U']}，跌停 {counts['D']}，炸板 {counts['Z']}，最高连板 {height}。不含 ST、北交所。"
     if follow is not None:
-        text += f"昨天涨停的 {follow_count} 只，今天平均涨跌 {follow:+.2f}%。"
+        text += f"昨天涨停的 {follow_count} 只，今天平均涨跌 {follow:+.2f}%（20cm 的折成 10cm）。"
     text += "连板天梯接口没有权限，高度来自 limit_times。"
     return _body([{"id": "mkt.limits", "text": text}], text, {
         "up": counts["U"], "down": counts["D"], "broken": counts["Z"], "height": height,
@@ -582,6 +665,7 @@ def format_index(bars: dict[str, list[dict]], basics: dict[str, dict]) -> dict:
             continue
         last = rows[-1]
         ret20 = _window_return(rows, 20)
+        ret3, ret5 = _window_return(rows, 3), _window_return(rows, 5)
         pe = _num((basics.get(code) or {}).get("pe_ttm"))
         closes = [_num(row.get("close")) for row in rows]
         ma60 = sum(closes[-60:]) / 60 if len(closes) >= 60 else None
@@ -593,7 +677,7 @@ def format_index(bars: dict[str, list[dict]], basics: dict[str, dict]) -> dict:
         bits.append(f"{name} {_iso(last.get('trade_date'))} {close}，近 20 日 {_pct(ret20)}，PE(TTM) {pe}")
         series.append({
             "name": name, "code": code, "date": _iso(last.get("trade_date")),
-            "close": close, "pct": _num(last.get("pct_chg")), "ret20": ret20, "pe": pe,
+            "close": close, "pct": _num(last.get("pct_chg")), "ret20": ret20, "ret3": ret3, "ret5": ret5, "pe": pe,
             "ma60": ma60, "above_ma60": None if ma60 is None else close >= ma60,
             "above_ma20": None if ma20 is None else close >= ma20,
             "prior_low": low, "broke_low": None if low is None else close < low,
@@ -738,9 +822,9 @@ def format_calendar(events: list[dict], opens: list[dict]) -> dict:
     })
 
 
-def format_unlock(rows: list[dict]) -> dict:
+def format_unlock(rows: list[dict], capped: bool = False) -> dict:
     if not rows:
-        return _body([{"id": "mkt.unlock", "text": "这个窗口没有解禁"}], "这个窗口没有解禁")
+        return _body([{"id": "mkt.unlock", "text": "这个窗口没有解禁"}], "这个窗口没有解禁", {"capped": capped})
     total = 0.0
     ranked = []
     for row in rows:
@@ -752,9 +836,8 @@ def format_unlock(rows: list[dict]) -> dict:
     ranked.sort(reverse=True)
     top = "，".join(f"{code} {day} {shares / 1e8:.2f} 亿股" for shares, code, day in ranked[:5])
     text = f"窗口内解禁 {len(ranked)} 条，合计 {total / 1e8:.2f} 亿股。较大的几条：{top}。"
-    capped = len(rows) >= 6000
     if capped:
-        text += " 单次最多 6000 条，后面的没有算进来。"
+        text += " 有一天达到单次 6000 条上限，这一天后面的没有算进来。"
     return _body([{"id": "mkt.unlock", "text": text}], text, {
         "count": len(ranked),
         "total": total / 1e8,
@@ -767,19 +850,11 @@ def _pulse(today: date) -> dict:
     turn = _turnover(today)
     etf = _etf(today)
     margin = _margin(today)
-    labels = {}
-    for key, doc in (("turnover", turn), ("etf", etf), ("margin", margin)):
-        labels[key] = _label_from(doc.get("text") or "")
+    # 标签取各自 metrics 里判好的，不要从说明文字里再抓：成交额的文字里固定写着「冷清」「活跃」
+    labels = {key: (doc.get("metrics") or {}).get("label") or "没有" for key, doc in (("turnover", turn), ("etf", etf), ("margin", margin))}
     lean = judge_pulse(labels["turnover"], labels["etf"], labels["margin"])
     text = f"短期判定 {lean}。成交 {labels['turnover']}，宽基 {labels['etf']}，两融 {labels['margin']}。改成在进要宽基净流入并且成交不是冷清。"
     return _doc("pulse", [{"id": "mkt.pulse", "text": text}], text + " " + " ".join(doc.get("text") or "" for doc in (turn, etf, margin)))
-
-
-def _label_from(text: str) -> str:
-    for label in ("加速下降", "净流入", "净流出", "基本没变", "冷清", "活跃", "平时", "在降", "在升", "持平"):
-        if label in text:
-            return label
-    return "没有"
 
 
 def _turnover(today: date) -> dict:
@@ -813,16 +888,9 @@ def _turnover(today: date) -> dict:
 
 
 def _etf(today: date) -> dict:
-    start = _ymd_offset(today, 400)
-    shares: dict[str, list] = {}
-    closes: dict[str, list] = {}
-    for code, _name, _group in ETF_BOOK:
-        shares[code] = _cached(f"fdshare:{code}:{start}", lambda c=code: _pro().fund_share(
-            ts_code=c, start_date=start, end_date=_ymd(today),
-        ))
-        closes[code] = _cached(f"fddaily:{code}:{start}", lambda c=code: _pro().fund_daily(
-            ts_code=c, start_date=start, end_date=_ymd(today), fields="ts_code,trade_date,close,amount",
-        ))
+    codes = [code for code, _name, _group in ETF_BOOK]
+    shares = dict(zip(codes, _parallel(codes, lambda code: fund_share_rows(code, today))))
+    closes = dict(zip(codes, _parallel(codes, lambda code: fund_bar_rows(code, today))))
     body = format_etf(shares, closes)
     return _from("etf", body)
 
@@ -863,8 +931,8 @@ def _member_map() -> dict[str, str]:
     if isinstance(cached, dict):
         return cached
     mapping = {}
-    for code in _L1:
-        rows = _records(lambda c=code: _pro().index_member_all(l1_code=c, is_new="Y"))
+    loaded = _parallel(list(_L1), lambda code: _cached(f"l1members:{code}", lambda c=code: _pro().index_member_all(l1_code=c, is_new="Y")))
+    for code, rows in zip(_L1, loaded):
         name = ""
         for row in rows:
             name = str(row.get("l1_name") or name)
@@ -916,6 +984,8 @@ def weekly_supply(trades: list[dict], today: date) -> list[dict]:
         if len(day) < 8 or vol is None or price is None:
             continue
         side = str(row.get("in_de") or "").upper()
+        if side not in ("IN", "DE"):
+            continue
         for week in weeks:
             if week[0] <= day <= week[1]:
                 week[2 if side == "IN" else 3] += vol * price / 1e8
@@ -939,18 +1009,21 @@ def _data_days(today: date, count: int = 4) -> list[str]:
     return list(reversed(_open_dates(today, count) or [_ymd(today)]))
 
 
+def _daily_rows(day: str) -> list[dict]:
+    return _cached(f"daily:{day}", lambda d=day: _pro().daily(trade_date=d, fields="ts_code,close,pct_chg"))
+
+
 def _breadth(today: date) -> dict:
     days = _data_days(today)
     day = days[0]
     today_rows: list[dict] = []
     for day in days:
-        today_rows = _cached(f"daily:{day}", lambda d=day: _pro().daily(trade_date=d, fields="ts_code,close,pct_chg"))
+        today_rows = _daily_rows(day)
         if today_rows:
             break
     history: dict[str, list[float]] = {}
     dates = [item for item in _open_dates(today, 26) if item < day][-24:]
-    for trade_day in dates:
-        rows = _cached(f"daily:{trade_day}", lambda d=trade_day: _pro().daily(trade_date=d, fields="ts_code,close,pct_chg"))
+    for rows in _parallel(dates, _daily_rows):
         for row in rows:
             close = _num(row.get("close"))
             code = str(row.get("ts_code") or "")
@@ -1087,13 +1160,32 @@ def _valuation(today: date) -> dict:
 
 
 def unlock_rows(today: date) -> list[dict]:
-    end = today + timedelta(days=10)
-    return _cached(f"unlock:{_ymd(today)}", lambda: _pro().share_float(start_date=_ymd(today), end_date=_ymd(end)))
+    rows, _capped = _unlock_fetch(today)
+    return rows
+
+
+def _unlock_fetch(today: date) -> tuple[list[dict], bool]:
+    """按天取。一次拉 10 天会顶到 6000 条上限，后面的解禁就丢了。"""
+    rows = []
+    seen = set()
+    capped = False
+    days = [_ymd(today + timedelta(days=offset)) for offset in range(11)]
+    loaded = _parallel(days, lambda day: _cached(f"unlockday:{day}", lambda d=day: _pro().share_float(start_date=d, end_date=d)))
+    for part in loaded:
+        if len(part) >= 6000:
+            capped = True
+        for row in part:
+            key = (row.get("ts_code"), _ymd(row.get("float_date")), row.get("float_share"), row.get("holder_name"))
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append(row)
+    return rows, capped
 
 
 def _unlock(today: date) -> dict:
-    body = format_unlock(unlock_rows(today))
-    return _from("unlock", body)
+    rows, capped = _unlock_fetch(today)
+    return _from("unlock", format_unlock(rows, capped))
 
 
 def _open_dates(today: date, count: int) -> list[str]:
@@ -1103,15 +1195,112 @@ def _open_dates(today: date, count: int) -> list[str]:
     return days[-count:]
 
 
-def _cached(name: str, fetch) -> list[dict]:
-    key = f"market_tape:{name}"
+_DAY_KEYS = {"daily", "limit", "margin_detail", "sw", "indflow"}
+_FLIGHT_LOCK = threading.Lock()
+_FLIGHT: dict[str, threading.Event] = {}
+
+
+def _keep_on_disk(name: str) -> bool:
+    """已经收盘的某一天，以及申万成分，落盘后不再打接口。含今天的滚动窗口不落盘。"""
+    if name.startswith("l1members:") or name.startswith("discl:"):
+        return True
+    head, _, tail = name.rpartition(":")
+    if len(tail) != 8 or not tail.isdigit():
+        return False
+    if head == "unlockday":
+        return True
+    return head in _DAY_KEYS and tail < datetime.now(_ZONE).strftime("%Y%m%d")
+
+
+def _memory_ttl(name: str) -> float:
+    head, _, tail = name.rpartition(":")
+    today = datetime.now(_ZONE).strftime("%Y%m%d")
+    if head == "unlockday" and tail >= today:
+        return _TTL
+    if name.startswith("l1members:"):
+        return 24 * 3600
+    if name.startswith("discl:"):
+        return _TTL
+    return 7 * 24 * 3600
+
+
+def _memory_or_disk(name: str, key: str):
+    from app.services import market_disk
+
     cached = cache.get(key)
     if isinstance(cached, list):
         return cached
-    rows = _records(fetch)
-    if rows:
-        cache.set(key, rows, _TTL)
-    return rows
+    if not _keep_on_disk(name):
+        return None
+    stored = market_disk.load(key)
+    if isinstance(stored, list) and (stored or name.startswith("discl:")):
+        cache.set(key, stored, _memory_ttl(name))
+        return stored
+    return None
+
+
+def _cached(name: str, fetch) -> list[dict]:
+    from app.services import market_disk
+
+    key = f"market_tape:{name}"
+    hit = _memory_or_disk(name, key)
+    if hit is not None:
+        return hit
+    with _FLIGHT_LOCK:
+        hit = _memory_or_disk(name, key)
+        if hit is not None:
+            return hit
+        event = _FLIGHT.get(key)
+        if event is None:
+            event = threading.Event()
+            _FLIGHT[key] = event
+            owner = True
+        else:
+            owner = False
+    if not owner:
+        event.wait(180)
+        return _memory_or_disk(name, key) or []
+    try:
+        try:
+            rows = _records(fetch)
+        except Exception:
+            rows = []
+        if rows or name.startswith("discl:"):
+            cache.set(key, rows, _memory_ttl(name))
+            if _keep_on_disk(name):
+                market_disk.save(key, rows)
+        return rows
+    finally:
+        event.set()
+        with _FLIGHT_LOCK:
+            _FLIGHT.pop(key, None)
+
+
+def _parallel(items, fetch):
+    """同一类请求一起打。缓存里已有的不会再出去。"""
+    if not items:
+        return []
+    from concurrent.futures import ThreadPoolExecutor
+
+    if len(items) == 1:
+        return [fetch(items[0])]
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        return list(pool.map(fetch, items))
+
+
+def fund_share_rows(code: str, today: date, days: int = 400) -> list[dict]:
+    """宽基、国家队、板块共用同一段份额，避免同一只 ETF 按不同窗口各取一次。"""
+    start = _ymd_offset(today, days)
+    return _cached(f"fdshare:{code}:{start}", lambda c=code, s=start: _pro().fund_share(
+        ts_code=c, start_date=s, end_date=_ymd(today),
+    ))
+
+
+def fund_bar_rows(code: str, today: date, days: int = 400) -> list[dict]:
+    start = _ymd_offset(today, days)
+    return _cached(f"fdbar:{code}:{start}", lambda c=code, s=start: _pro().fund_daily(
+        ts_code=c, start_date=s, end_date=_ymd(today), fields="ts_code,trade_date,close,pct_chg,vol,amount",
+    ))
 
 
 def _cached_value(name: str):
@@ -1238,6 +1427,10 @@ def _iso(value) -> str:
     if len(text) < 8:
         return ""
     return f"{text[:4]}-{text[4:6]}-{text[6:8]}"
+
+
+def _day_gap(earlier: str, later: str) -> int:
+    return (datetime.strptime(later, "%Y%m%d") - datetime.strptime(earlier, "%Y%m%d")).days
 
 
 def _ymd_offset(day: date, days: int) -> str:
