@@ -14,6 +14,7 @@ _REASON = {
     "weak": "证据不足",
     "contradicted": "被其他事实反驳",
 }
+_CERTAINTY_TEXT = {"high": "高", "medium": "中", "low": "低"}
 _ORDER = (
     ("sector", "板块"),
     ("volume_flow", "资金流"),
@@ -51,6 +52,7 @@ def card(data: dict) -> dict:
     wrong = ((final or {}).get("postmortem") or {}).get("text") or ""
     price = down.get("price")
     if price is not None and f"{float(price):.2f}" not in wrong:
+        wrong = wrong.rstrip("。．.；; ")
         wrong = f"{wrong}，并且收盘跌破 {float(price):.2f}" if wrong else f"收盘跌破 {float(price):.2f}"
     note = (final or {}).get("conflict_note") or {}
     however = note.get("text") if isinstance(note, dict) else ""
@@ -102,7 +104,54 @@ def detail(data: dict) -> dict:
             "up": _price(_levels(data).get("up")),
         },
         "trend": page.get("trend"),
+        # 右侧「结论」页用：五位分析师各自的立场、正反方论据怎么裁决的、结论哪里可能错
+        "stance": _stance(table),
+        "points": _points(data, final),
+        "score": shown["score"],
+        "conflict": shown["however"],
+        "postmortem": shown["if_wrong"]["text"],
+        "source_note": "" if final else "这次主分析师没有给出裁决，下面是规则版结论。",
     }
+
+
+def _stance(table: FactTable) -> list[dict]:
+    """五位分析师的立场：方向、强度、把握度，加上他们各自那一句话。"""
+    headlines = {row.get("dimension"): row for row in table.headlines or []}
+    view = {row.get("dimension"): row for row in (table.context or {}).get("dim_view") or []}
+    lean = (table.context or {}).get("dim_lean") or {}
+    out = []
+    for key, label in _ORDER:
+        head = (headlines.get(key) or {}).get("headline") or {}
+        seen = view.get(key) or {}
+        direction = seen.get("direction") or policy.DIRECTION_TEXT.get(lean.get(key), "") if (seen or key in lean) else ""
+        out.append({
+            "dimension": key, "label": label, "direction": direction or None, "strength": seen.get("strength") or "",
+            "certainty": _CERTAINTY_TEXT.get(seen.get("certainty") or "", ""), "text": head.get("text") or "",
+            "done": bool(seen or key in lean),
+        })
+    return out
+
+
+def _points(data: dict, final: dict | None) -> dict:
+    """正反方的论据，每条标明主分析师采信与否、最终分量和不采信的原因。"""
+    sides = (data.get("decision") or {}).get("sides") or {}
+    adopted = {item.get("ref"): item for item in (final or {}).get("adopted") or []}
+    rejected = {item.get("ref"): item for item in (final or {}).get("rejected") or []}
+    out = {}
+    for side in ("bull", "bear"):
+        rows = []
+        for index, point in enumerate((sides.get(side) or {}).get("points") or [], start=1):
+            ref = f"{side}.{index}"
+            took, dropped = adopted.get(ref), rejected.get(ref)
+            rows.append({
+                "ref": ref, "mark": _mark(ref), "claim": point.get("claim") or "", "weight": point.get("weight"),
+                "state": "adopted" if took else "rejected" if dropped else "pending",
+                "final_weight": (took or {}).get("weight"),
+                "reason": _REASON.get((dropped or {}).get("reason") or "", (dropped or {}).get("reason") or ""),
+            })
+        risk = (sides.get(side) or {}).get("risk") or {}
+        out[side] = {"points": rows, "risk": risk.get("text") if isinstance(risk, dict) else None}
+    return out
 
 
 def _page(data: dict) -> dict:

@@ -96,6 +96,12 @@ def load_table(
         "fresh": rule["fresh"],
         "majority": rule["majority"],
         "dim_lean": {snap.key: snap.lean for snap in snaps if snap.done},
+        # 给主分析师看：每个已完成的维度的方向、强度、把握度（顺序和 headlines 一致）
+        "dim_view": [
+            {"dimension": snap.key, "label": policy.DIMENSION_LABEL.get(snap.key, snap.key), "direction": policy.DIRECTION_TEXT.get(snap.lean, "不明"),
+             "strength": policy.LEVEL_TEXT.get(snap.level or 0, ""), "certainty": snap.certainty or ""}
+            for key in ("sector", "volume_flow", "news", "finance", "fundamental") for snap in snaps if snap.key == key and snap.done
+        ],
     }
     table = build_fact_table(snaps, market, rule, candidates, context)
     _attach_review_facts(table, bundle.payloads, bundle.aligned, stock, now)

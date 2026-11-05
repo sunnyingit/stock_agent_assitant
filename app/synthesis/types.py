@@ -94,6 +94,7 @@ class FactTable:
         view["candidates"] = [_candidate_view(item) for item in self.candidates]
         view["rule_reference"] = self.rule_reference()
         view["headlines"] = list(self.headlines)
+        view["dimensions"] = list((self.context or {}).get("dim_view") or [])
         return view
 
     def rule_reference(self) -> dict:

@@ -52,7 +52,7 @@ class NewsStreamTest(unittest.TestCase):
                 return {
                     "events": [{
                         "article_id": article_id, "summary": "回购30亿", "category": "资本", "scope": "公司",
-                        "basis": "事实", "direction": "利好", "magnitude": "大",
+                        "basis": "事实", "direction": "利好", "magnitude": "大", "amount": "30亿", "base": "100亿",
                     }],
                     "lean": "利好",
                     "ai_text": "公司公告回购30亿。",
