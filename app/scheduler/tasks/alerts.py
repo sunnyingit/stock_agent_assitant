@@ -150,7 +150,7 @@ def relay_sync(ctx):
     if not relay.enabled():
         return {"enabled": False}
     out = {"enabled": True}
-    for name, call in (("alerts", relay.sync_alerts), ("subscriptions", lambda: relay.sync_subscriptions([{"ts_code": s["ts_code"], "tier": "hold" if s["tier"] == "hold" else "other"} for s in watch_subjects()])), ("events", relay.pull_events)):
+    for name, call in (("alerts", relay.sync_alerts), ("subscriptions", lambda: relay.sync_subscriptions([{"ts_code": s["ts_code"], "tier": "hold" if s["tier"] == "hold" else "other"} for s in watch_subjects()])), ("events", relay.pull_events), ("server_tasks", relay.pull_system_events)):
         try:
             out[name] = call()
         except Exception as exc:        # 服务端暂时连不上：本机降级评估，不算任务失败

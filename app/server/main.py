@@ -32,6 +32,7 @@ def build(store: ServerStore | None = None, clock: clocks.Clock | None = None, s
     tasks.install(registry, tasks.build(store, **deps))
     sched = Scheduler(SchedStore(sched_path or os.environ.get("SERVER_SCHED_DB") or None), registry, TradingCalendar(), clock, profile="server", code_version=rt.code_version())
     runtime = rt.Runtime(sched)
+    sched.listeners.append(lambda run, spec: record_run(store, sched, clock, run, spec))
 
     app = Flask(__name__)
     app.config.update(SERVER_STORE=store, SERVER_CLOCK=clock, ARTIFACT_PRODUCERS={"stock.facts": F.on_demand})
@@ -46,6 +47,27 @@ def build(store: ServerStore | None = None, clock: clocks.Clock | None = None, s
     app.register_blueprint(sched_api.bp, name="admin_sched", url_prefix="/v1/admin/sched")
     app.before_request(lambda: security.admin_check() if request.path.startswith("/v1/admin/") else None)
     return app, runtime
+
+
+def record_run(store: ServerStore, sched: Scheduler, clock: clocks.Clock, run: dict, spec) -> None:
+    """服务端任务每次跑完，把回执写进系统事件流，客户端拉到后写进自己的收件箱。"""
+    from app.scheduler import report
+    from app.scheduler.ids import ulid
+
+    now = clock.now_ms()
+    if run["state"] in ("failed", "partial"):
+        counts = run.get("counts") or {}
+        first = next(iter(sched.store.jobs_of(run["run_id"], "dead", limit=1)), None)
+        event = {"v": 1, "type": "task.failed", "dedupe_key": f"server:failed:{run['run_id']}", "occurred_at": now, "severity": "normal",
+                 "payload": {"task_id": run["task_id"], "title": spec.title, "run_id": run["run_id"], "dead": counts.get("dead", 0) + counts.get("expired", 0),
+                             "total": counts.get("jobs", 0), "first_error": ((first or {}).get("error") or {}).get("message", "")}}
+    else:
+        receipt = report.completion(sched.store, run, spec, sched.effective(spec)["trigger"], "server")
+        if receipt is None:
+            return
+        event = {"v": 1, "type": "task.completed", "dedupe_key": receipt["dedupe_key"], "occurred_at": now, "severity": "info", "payload": receipt["payload"]}
+    event["event_id"] = ulid(now)
+    store.add_system_event(event, now)
 
 
 def main() -> None:

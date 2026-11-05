@@ -61,7 +61,8 @@ class Notifier:
         title, body = spec.render(payload)
         link = spec.link(payload)
         group = clocks.day_of(now).isoformat()
-        notification = self.store.add_notification(stored, title, body, spec.tone, link, group, now)
+        tone = spec.tone_fn(payload) if spec.tone_fn else spec.tone
+        notification = self.store.add_notification(stored, title, body, tone, link, group, now)
         collapsed = False
         if types.SEVERITY[stored["severity"]] == 1 and spec.group == "stock":
             window = self.store.settings().get("collapse_s", 600) * 1000

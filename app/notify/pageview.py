@@ -10,13 +10,13 @@ from app.notify.store import NotifyStore
 from app.scheduler import clock as clocks
 
 PREFIX = "inbox:"
-SYSTEM_TYPES = ("task.failed", "task.overdue")
+SYSTEM_TYPES = ("task.failed", "task.overdue", "task.completed")
 # 事件类型 → 页面抽屉里的分类
 KINDS = {
     "price.alert.fired": "alert", "price.move": "move", "limit.hit": "move", "price.extreme": "move",
     "judgment.changed": "change", "reason.status_changed": "change", "wish.condition_met": "change", "flow.streak": "move",
     "announcement.published": "ann", "news.item": "ann", "calendar.upcoming": "upcoming", "outcome.settled": "settle",
-    "task.failed": "system", "task.overdue": "system", "digest.summary": "system",
+    "task.failed": "system", "task.overdue": "system", "task.completed": "system", "digest.summary": "system",
 }
 
 

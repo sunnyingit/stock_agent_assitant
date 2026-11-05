@@ -89,7 +89,7 @@ class AlertTaskTest(unittest.TestCase):
 
     def test_failed_run_produces_one_aggregated_task_failed_event(self):
         self.h.add("boom", lambda ctx: (_ for _ in ()).throw(Permanent("坏了")), trigger={"kind": "daily", "at": "08:30"})
-        self.h.sched.listeners.append(notify_hook.on_run_finished)
+        self.h.sched.listeners.append(lambda run, spec: notify_hook.on_run_finished(run, spec, self.h.sched))
         self.h.clock.set("2026-11-05 08:35")
         self.h.run()
         events = self.n.store.events("task.failed")

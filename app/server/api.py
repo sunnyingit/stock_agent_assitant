@@ -204,3 +204,13 @@ def ready():
     if not date:
         return _err(400, "invalid_query", "需要 date")
     return jsonify({"v": 1, "date": date, "gates": _store().ready(date)})
+
+
+# ------------------------------------------------------------ 服务端任务的回执
+@bp.route("/system/events", methods=["GET"])
+@device_required
+def system_events():
+    """服务端任务每次跑完的回执（task.completed / task.failed）。所有设备看到同一份，不含用户数据。第一次拉只给最近 24 小时。"""
+    after = request.args.get("after", type=int, default=0)
+    since = _now() - 24 * 3600_000 if after == 0 else 0
+    return jsonify({"items": _store().system_events(after, since)})

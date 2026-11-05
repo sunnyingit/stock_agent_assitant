@@ -48,6 +48,9 @@ CREATE TABLE IF NOT EXISTS artifact (
 );
 CREATE INDEX IF NOT EXISTS artifact_by_day ON artifact (kind, as_of);
 CREATE TABLE IF NOT EXISTS ready_marker (date TEXT NOT NULL, gate TEXT NOT NULL, ready_at INTEGER, checked_at INTEGER NOT NULL, PRIMARY KEY (date, gate));
+CREATE TABLE IF NOT EXISTS system_event (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT, dedupe_key TEXT NOT NULL UNIQUE, event TEXT NOT NULL, created_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS demand (ts_code TEXT PRIMARY KEY, hits INTEGER NOT NULL DEFAULT 0, last_at INTEGER NOT NULL);
 """
 
@@ -297,9 +300,21 @@ class ServerStore:
             rows = conn.execute("SELECT * FROM ready_marker WHERE date=?", (date,)).fetchall()
         return {r["gate"]: ({"ready": True, "at": r["ready_at"]} if r["ready_at"] else {"ready": False, "checked_at": r["checked_at"]}) for r in rows}
 
+    # ------------------------------------------------------------ 系统事件流（服务端任务的回执，所有设备共用，不含任何用户数据）
+    def add_system_event(self, event: dict, now: int) -> int | None:
+        with self._conn() as conn:
+            cursor = conn.execute("INSERT OR IGNORE INTO system_event (dedupe_key, event, created_at) VALUES (?,?,?)", (event["dedupe_key"], canonical(event), now))
+            return cursor.lastrowid if cursor.rowcount else None
+
+    def system_events(self, after: int = 0, since: int = 0, limit: int = 200) -> list[dict]:
+        with self._conn() as conn:
+            rows = conn.execute("SELECT seq, event, created_at FROM system_event WHERE seq>? AND created_at>=? ORDER BY seq LIMIT ?", (after, since, limit)).fetchall()
+        return [{"seq": r["seq"], "event": json.loads(r["event"]), "created_at": r["created_at"]} for r in rows]
+
     # ------------------------------------------------------------ 清理
     def purge(self, now: int) -> dict:
         with self._conn() as conn:
             artifacts = conn.execute("DELETE FROM artifact WHERE expires_at IS NOT NULL AND expires_at<?", (now,)).rowcount
+            conn.execute("DELETE FROM system_event WHERE created_at<?", (now - 7 * 86400_000,))
             events = conn.execute("DELETE FROM relay_event WHERE created_at<? AND (acked_at IS NOT NULL OR pushed_at IS NOT NULL)", (now - 7 * 86400_000,)).rowcount
         return {"artifacts": artifacts, "relay_events": events, "stale_devices": len(self.stale_devices(now))}

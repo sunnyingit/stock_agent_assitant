@@ -22,6 +22,7 @@ class EventType:
     link: Callable[[dict], dict] = lambda p: {}
     required: tuple = ()
     group: str = "other"           # 收件箱里的分组：stock | market | system
+    tone_fn: Callable[[dict], str] | None = None   # 按内容决定语气（例如「成功」是好、「已过期」是警示）
 
 
 REGISTRY: dict[str, EventType] = {}
@@ -118,6 +119,17 @@ def _task_overdue(p):
     return f"定时任务没跑：{p.get('title') or p['task_id']}", f"应该在 {p.get('expected_by', '')} 前完成，现在是「{p.get('state', '')}」。"
 
 
+def _task_completed(p):
+    where = "服务端" if p.get("host") == "server" else "本机"
+    seconds = f"{p['duration_ms'] / 1000:.1f}s" if p.get("duration_ms") is not None else "-"
+    lines = [f"{where} · {p['state_text']} · {p['trigger_text']} · 用时 {seconds}" + (f" · 单元 {p['succeeded']}/{p['jobs']}" if p.get("jobs") else "")]
+    if p.get("summary"):
+        lines.append(p["summary"])
+    if p.get("note"):
+        lines.append(p["note"])
+    return f"定时任务{p['state_text']}：{p.get('title') or p['task_id']}", "\n".join(lines)
+
+
 def _digest(p):
     counts = p.get("counts") or {}
     return f"{p.get('period_label', '摘要')}：{sum(counts.values()) if counts else len(p.get('items') or [])} 条", "\n".join(f"· {item}" for item in (p.get("items") or [])[:20])
@@ -147,6 +159,8 @@ for _spec in (
     EventType("portfolio.checkup_changed", "normal", 3 * DAY, "warn", lambda p: ("持仓体检有变化", p.get("summary", "")), lambda p: {"page": "holdings", "tab": "chk"}, (), "stock"),
     EventType("task.failed", "normal", 3 * DAY, "bad", _task_failed, lambda p: {"page": "sched", "run_id": p.get("run_id", "")}, ("task_id", "dead", "total"), "system"),
     EventType("task.overdue", "urgent", DAY, "bad", _task_overdue, lambda p: {"page": "sched"}, ("task_id",), "system"),
+    EventType("task.completed", "info", 7 * DAY, "good", _task_completed, lambda p: {"page": "sched", "run_id": p.get("run_id", "")}, ("task_id", "state"), "system",
+              tone_fn=lambda p: "good" if p["state"] == "succeeded" else "warn"),
     EventType("digest.summary", "normal", 3 * DAY, "flat", _digest, lambda p: {}, ("period",), "system"),
     EventType("generic.notice", "normal", DAY, "flat", _generic, lambda p: p.get("link") or {}, ("title",), "market"),
 ):

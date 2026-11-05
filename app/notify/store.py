@@ -66,7 +66,7 @@ DEFAULT_SETTINGS = {
     "quiet_hours": {"from": "22:30", "to": "08:00"},
     "digest": {"enabled": False, "times": ["08:35", "21:30"]},
     "collapse_s": 600,
-    "relay": {"enabled": False, "url": "", "device_id": "", "rev": 0, "sub_rev": 0, "cursor": 0, "defs_hash": "", "subs_hash": "", "secrets": {}, "healthy_at": 0},
+    "relay": {"enabled": False, "url": "", "device_id": "", "rev": 0, "sub_rev": 0, "cursor": 0, "sys_cursor": 0, "defs_hash": "", "subs_hash": "", "secrets": {}, "healthy_at": 0},
 }
 
 

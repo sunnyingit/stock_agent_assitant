@@ -74,7 +74,12 @@ class Scheduler:
         if trig["kind"] in ("event", "manual"):
             return 0
         window = triggers.window_ms(trig) or 0
-        horizon = window * 3 if spec.misfire == "skip" else (max(window, spec.catchup_ttl_min * 60_000) if trig["kind"] == "cron" else None)
+        if trig["kind"] in ("daily", "data_ready"):
+            horizon = None                      # 一天一次的任务，错过的都要留记录（最多回看 3 天）
+        elif spec.misfire == "skip":
+            horizon = window * 3
+        else:
+            horizon = max(window, spec.catchup_ttl_min * 60_000) if trig["kind"] == "cron" else None
         missing = [p for p in triggers.candidates(trig, now, self.calendar, horizon_ms=horizon) if self.store.run_by_period(spec.task_id, p.key) is None]
         created = 0
         ttl_ms = spec.catchup_ttl_min * 60_000
@@ -97,8 +102,12 @@ class Scheduler:
                 state, how, note = "expired", "schedule", "错过太久，超过补跑有效期"
             if state == "expired" and period.scheduled_for < installed:
                 continue            # 装上之前的周期，谈不上「错过」，不留记录
-            if self.store.create_run(spec.task_id, period.key, how, period.scheduled_for, state, config, self.code_version, note, now):
+            made = self.store.create_run(spec.task_id, period.key, how, period.scheduled_for, state, config, self.code_version, note, now)
+            if made:
                 created += state == "planned"
+                if state == "expired":
+                    self.store.update_run(made["run_id"], finished_at=now)
+                    self._finished(made["run_id"], spec)
         return created
 
     # ------------------------------------------------------------ 推进：等待 → 展开 → 结束

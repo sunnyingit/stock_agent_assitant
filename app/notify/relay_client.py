@@ -199,3 +199,24 @@ class RelayClient:
         self.save(healthy_at=self.n.clock.now_ms())
         self.n.dispatch()
         return {"events": len(seqs), "created": created}
+
+    # ---- 服务端任务的回执（task.completed / task.failed）：拉回来写进本机收件箱，才看得到服务端的定时任务有没有真的跑
+    def pull_system_events(self) -> dict:
+        if not self.enabled():
+            return {"skipped": "disabled"}
+        conf = self.config()
+        status, body = self._call("GET", f"/v1/system/events?after={conf.get('sys_cursor', 0)}")
+        if status != 200:
+            raise RuntimeError(f"拉取服务端任务回执失败（{status}）")
+        created, last = 0, conf.get("sys_cursor", 0)
+        local_only = [c["channel_id"] for c in self.n.store.channels() if c["type"] in ("desktop", "inapp")]
+        for item in body.get("items", []):
+            event = item["event"]
+            made = self.n.publish(event["type"], {"kind": "system", "id": event["payload"]["task_id"]}, event["payload"], event["dedupe_key"],
+                                  occurred_at=event.get("occurred_at"), severity=event.get("severity"),
+                                  source={"host": "server", "task_id": event["payload"]["task_id"]}, routing={"channels": local_only}, dispatch=False)
+            created += made["status"] == "created"
+            last = max(last, item["seq"])
+        if last != conf.get("sys_cursor", 0):
+            self.save(sys_cursor=last)
+        return {"events": len(body.get("items", [])), "created": created}

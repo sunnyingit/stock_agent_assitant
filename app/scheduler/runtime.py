@@ -94,7 +94,7 @@ def current(create: bool = True) -> Runtime | None:
             store = SchedStore(os.environ.get("SCHED_DB") or None)
             sched = Scheduler(store, default_registry, TradingCalendar(), profile="client", code_version=code_version())
             from app.scheduler import notify_hook
-            sched.listeners.append(notify_hook.on_run_finished)
+            sched.listeners.append(lambda run, spec: notify_hook.on_run_finished(run, spec, sched))
             _runtime = Runtime(sched)
         return _runtime
 
