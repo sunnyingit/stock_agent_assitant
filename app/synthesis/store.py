@@ -161,6 +161,10 @@ class Store:
         with self._conn() as conn:
             return self._row(conn.execute(sql, args).fetchone())
 
+    def run(self, run_id: int) -> dict | None:
+        with self._conn() as conn:
+            return self._row(conn.execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone())
+
     def by_hash(self, ts_code: str, facts_hash: str, session: str, trade_date: str) -> dict | None:
         """同一个交易日内，事实没变才复用；换了一天就要重新存一条，否则每日判断会出现空洞。"""
         with self._conn() as conn:
@@ -191,6 +195,16 @@ class Store:
                 "text": (data.get("shown") or {}).get("change_text", ""),
             }
         return [by_date[key] for key in sorted(by_date)]
+
+    def latest_per_stock(self, limit: int = 200) -> list[dict]:
+        """每只股票最新的一次运行，新的在前。想买页「今天判断偏多的」从这里挑。"""
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT r.* FROM runs r JOIN (SELECT ts_code, MAX(id) AS mid FROM runs GROUP BY ts_code) m ON r.id=m.mid"
+                " ORDER BY r.id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            return [self._row(row) for row in rows]
 
     def recent(self, ts_code: str, limit: int = 10) -> list[dict]:
         with self._conn() as conn:

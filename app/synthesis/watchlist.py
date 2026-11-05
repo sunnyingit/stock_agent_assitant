@@ -117,14 +117,5 @@ def build(
             },
             "_order": (_RANK[subtitle["kind"]], order),
         })
-    try:
-        from app.notify.price import check_prices
-        check_prices(
-            store,
-            {row["ts_code"]: quotes.get(row["ts_code"]) or {} for row in rows},
-            {row["ts_code"]: row["name"] for row in rows},
-        )
-    except Exception:
-        pass
     items.sort(key=lambda item: item.pop("_order"))
     return items

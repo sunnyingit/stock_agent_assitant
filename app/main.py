@@ -4,6 +4,9 @@ import os
 
 from flask import Flask
 
+from app.api.holdings import bp as holdings_bp
+from app.notify.api import bp as notify_bp
+from app.scheduler.api import bp as sched_bp
 from app.api.stocks import bp
 from app.api.v1 import bp as v1_bp
 from app.flow_review.api import bp as flow_review_bp
@@ -44,6 +47,7 @@ _ROUTES = (
     ("看空流式", "/api/v1/stocks/{ts_code}/bear/stream", ""),
     ("看空追问", "/api/v1/stocks/{ts_code}/bear/reply", "POST question"),
     ("自选诊断", "/api/v1/watchlist", ""),
+    ("持仓", "/api/v1/holdings/summary", ""),
     ("资金面体检", "/api/v1/stocks/{ts_code}/dimensions/volume_flow/review", ""),
     ("基本面体检", "/api/v1/stocks/{ts_code}/dimensions/fundamental/review", ""),
     ("财报解读", "/api/v1/stocks/{ts_code}/dimensions/finance/review", ""),
@@ -73,6 +77,9 @@ def create_app() -> Flask:
 
     app.register_blueprint(bp)
     app.register_blueprint(v1_bp)
+    app.register_blueprint(holdings_bp)
+    app.register_blueprint(sched_bp)
+    app.register_blueprint(notify_bp)
     app.register_blueprint(synthesis_bp)
     app.register_blueprint(flow_review_bp)
     app.register_blueprint(fundamental_review_bp)
@@ -88,9 +95,12 @@ def main() -> None:
     from app.synthesis import worker
 
     worker.start()
-    from app.services import market_job
+    from app.scheduler import runtime
 
-    market_job.start()   # 交易日 08:30 / 15:35 的市场简报和快照
+    runtime.start()   # 定时任务：交易日 08:30 盘前简报、15:35 收盘复盘等，见 app/scheduler/tasks
+    from app.services import market_page
+
+    market_page.warm()   # 有昨天的结果就先用，今天的在后台算
     attach.enable()   # 资金流、基本面详情里的 AI 体检在后台生成
     print(f"股票查询服务: http://localhost:{port}")
     for item in _ROUTES:

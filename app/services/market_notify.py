@@ -71,9 +71,9 @@ def record(summary: dict, parts: dict, store: MarketStore | None = None, now: da
 
 def _push(key: str, title: str, text: str) -> None:
     try:
-        from app.notify.emit import emit
+        from app.notify import pipeline
 
-        emit(key, title, text)
+        pipeline.current().publish_text(key, title, text, link={"page": "market"})
     except Exception:
         pass
 
