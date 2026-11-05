@@ -16,6 +16,11 @@ class ApiTest(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         self.addCleanup(holdings_store.set_store, None)
+        from app.notify import pipeline
+        from app.notify.pipeline import Notifier
+        from app.notify.store import NotifyStore
+        pipeline.install(Notifier(NotifyStore(":memory:")))
+        self.addCleanup(pipeline.install, None)
         self.client = create_app().test_client()
 
     def post(self, url, body):

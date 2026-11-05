@@ -1017,7 +1017,7 @@ JSON 行，必带 `run_id`、`job_id`、`task_id`、`unit_key`、`attempt`、`st
 - 调度 tick 15 秒（设计 30 秒）；`/sched/stream` 是轮询式 SSE；`/sched/logs`（JSON 行日志文件）和指标表没做；配置变更只写日志，没产出 `system.config_changed` 事件。
 - `stock.nightly` 仍在本机重新取数；服务端的 `stock.facts` 已能生产和按需生成，但客户端综合判断还没改成从产物起步（需要把 `load_table` 拆成「取数」和「装表」两段）。`llm_call` 表和统一的 LLM 网关没做，预算按「分析次数」计，不是 token。
 - 规则评估器只实现了 `price_alert`、`price_move(day_pct)`、`announcement`、`judgment_change`；`price_move(speed)`、`limit_hit`、`price_extreme`、`reason_status`、`wish_condition`、`flow_streak`、`calendar_upcoming`、`market_change`、`outcome_settled` 的事件类型已注册、接口可建规则，评估器还没写。`news.item`、`news.impact_assessed` 同理。
-- 页面里的通知抽屉（市场页、持仓页）还是各自拼的，没改成读 `/notify/inbox`；还没有调度和通知设置的页面。
+- 市场页、持仓页的通知抽屉已经并入收件箱（`app/notify/pageview.py`）：页面自己算的条目照旧，收件箱的新通知并进来、已读同步；持仓页里和收件箱重复的「到价」「改判」以收件箱为准。还没有调度和通知设置的页面。
 - Electron：没有进程监督心跳、`powerSaveBlocker`；安装包里还没有打进股票后端（开发模式从相邻目录拉起）。
 - 服务端：渠道密钥的主密钥来自 `RELAY_MASTER_KEY`（没配时开发环境落盘 `data/relay.key`）；设备注册没有限流和滥用防护；服务端用 SQLite，上线前换库。
 - 第 14 节的待定问题（数据授权、合规、账号体系）仍然是上线前必须确认的事项。

@@ -487,10 +487,11 @@ def market_intraday():
 
 @bp.route("/market/notifications", methods=["GET"])
 def market_notifications():
+    from app.notify import pageview, pipeline
     from app.services.market_page import notify_payload
 
     try:
-        return jsonify(notify_payload())
+        return jsonify(notify_payload(inbox=pageview.for_market(pipeline.current().store)))
     except Exception as exc:
         log.exception("market notifications failed")
         return jsonify({"error": str(exc)}), 500
@@ -500,10 +501,15 @@ def market_notifications():
 def market_notifications_read():
     from app.services.market_store import get_store
 
+    from app.notify import pageview, pipeline
+
     body = request.get_json(silent=True) or {}
     ids = body.get("ids")
-    get_store().mark_read(None if ids is None else [int(item) for item in ids])
-    return jsonify({"status": "ok", "unread": get_store().unread()})
+    notifier = pipeline.current()
+    own = None if ids is None else [int(item) for item in ids if not str(item).startswith(pageview.PREFIX)]
+    get_store().mark_read(own)
+    pageview.mark_read(notifier.store, ids, pageview.for_market(notifier.store), notifier.clock.now_ms())
+    return jsonify({"status": "ok", "unread": get_store().unread() + sum(1 for i in pageview.for_market(notifier.store) if i["read_at"] is None)})
 
 
 @bp.route("/market/settings", methods=["GET", "PUT"])

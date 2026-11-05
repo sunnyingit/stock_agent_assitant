@@ -90,7 +90,7 @@ def brief(session: str, summary: dict, view: dict) -> tuple[str, str]:
     return ("市场 · 盘前简报" if session == "pre" else "市场 · 收盘复盘"), "\n".join(lines)
 
 
-def notifications(store: MarketStore | None = None, upcoming: list[dict] | None = None, today: date | None = None) -> dict:
+def notifications(store: MarketStore | None = None, upcoming: list[dict] | None = None, today: date | None = None, inbox: list[dict] | None = None) -> dict:
     store = store or get_store()
     today = today or datetime.now(_ZONE).date()
     groups: dict[str, list[dict]] = {"今天": [], "昨天": [], "更早": []}
@@ -101,8 +101,19 @@ def notifications(store: MarketStore | None = None, upcoming: list[dict] | None 
             "id": row["id"], "kind": "判断变化", "title": row["title"], "text": row["text"], "tab": row["tab"], "tone": row["tone"],
             "time": datetime.fromtimestamp(row["created_at"], _ZONE).strftime("%H:%M" if group == "今天" else "%m-%d %H:%M"), "unread": not row["read"],
         })
+    unread = store.unread()
+    if inbox:                         # 收件箱里的新通知（简报、任务出错…）并进同样的分组
+        from app.notify import pageview
+
+        for raw in inbox:
+            v = pageview.view(raw, today)
+            groups[v["group"]].append({"id": v["id"], "kind": "系统" if v["kind"] == "system" else "简报", "title": v["title"], "text": v["text"], "tab": v["tab"],
+                                       "tone": v["tone"], "time": v["time"], "unread": v["unread"]})
+            unread += v["unread"]
+        for items in groups.values():
+            items.sort(key=lambda item: item["time"], reverse=True)
     return {
-        "unread": store.unread(),
+        "unread": unread,
         "groups": [{"title": title, "items": items} for title, items in groups.items() if items],
         "upcoming": upcoming or [],
         "channel": _channel(),

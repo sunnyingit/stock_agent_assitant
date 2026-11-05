@@ -1048,7 +1048,7 @@ def history_view() -> list[dict]:
     return market_changes.history(get_store().snapshots())
 
 
-def notify_payload(today: date | None = None) -> dict:
+def notify_payload(today: date | None = None, inbox: list[dict] | None = None) -> dict:
     day = today or datetime.now(_ZONE).date()
     parts = bundle(day)
     card = _calendar_card(parts, parts["watch"], day)
@@ -1056,7 +1056,7 @@ def notify_payload(today: date | None = None) -> dict:
         {"tag": "提醒", "title": row["text"], "when": row["date"][5:], "weekday": row["weekday"], "tab": "cal"}
         for row in card["rows"] if row["tag"] == "涉及自选" and row["date"] >= day.isoformat()
     ]
-    return market_notify.notifications(upcoming=upcoming, today=day)
+    return market_notify.notifications(upcoming=upcoming, today=day, inbox=inbox)
 
 
 def summarize(parts: dict, day: date) -> dict:

@@ -36,8 +36,9 @@ def _day_text(day: str) -> str:
 class Context:
     """一次请求里共用的状态：流水、持仓、现价、每只票的 AI 和板块，算过一次就留着。"""
 
-    def __init__(self, store: HoldingsStore, data, today: date | None = None):
+    def __init__(self, store: HoldingsStore, data, today: date | None = None, inbox=None):
         self.store, self.data = store, data
+        self.inbox = inbox            # 通知收件箱（NotifyStore）；没传就不并入，测试里默认如此
         self.today = today or date.today()
         self._memo: dict = {}
 
@@ -580,14 +581,47 @@ def notifications(ctx: Context) -> dict:
     seen = set(ctx.store.get("notif_seen", []))
     for item in items:
         item["unread"] = item["id"] not in seen
-    order = {"今天": 0, "即将发生": 1, "昨天": 2}
+    items = _merge_inbox(ctx, items)
+    order = {"今天": 0, "即将发生": 1, "昨天": 2, "更早": 3}
     items.sort(key=lambda item: (order[item["group"]], item["day"] if item["group"] == "即将发生" else ""))
     return {"items": items, "unread": sum(1 for item in items if item["unread"])}
 
 
+def _inbox_rows(ctx: Context) -> list[dict]:
+    if ctx.inbox is None:
+        return []
+    from app.notify import pageview
+
+    return pageview.for_holdings(ctx.inbox, set(ctx.names))
+
+
+def _merge_inbox(ctx: Context, items: list[dict]) -> list[dict]:
+    """收件箱的通知并进来。页面自己算的「到价」「改判」和收件箱里对应的事件是同一件事，以收件箱为准，不显示两遍。"""
+    rows = _inbox_rows(ctx)
+    if not rows:
+        return items
+    from app.notify import pageview
+
+    fired = {str(r["payload"].get("alert_id")) for r in rows if r["type"] == "price.alert.fired"}
+    changed = {(r["subject_id"], r["payload"].get("trade_date")) for r in rows if r["type"] == "judgment.changed"}
+    kept = []
+    for item in items:
+        if item["kind"] == "alert" and item["id"].split(":")[1] in fired:
+            continue
+        if item["kind"] == "change" and (item["code"], item["id"].rsplit(":", 1)[-1]) in changed:
+            continue
+        kept.append(item)
+    return kept + [pageview.view(r, ctx.today) for r in rows]
+
+
 def mark_read(ctx: Context) -> int:
     data = notifications(ctx)
-    ctx.store.set("notif_seen", sorted({item["id"] for item in data["items"]} | set(ctx.store.get("notif_seen", [])))[-300:])
+    own = [item["id"] for item in data["items"] if not item["id"].startswith("inbox:")]
+    ctx.store.set("notif_seen", sorted(set(own) | set(ctx.store.get("notif_seen", [])))[-300:])
+    if ctx.inbox is not None:
+        from app.notify import pageview
+
+        pageview.mark_read(ctx.inbox, None, _inbox_rows(ctx), int(datetime.now().timestamp() * 1000))
     return len(data["items"])
 
 

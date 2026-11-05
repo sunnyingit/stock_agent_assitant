@@ -16,7 +16,9 @@ TABS = ("buy", "now", "chk", "rev")
 
 
 def _ctx() -> page.Context:
-    return page.Context(get_store(), Data(date.today()), date.today())
+    from app.notify import pipeline
+
+    return page.Context(get_store(), Data(date.today()), date.today(), inbox=pipeline.current().store)
 
 
 def _body() -> dict:
