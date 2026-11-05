@@ -152,3 +152,46 @@ class ChiefDetailTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FlowWindowTest(unittest.TestCase):
+    def rows(self, count):
+        return [{"trade_date": f"2026{(i // 28) + 1:02d}{(i % 28) + 1:02d}", "net_amount": 1e6 * (i + 1), "buy_elg_amount": 5e5, "buy_lg_amount": 5e5,
+                 "buy_md_amount": -4e5, "buy_sm_amount": -6e5} for i in range(count)]
+
+    def test_dc_shows_every_time_scale_it_has_data_for(self):
+        from app.services.flow_reply import format_dc
+        ids = [f["id"] for f in format_dc(self.rows(100))["facts"]]
+        self.assertEqual(ids, ["fl.dc_1d", "fl.dc_3d", "fl.dc_5d", "fl.dc_10d", "fl.dc_20d", "fl.dc_60d", "fl.dc_daily"])
+        short = [f["id"] for f in format_dc(self.rows(12))["facts"]]
+        self.assertEqual(short, ["fl.dc_1d", "fl.dc_3d", "fl.dc_5d", "fl.dc_10d", "fl.dc_daily"])       # 历史不够的窗口不写
+
+    def test_an_asked_window_is_added_with_its_daily_detail(self):
+        from app.services.flow_reply import format_dc
+        out = format_dc(self.rows(100), 45)
+        self.assertIn("fl.dc_45d", [f["id"] for f in out["facts"]])
+        daily = next(f for f in out["facts"] if f["id"] == "fl.dc_daily")
+        self.assertTrue(daily["text"].startswith("近 45 日逐日净流入"))
+        self.assertEqual(daily["text"].split("：", 1)[1].count("，") + 1, 45)
+
+    def test_days_are_clamped_and_bad_values_fall_back_to_the_default(self):
+        from app.services.flow_reply import MAX_DAYS, clamp_days
+        self.assertEqual((clamp_days("30"), clamp_days(9999), clamp_days(0), clamp_days("x"), clamp_days(None)), (30, MAX_DAYS, None, None, None))
+
+    def test_bar_gives_cumulative_moves_for_each_scale(self):
+        from app.services.flow_reply import format_bar
+        bars = [{"trade_date": f"2026{(i // 28) + 1:02d}{(i % 28) + 1:02d}", "close": 10 + i, "pct_chg": 1.0, "vol": 100} for i in range(70)]
+        text = next(f["text"] for f in format_bar(bars)["facts"] if f["id"] == "fl.bar_windows")
+        for scale in ("近 3 日", "近 10 日", "近 60 日"):
+            self.assertIn(scale, text)
+
+    def test_the_fact_sheet_has_10_and_60_day_flow_and_one_day_strength_when_history_allows(self):
+        from synthesis.fixtures import make_aligned, make_stock, volume_payload
+        from app.flow_review import facts as sheet
+        from app.synthesis.calendar import now_cn
+        aligned = make_aligned()
+        payload = volume_payload(aligned)
+        facts, d = sheet.build(payload, aligned, {"missing": []}, make_stock(), now_cn())
+        ids = {fact.id for fact in facts}
+        for wanted in ("fr.ret_10d", "fr.ret_60d", "fr.big_net_10d", "fr.net_rate_60d", "fr.vs_self_10d"):
+            self.assertIn(wanted, ids)

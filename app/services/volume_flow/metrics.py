@@ -52,7 +52,7 @@ def compute(aligned: dict, window: int) -> dict:
             {"days": days, **_relative(bars[-days:], flow, sector, index, aligned)}
             for days in REL_WINDOWS
         ],
-        "windows": [_window_row(bars, flow, days) for days in (3, 5, 10, 20)],
+        "windows": [_window_row(bars, flow, days) for days in (1, 3, 5, 10, 20, 60)],
         "signals": _signals(bars, concentration, elg, big, aligned.get("margin_percentile")),
     }
 

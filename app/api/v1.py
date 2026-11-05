@@ -289,7 +289,7 @@ def volume_flow_reply(ts_code: str):
     if stock is None:
         return jsonify({"error": f"未找到股票: {ts_code}"}), 404
     try:
-        return jsonify(build(stock, part))
+        return jsonify(build(stock, part, request.args.get("days")))
     except Exception as exc:
         log.exception("volume_flow reply failed: %s", stock.ts_code)
         return jsonify({"error": str(exc)}), 500

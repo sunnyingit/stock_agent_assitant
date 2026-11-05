@@ -21,7 +21,7 @@ TITLES = {key: title for key, title, _ in QUESTIONS}
 
 # 每个问题该看的事实：给模型一张"看哪几条"的索引，减少漏看和乱引用
 RELEVANT = {
-    "q1": ["fr.vs_self_5d", "fr.vs_self_3d", "fr.vs_self_20d", "fr.ret_5d", "fr.ret_3d", "fr.ret_20d", "fr.big_net_5d", "fr.big_net_20d", "fr.net_rate_5d", "fr.net_rate_3d", "fr.net_rate_20d", "fr.pattern", "fr.high_vol_down", "fr.close_pos"],
+    "q1": ["fr.vs_self_5d", "fr.vs_self_1d", "fr.vs_self_3d", "fr.vs_self_10d", "fr.vs_self_20d", "fr.ret_5d", "fr.ret_3d", "fr.ret_10d", "fr.ret_20d", "fr.ret_60d", "fr.big_net_5d", "fr.big_net_10d", "fr.big_net_60d", "fr.net_rate_10d", "fr.net_rate_60d", "fr.big_net_20d", "fr.net_rate_5d", "fr.net_rate_3d", "fr.net_rate_20d", "fr.pattern", "fr.high_vol_down", "fr.close_pos"],
     "q2": ["fr.elg_net_5d", "fr.lg_net_5d", "fr.md_net_5d", "fr.sm_net_5d", "fr.concentration", "fr.elg_net_20d", "fr.lg_net_20d"],
     "q3": ["fr.vs_self_3d", "fr.vs_self_5d", "fr.vs_self_10d", "fr.vs_self_20d", "fr.streak", "fr.in_out_days", "fr.trend", "fr.net_rate_5d", "fr.net_rate_3d", "fr.net_rate_20d", "fr.last_day_net", "fr.last_day_z", "fr.last_share_5d"],
     "q4": ["fr.vs_self_5d", "fr.vs_self_20d", "fr.net_rate_5d", "fr.net_rate_3d", "fr.net_rate_20d", "fr.net_to_circ", "fr.circ_mv", "fr.flow_pctile", "fr.last_day_rate", "fr.last_day_z"],

@@ -41,7 +41,10 @@ META = {
     "fr.lg_net_20d": ("资金分档", "yi"), "fr.md_net_20d": ("资金分档", "yi"), "fr.sm_net_20d": ("资金分档", "yi"),
     "fr.net_rate_20d": ("资金分档", "pct"), "fr.net_rate_5d": ("资金分档", "pct"), "fr.net_rate_3d": ("资金分档", "pct"),
     "fr.vs_self_5d": ("持续性与强度", "sigma"), "fr.vs_self_3d": ("持续性与强度", "sigma"), "fr.vs_self_10d": ("持续性与强度", "sigma"),
-    "fr.vs_self_20d": ("持续性与强度", "sigma"),
+    "fr.vs_self_20d": ("持续性与强度", "sigma"), "fr.vs_self_1d": ("持续性与强度", "sigma"),
+    "fr.ret_10d": ("价格与量能", "pct"), "fr.ret_60d": ("价格与量能", "pct"),
+    "fr.big_net_10d": ("资金分档", "yi"), "fr.big_net_60d": ("资金分档", "yi"),
+    "fr.net_rate_10d": ("资金分档", "pct"), "fr.net_rate_60d": ("资金分档", "pct"),
     "fr.concentration": ("资金分档", "share"),
     "fr.circ_mv": ("资金分档", "yi_abs"), "fr.net_to_circ": ("资金分档", "pct"),
     "fr.last_day_net": ("持续性与强度", "yi"), "fr.last_day_rate": ("持续性与强度", "pct"),
@@ -225,12 +228,29 @@ def build(payload: dict, aligned: dict, extra: dict, stock, now) -> tuple[FactSh
     # 和这只股票自己过去同长度窗口比：大单净流出本来就是常态（约六成窗口），绝对净额的正负不能直接当信号
     from app.services.volume_flow.rules import STATE_TEXT, flow_state
 
-    for days in (3, 5, 10, 20):
+    for days in (1, 3, 5, 10, 20):
         z = (win_rows.get(days) or {}).get("net_rate_z")
         state = flow_state(z)
         if state:
             d[f"vs_self_{days}d"] = {"z": z, "state": state}
             _put(facts, f"fr.vs_self_{days}d", f"近 {days} 日大资金净流入率和这只股票自己平时比", z, f"{STATE_TEXT[state]}（{z:+.1f} 个标准差）")
+    # 更多时间尺度：10 日（短线趋势）、60 日（中期）。窗口放不下（历史不够）就不写，不拿短窗口冒充
+    for n in (10, 60):
+        if len(bars) < n:
+            continue
+        chosen = bars[-n:]
+        *_ignored, big_n, _retail_n, rate_n, covered_n = _flow_window(chosen, f"{n}d")
+        if covered_n < max(3, n * 0.8):
+            continue
+        ret_n = _compound([row.get("chg") for row in chosen])
+        d[f"ret_{n}d"], d[f"net_rate_{n}d"] = ret_n, rate_n
+        if ret_n is not None:
+            _put(facts, f"fr.ret_{n}d", f"近 {n} 日涨跌幅", ret_n, _pct(ret_n))
+        if big_n is not None:
+            d[f"big_net_{n}d"] = big_n / 1e8
+            _put(facts, f"fr.big_net_{n}d", f"近 {n} 日大资金（超大单加大单）净额", big_n / 1e8, _yi(big_n / 1e8))
+        if rate_n is not None:
+            _put(facts, f"fr.net_rate_{n}d", f"近 {n} 日大资金净额占成交额", rate_n, _pct(rate_n))
     circ = (extra.get("circ") or {}).get("circ_mv_yi")
     if circ:
         _put(facts, "fr.circ_mv", "流通市值", circ, f"{circ:.0f} 亿元")
