@@ -6,6 +6,7 @@ etf_share_size、rt_etf_k、limit_step、yc_cb 没有权限，不在这里。
 
 from __future__ import annotations
 
+import math
 import threading
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -80,36 +81,43 @@ def build(part: str, today: date | None = None) -> dict:
     }[part](day)
 
 
-def judge_turnover(ratio) -> str:
-    if ratio is None:
-        return "没有"
-    if ratio < -0.05:
-        return "冷清"
-    if ratio > 0.05:
-        return "活跃"
-    return "平时"
+# 三个模块共用 Modified Z-Score。参数只用日度序列，不用重叠滚动窗口。
+# Mz = 0.6745 × (当前值 − 中位数) / MAD，等于 (当前值 − 中位数) / (1.4826 × MAD)。
+BASELINE_DAYS = 60
+MZ_K = 0.6745
+TURN_HOT, TURN_COLD = 1.5, -1.0
+TURN_LOG_FLOOR = math.log(1.05)     # 对数成交额至少偏离 5% 才认信号
+TURN_FALLBACK = 0.10                 # 基线不足时退回 ±10%
+ETF_Z = 1.5
+ETF_FLOOR = 0.005                    # 5 日累计份额变化至少 0.5%
+ETF_FALLBACK = 0.01                  # 基线不足时，5 日 >+1% / <−1%
+SPLIT_RATE = 0.5                     # 单日份额变动超过一半，当成拆分合并，不进基线和信号
+MARGIN_UP, MARGIN_DOWN = 1.5, -1.5
+MARGIN_SOFT, MARGIN_FAST = -1.0, -2.0
 
 
-def judge_etf(share_ratio, buy_days: int) -> str:
-    if share_ratio is None:
-        return "没有"
-    if share_ratio >= 0.01 and buy_days >= 4:
-        return "净流入"
-    if share_ratio <= -0.01:
-        return "净流出"
-    return "基本没变"
+def _median(values: list[float]) -> float:
+    ordered = sorted(values)
+    mid = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[mid]
+    return (ordered[mid - 1] + ordered[mid]) / 2
 
 
-def judge_margin(ratio_4w) -> str:
-    if ratio_4w is None:
-        return "没有"
-    if ratio_4w < -0.05:
-        return "加速下降"
-    if ratio_4w < -0.02:
-        return "在降"
-    if ratio_4w > 0.02:
-        return "在升"
-    return "持平"
+def _baseline(daily: list[float]) -> tuple[float | None, float | None, bool]:
+    """最近 60 个日度点的中位数和 MAD。样本不足或 MAD 为 0 时，基线不够。"""
+    if len(daily) < BASELINE_DAYS:
+        return (None, None, False)
+    sample = daily[-BASELINE_DAYS:]
+    med = _median(sample)
+    mad = _median([abs(value - med) for value in sample])
+    return med, mad, mad > 0
+
+
+def modified_z(value: float | None, center: float | None, mad: float | None) -> float | None:
+    if value is None or center is None or not mad:
+        return None
+    return MZ_K * (value - center) / mad
 
 
 def _window(windows: dict, n: int):
@@ -120,44 +128,101 @@ def _window(windows: dict, n: int):
     return windows.get(str(n))
 
 
-def judge_turnover_spans(windows: dict) -> str:
-    """1 / 3 / 5 / 30 日各按 ±5% 对 60 日均打一档。三档冷清才叫冷清，三档活跃才叫活跃。"""
-    votes = [judge_turnover(_window(windows, n)) for n in (1, 3, 5, 30)]
-    votes = [item for item in votes if item != "没有"]
-    if not votes:
+def judge_turnover_votes(sides: dict, last_two: tuple[str, str]) -> str:
+    """1/3/5/30 日各有一档。30 日要和另外至少一档同向，最近两日也要同向。单独一天不改档。"""
+    known = [sides.get(n) for n in (1, 3, 5, 30)]
+    if not any(item and item != "没有" for item in known):
         return "没有"
-    if sum(item == "冷清" for item in votes) >= 3:
+
+    def agree(word: str) -> bool:
+        if sides.get(30) != word:
+            return False
+        if word not in (sides.get(1), sides.get(3), sides.get(5)):
+            return False
+        return last_two[0] == word and last_two[1] == word
+
+    if agree("冷清"):
         return "冷清"
-    if sum(item == "活跃" for item in votes) >= 3:
+    if agree("活跃"):
         return "活跃"
     return "平时"
 
 
-def judge_etf_spans(windows: dict, buy_days: int) -> str:
-    """净流入要 5 日超过 +1% 且至少 4 天在买，同时 30 日、60 日也都超过 +1%。净流出要 5 日和 30 日都低于 −1%。"""
-    day5, day30, day60 = _window(windows, 5), _window(windows, 30), _window(windows, 60)
-    if day5 is None:
+def judge_etf_signal(mz5, mz30, mz60, cum5, sell_days: int, outflow_streak: bool, enough: bool) -> str:
+    """净流入看 5/30/60 日偏离，且这 5 天里没有连续两天净流出。净流出还要 5 天里至少 3 天在卖。"""
+    if cum5 is None:
         return "没有"
-    longer_in = (day30 is None or day30 >= 0.01) and (day60 is None or day60 >= 0.01)
-    if day5 >= 0.01 and buy_days >= 4 and longer_in:
+    if not enough:
+        if cum5 > ETF_FALLBACK and not outflow_streak:
+            return "净流入"
+        if cum5 < -ETF_FALLBACK and sell_days >= 3:
+            return "净流出"
+        return "基本没变"
+    if abs(cum5) < ETF_FLOOR:
+        return "基本没变"
+    longer_in = (mz30 is None or mz30 > ETF_Z) and (mz60 is None or mz60 > ETF_Z)
+    if mz5 is not None and mz5 > ETF_Z and longer_in and not outflow_streak:
         return "净流入"
-    if day5 <= -0.01 and (day30 is None or day30 <= -0.01):
+    longer_out = (mz30 is None or mz30 < -ETF_Z) and (mz60 is None or mz60 < -ETF_Z)
+    if mz5 is not None and mz5 < -ETF_Z and sell_days >= 3 and longer_out:
         return "净流出"
     return "基本没变"
 
 
-def judge_margin_spans(windows: dict) -> str:
-    """加速下降要 30 日和 60 日都低于 −5%。在降、在升看 30 日，60 日有数时在升还要 60 日不降。"""
-    day30, day60 = _window(windows, 30), _window(windows, 60)
-    if day30 is None:
-        return "没有"
-    if day30 < -0.05 and (day60 is None or day60 < -0.05):
+def judge_margin_signal(mz5, mz30, mz60, enough: bool) -> str:
+    """5 日是主触发。样本不足时不判升也不判降。30 日没有数时可以判升/降，但不标加速下降。"""
+    if not enough or mz5 is None:
+        return "持平"
+    rising_30 = mz30 is None or mz30 > MARGIN_SOFT
+    if mz5 < MARGIN_FAST and mz30 is not None and mz30 < MARGIN_SOFT:
         return "加速下降"
-    if day30 < -0.02:
+    if mz5 < MARGIN_DOWN or (mz5 < MARGIN_SOFT and mz30 is not None and mz30 < MARGIN_DOWN):
         return "在降"
-    if day30 > 0.02 and (day60 is None or day60 > 0):
+    if mz5 > MARGIN_UP and rising_30:
         return "在升"
     return "持平"
+
+
+def _turn_side(mean_log: float | None, med: float | None, mad: float | None, enough: bool, level_ratio: float | None) -> str:
+    if mean_log is None:
+        return "没有"
+    if not enough:
+        if level_ratio is None:
+            return "没有"
+        if level_ratio <= -TURN_FALLBACK:
+            return "冷清"
+        if level_ratio >= TURN_FALLBACK:
+            return "活跃"
+        return "平时"
+    if abs(mean_log - med) < TURN_LOG_FLOOR:
+        return "平时"
+    score = modified_z(mean_log, med, mad)
+    if score is None:
+        return "平时"
+    if score > TURN_HOT:
+        return "活跃"
+    if score < TURN_COLD:
+        return "冷清"
+    return "平时"
+
+
+def _compound(rates: list[float]) -> float:
+    value = 1.0
+    for rate in rates:
+        value *= 1 + rate
+    return value - 1
+
+
+def _rate_z(rates: list[float], n: int) -> tuple[float | None, float | None, bool]:
+    """窗口累计变化，对照窗口之前 60 个日度变化率。n 日累计的波动按 √n 放大，避免用重叠窗口估波动。"""
+    if len(rates) < n:
+        return None, None, False
+    cum = _compound(rates[-n:])
+    prior = rates[-n - BASELINE_DAYS:-n]
+    med, mad, enough = _baseline(prior)
+    if not enough or med is None or not mad:
+        return cum, None, False
+    return cum, modified_z(cum, n * med, mad * math.sqrt(n)), True
 
 
 SPANS = (1, 3, 5, 30, 60)
@@ -171,11 +236,150 @@ def _ago(days: list, n: int):
 
 
 def judge_pulse(turnover: str, etf: str, margin: str) -> str:
+    """宽基定方向，成交定冷热，两融定退潮。成交平时且两融加速下降时，净流入也不算在进。"""
+    if etf == "净流入" and turnover == "平时" and margin == "加速下降":
+        return "观望"
     if etf == "净流入" and turnover != "冷清":
         return "在进"
     if turnover == "冷清" and margin in ("在降", "加速下降"):
         return "偏弱"
     return "观望"
+
+
+def _one_log_side(point: float, prior: list[float]) -> str:
+    med, mad, enough = _baseline(prior)
+    if enough:
+        return _turn_side(point, med, mad, True, None)
+    if not prior:
+        return "没有"
+    center = _median(prior)
+    return _turn_side(point, center, None, False, math.exp(point - center) - 1)
+
+
+def _turnover_sides(logs: list[float]) -> tuple[dict, dict, bool]:
+    sides, scores = {}, {}
+    short = len(logs) < BASELINE_DAYS + 30
+    for n in (1, 3, 5, 30):
+        if len(logs) <= n:
+            sides[n] = "没有"
+            scores[n] = None
+            short = True
+            continue
+        window = logs[-n:]
+        mean_log = sum(window) / len(window)
+        prior = logs[:-n]
+        med, mad, enough = _baseline(prior)
+        if not enough:
+            short = True
+            center = _median(prior) if prior else None
+            ratio = None if center is None else math.exp(mean_log - center) - 1
+            sides[n] = _turn_side(mean_log, center, None, False, ratio)
+            scores[n] = None
+        else:
+            sides[n] = _turn_side(mean_log, med, mad, True, None)
+            scores[n] = modified_z(mean_log, med, mad)
+    return sides, scores, short
+
+
+def _prior_day_side(logs: list[float]) -> str:
+    if len(logs) < 2:
+        return "没有"
+    return _one_log_side(logs[-2], logs[:-2])
+
+
+def _share_rates(rows: list[dict]) -> list[float]:
+    ordered = sorted([row for row in rows if _num(row.get("fd_share")) is not None], key=lambda row: _ymd(row.get("trade_date")))
+    rates = []
+    for prev, row in zip(ordered, ordered[1:]):
+        if _day_gap(_ymd(prev.get("trade_date")), _ymd(row.get("trade_date"))) > 4:
+            continue
+        base = _num(prev.get("fd_share")) or 0
+        if base <= 0:
+            continue
+        rate = ((_num(row.get("fd_share")) or 0) - base) / base
+        if abs(rate) > SPLIT_RATE:
+            continue
+        rates.append(rate)
+    return rates
+
+
+def _judge_broad_etf(shares: dict[str, list[dict]], fallback_cum: float | None = None) -> dict:
+    """每只 ETF 用自己近 60 天的日度份额变化率估常态，篮子取各只偏离的中位数。"""
+    books = [rates for code, _name, _group in ETF_BOOK if len(rates := _share_rates(shares.get(code) or [])) >= 5]
+    if not books:
+        label = judge_etf_signal(None, None, None, fallback_cum, 0, False, False)
+        return {"label": label, "votes": [5] if label in ("净流入", "净流出") else [], "baseline": "不足", "mz": {}}
+    scores = {1: [], 3: [], 5: [], 30: [], 60: []}
+    cums = []
+    ready = 0
+    for rates in books:
+        cum5, mz5, ok5 = _rate_z(rates, 5)
+        if cum5 is not None:
+            cums.append(cum5)
+        if ok5 and mz5 is not None:
+            ready += 1
+            scores[5].append(mz5)
+        for n in (1, 3, 30, 60):
+            _cum, mz, ok = _rate_z(rates, n)
+            if ok and mz is not None:
+                scores[n].append(mz)
+    slots = []
+    for offset in range(5, 0, -1):
+        day_rates = [rates[-offset] for rates in books if len(rates) >= offset]
+        slots.append(_median(day_rates) if day_rates else 0.0)
+    sell_days = sum(1 for rate in slots if rate < 0)
+    streak = any(slots[i] < 0 and slots[i + 1] < 0 for i in range(len(slots) - 1))
+    enough = ready >= max(1, len(books) / 2) and bool(scores[5])
+    mid = lambda items: _median(items) if items else None
+    label = judge_etf_signal(mid(scores[5]), mid(scores[30]), mid(scores[60]), mid(cums), sell_days, streak, enough)
+    if label == "净流入":
+        votes = [n for n in (5, 30, 60) if scores[n] and mid(scores[n]) > ETF_Z] or [5]
+    elif label == "净流出":
+        votes = [n for n in (5, 30, 60) if scores[n] and mid(scores[n]) < -ETF_Z] or [5]
+    else:
+        votes = []
+    return {"label": label, "votes": votes, "baseline": "够" if enough else "不足",
+            "mz": {n: mid(scores[n]) for n in (1, 3, 5, 30, 60)}}
+
+
+def _margin_rates(days: list[str], by_day: dict) -> tuple[list[float], list[float]]:
+    rates, nets = [], []
+    for prev, day in zip(days, days[1:]):
+        if _day_gap(prev, day) > 4:
+            continue
+        base = by_day[prev]["rzye"]
+        if not base:
+            continue
+        rates.append(by_day[day]["rzye"] / base - 1)
+        nets.append(by_day[day]["rzmre"] - by_day[day]["rzche"])
+    return rates, nets
+
+
+def _judge_margin_book(days: list[str], by_day: dict) -> tuple[str, list[int], str, list[str]]:
+    rates, nets = _margin_rates(days, by_day)
+    got = {}
+    for n in (1, 3, 5, 30, 60):
+        _cum, mz, ok = _rate_z(rates, n)
+        got[n] = (mz if ok else None, ok, _cum)
+    mz5, ok5, cum5 = got[5][0], got[5][1], got[5][2]
+    mz30, ok30 = got[30][0], got[30][1]
+    mz60, ok60 = got[60][0], got[60][1]
+    label = judge_margin_signal(mz5 if ok5 else None, mz30 if ok30 else None, mz60 if ok60 else None, ok5)
+    reversal = bool(ok5 and len(rates) >= 2 and cum5 and rates[-1] and (cum5 > 0) != (rates[-1] > 0))
+    net5 = sum(nets[-5:]) if len(nets) >= 5 else None
+    deep = bool(ok30 and mz30 is not None and mz30 < MARGIN_FAST and (not ok60 or mz60 is None or mz60 < MARGIN_FAST) and net5 is not None and net5 < 0)
+    if label == "加速下降":
+        votes = [5, 30]
+    elif label in ("在降", "在升"):
+        votes = [5] + ([30] if ok30 else [])
+    else:
+        votes = []
+    marks = []
+    if reversal:
+        marks.append("两融 5 日方向和前一交易日相反，可能是噪音")
+    if deep:
+        marks.append("中期深度去杠杆")
+    return label, votes, "够" if ok5 else "不足", marks, {n: got[n][0] for n in (1, 3, 5, 30, 60)}
 
 
 def format_turnover(rows: list[dict], index_pct: dict[str, float] | None = None) -> dict:
@@ -184,10 +388,15 @@ def format_turnover(rows: list[dict], index_pct: dict[str, float] | None = None)
     if len(rows) < 6:
         return _body([], "没有取到足够的全市场成交额")
     latest = rows[-1]
+    amounts = [_num(row.get("amount")) for row in rows]
+    amounts = [item for item in amounts if item and item > 0]
+    logs = [math.log(item) for item in amounts]
     avg60 = _mean(rows[-60:], "amount")
     windows = {n: None if not avg60 else _mean(rows[-n:], "amount") / avg60 - 1 for n in SPANS}
+    sides, scores, baseline_short = _turnover_sides(logs)
+    label = judge_turnover_votes(sides, (sides.get(1, "没有"), _prior_day_side(logs)))
+    votes = [n for n in (1, 3, 5, 30) if sides.get(n) == label and label in ("冷清", "活跃")]
     ratio5 = windows[5]
-    label = judge_turnover_spans(windows)
     year = rows[-240:]
     amounts = [_num(row.get("amount")) for row in year]
     amounts = [item for item in amounts if item is not None]
@@ -198,7 +407,7 @@ def format_turnover(rows: list[dict], index_pct: dict[str, float] | None = None)
         if pct is not None and pct < 0:
             down += 1
     facts = [
-        {"id": "mkt.turnover", "text": f"{_iso(latest.get('trade_date'))} 沪深成交额 {_yi_plain(_num(latest.get('amount')))}，1 / 3 / 5 / 30 日相对 60 日均，三档同向才改冷清或活跃，判定 {label}"},
+        {"id": "mkt.turnover", "text": f"{_iso(latest.get('trade_date'))} 沪深成交额 {_yi_plain(_num(latest.get('amount')))}，1 / 3 / 5 / 30 日对数成交额对照自身近 60 日，判定 {label}" + ("，基线不足" if baseline_short else "")},
         {"id": "mkt.turnover_windows", "text": "相对过去 60 日：" + "，".join(f"{n} 日 {_pct(windows[n])}" for n in SPANS)},
         {"id": "mkt.turnover_pctile", "text": f"成交额处在近一年 {'' if pctile is None else str(round(pctile * 100)) + '%'} 分位"},
     ]
@@ -210,8 +419,11 @@ def format_turnover(rows: list[dict], index_pct: dict[str, float] | None = None)
         "ratio5": ratio5,
         "avg60": avg60,
         "windows": windows,
+        "mz": scores,
         "pctile": pctile,
         "label": label,
+        "votes": votes,
+        "baseline": "不足" if baseline_short else "够",
         "down_days": down,
         "series": [
             {"date": _iso(row.get("trade_date")), "value": _num(row.get("amount")),
@@ -219,7 +431,7 @@ def format_turnover(rows: list[dict], index_pct: dict[str, float] | None = None)
             for row in rows[-60:]
         ],
     }
-    return _body(facts, " ".join(item["text"] for item in facts) + "。成交额只说明热不热，不代表钱在进还是出。盘中同一时刻没有接。", metrics)
+    return _body(facts, " ".join(item["text"] for item in facts) + "。冷清或活跃只说明热不热，不代表钱在进还是出。盘中同一时刻没有接。", metrics)
 
 
 def format_etf(shares: dict[str, list[dict]], closes: dict[str, list[dict]]) -> dict:
@@ -255,9 +467,10 @@ def format_etf(shares: dict[str, list[dict]], closes: dict[str, list[dict]]) -> 
     series = _etf_series(shares)
     windows = series.get("windows") or {n: None for n in SPANS}
     windows[5] = ratio
-    label = judge_etf_spans(windows, buy_days)
+    judged = _judge_broad_etf(shares, ratio)
+    label = judged["label"]
     bits = [
-        f"9 只名单里取到 {counted} 只，份额变化 {_pct(ratio)}，判定 {label}",
+        f"9 只名单里取到 {counted} 只，份额变化 {_pct(ratio)}，判定 {label}" + ("，基线不足" if judged["baseline"] == "不足" else ""),
         f"近 5 个交易日里篮子净申购的天数 {buy_days}",
     ]
     if any(group_known.values()):
@@ -269,7 +482,8 @@ def format_etf(shares: dict[str, list[dict]], closes: dict[str, list[dict]]) -> 
     text = "。".join(bits) + "。这是 fund_share 加收盘价的近似，不是交易所的份额规模接口。"
     metrics = {
         "ratio": ratio, "buy_days": buy_days, "label": label, "money": money,
-        "groups": groups, "counted": counted,
+        "groups": groups, "counted": counted, "votes": judged["votes"], "baseline": judged["baseline"],
+        "mz": judged.get("mz") or {},
         **series, "windows": windows,
     }
     return _body([{"id": "mkt.etf", "text": text}], text, metrics)
@@ -340,13 +554,13 @@ def format_margin(rows: list[dict], turnover: float | None = None) -> dict:
     ratio_day = windows[1]
     ratio5 = windows[5]
     ratio30 = windows[30]
-    label = judge_margin_spans(windows)
+    label, votes, baseline, marks, mz = _judge_margin_book(days, by_day)
     net = latest["rzmre"] - latest["rzche"]
     share = None if not turnover else latest["rzmre"] / (turnover * 1e8)
     text = (
         f"{_iso(days[-1])} 融资余额 {_yuan_yi(latest['rzye'])}，"
         + "，".join(f"{n} 日 {_pct(windows[n])}" for n in SPANS)
-        + f"，判定 {label}。"
+        + f"，判定 {label}" + ("，基线不足" if baseline == "不足" else "") + "。"
         f"当日融资买入 {_yuan_yi(latest['rzmre'])}，偿还 {_yuan_yi(latest['rzche'])}，净买入 {_yuan_yi(net)}"
     )
     if share is not None:
@@ -359,7 +573,11 @@ def format_margin(rows: list[dict], turnover: float | None = None) -> dict:
         "ratio5": ratio5,
         "ratio4": ratio30,
         "windows": windows,
+        "mz": mz,
         "label": label,
+        "votes": votes,
+        "baseline": baseline,
+        "marks": marks,
         "buy": latest["rzmre"] / 1e8,
         "repay": latest["rzche"] / 1e8,
         "net": net / 1e8,
@@ -853,7 +1071,7 @@ def _pulse(today: date) -> dict:
     # 标签取各自 metrics 里判好的，不要从说明文字里再抓：成交额的文字里固定写着「冷清」「活跃」
     labels = {key: (doc.get("metrics") or {}).get("label") or "没有" for key, doc in (("turnover", turn), ("etf", etf), ("margin", margin))}
     lean = judge_pulse(labels["turnover"], labels["etf"], labels["margin"])
-    text = f"短期判定 {lean}。成交 {labels['turnover']}，宽基 {labels['etf']}，两融 {labels['margin']}。改成在进要宽基净流入并且成交不是冷清。"
+    text = f"短期判定 {lean}。成交 {labels['turnover']}，宽基 {labels['etf']}，两融 {labels['margin']}。在进要宽基净流入并且成交不冷清；成交平时且两融加速下降时仍是观望。"
     return _doc("pulse", [{"id": "mkt.pulse", "text": text}], text + " " + " ".join(doc.get("text") or "" for doc in (turn, etf, margin)))
 
 

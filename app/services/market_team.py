@@ -1,66 +1,128 @@
-"""国家队：看几只大盘 ETF 有没有被大额、广泛地买进或卖出，只看份额，不猜是谁。
+"""国家队：只回答最近有没有出手、出手的钱还在不在、有没有在撤。
 
-A 股里国家队（汇金等）既会在市场承压时逆势护盘，也会在市场平稳或走强时减仓。散户抄底、追涨、恐慌赎回也会让 ETF 份额变化，
-所以买和卖都要同时满足「买得广、量级远超平时、主要是大盘宽基」，再看市场背景。
+不预测会不会出手，也不猜是谁。份额按指数合并，金额 = 份额变化 × 收盘价。
+触发要同一天四条都成立，记一次「疑似出手」；公告或季报对上才写成「确认」。
+这一路只展示，不进市场总档。「可能在撤」也只展示。
 
-出手（托底买入）：
-  1. 市场承压。当天上证收跌且够明显：跌超 1%；或跌超 0.5% 且近 3 日累计跌超 2%；
-     或者前两天刚承压（近 3 日累计跌超 2%，或最近 3 天里有一天跌超 1%），今天不管涨跌，国家队接着买。
-     买得极猛（近 60 天最大、异常度 ≥ 3）时，跌超 0.5% 也算。
-     不要求当天一定收跌：护盘买进去以后，指数当天可能已经拉红。
-  2. 买得广：9 只里至少 3/4 当天净申购为正。
-  3. 买得猛：9 只合计净申购超过前 60 日均值加 2 倍标准差；每只 ETF 的申购跟自己前 60 天比，取这些异常度的中位数，
-     超过前 60 天这个中位数的中位数加 2 倍 MAD（不会被以前的暴增日抬高）。
-  4. 买的是大盘宽基：沪深 300、上证 50、中证 500、A500 这几只贡献合计净申购的一半以上。
-减仓（出货）：
-  1. 买得广、买得猛、主要是大盘宽基的镜像：至少 3/4 的 ETF 当天净赎回，合计净赎回超过前 60 日均值减 2 倍标准差，
-     异常度的中位数低于前 60 天的中位数减 2 倍 MAD，大盘宽基占净赎回的一半以上。
-  2. 上证当天没有大跌（跌幅不超过 1%）：恐慌日的赎回是散户割肉，不算国家队。
-  3. 近 3 个交易日里至少 2 天满足以上，才算一次减仓：单日赎回可能只是调仓，连续才是趋势。
-只比较相邻两个交易日，缺份额的那只跳过，不把多天拼成一天。
-最近 5 个交易日内出现过出手，算「在出手」，强度按离开出手日的天数线性衰减，第 5 天降到 0。
-最近 5 个交易日内出现过减仓，或者出手后各只按自己的波动算累计回撤中位数超过 30%，算「可能在卖」；两者都有，以更近的为准。
-季报持有人没有接口，盘中异动要实时 ETF 行情，这一期都不做，页面上明说。
-公告走东方财富新闻搜索，只做确认线索：标题里要有官方主体和明确动作，专家解读不算。
+规模下限 [X]、赎回下限 [Y] 还没有回测，先不拿一个编出来的数去挡。
+5 日偏离用每天的份额变化率估基线，累计窗口按 √天数放大，不用重叠的滚动窗口。
 """
 
 from __future__ import annotations
 
+import math
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
-from statistics import mean, median, pstdev
 
 from app.services import market_tape as tape
 
-# 国家队通道 9 只，和宽基观察池（ETF_BOOK）不是一套
-TEAM_BOOK = (
-    ("510300.SH", "沪深300ETF 华泰柏瑞"),
-    ("510310.SH", "沪深300ETF 易方达"),
-    ("159919.SZ", "沪深300ETF 嘉实"),
-    ("510330.SH", "沪深300ETF 华夏"),
-    ("510050.SH", "上证50ETF 华夏"),
-    ("510500.SH", "中证500ETF 南方"),
-    ("512050.SH", "A500ETF 华夏"),
-    ("588000.SH", "科创50ETF 华夏"),
-    ("159995.SZ", "芯片ETF 华夏"),
+# 宽基通道：同指数合并后才触发出手、才算钱还在不在。A500 单独成组。
+BROAD = (
+    ("沪深300", (
+        ("510300.SH", "华泰柏瑞沪深300ETF"),
+        ("510310.SH", "易方达沪深300ETF"),
+        ("510330.SH", "华夏沪深300ETF"),
+        ("159919.SZ", "嘉实沪深300ETF"),
+    )),
+    ("上证50", (
+        ("510050.SH", "华夏上证50ETF"),
+    )),
+    ("中证500", (
+        ("510500.SH", "南方中证500ETF"),
+        ("159922.SZ", "嘉实中证500ETF"),
+        ("512500.SH", "华夏中证500ETF"),
+    )),
+    ("中证1000", (
+        ("512100.SH", "南方中证1000ETF"),
+        ("159845.SZ", "华夏中证1000ETF"),
+        ("560010.SH", "广发中证1000ETF"),
+    )),
+    ("创业板", (
+        ("159915.SZ", "易方达创业板ETF"),
+        ("159977.SZ", "天弘创业板ETF"),
+        ("159952.SZ", "广发创业板ETF"),
+    )),
+    ("科创50", (
+        ("588000.SH", "华夏科创50ETF"),
+        ("588080.SH", "易方达科创50ETF"),
+    )),
+    ("A500", (
+        ("512050.SH", "华夏中证A500ETF"),
+        ("560610.SH", "中证A500ETF"),
+    )),
 )
-LOOKBACK = 60
-MIN_BASE = 40        # 前 60 天里至少 40 天有数，才算得出这只的平时
-MIN_NAMES = 5        # 至少 5 只有 z 值，才合成当天的中位数
-MAD_K = 2.0          # 中位数加这么多倍 MAD
-MONEY_K = 2.0        # 合计净申购超过前 60 日均值加这么多倍标准差
-BREADTH = 0.75       # 至少这个比例的 ETF 当天净申购为正
-BLUE_CHIPS = ("510300.SH", "510310.SH", "159919.SZ", "510330.SH", "510050.SH", "510500.SH", "512050.SH")
-BLUE_SHARE = 0.5     # 大盘宽基要占合计净申购的一半以上
-DROP_HARD = -1.0     # 当天跌超 1%：明显下跌；前两天有这样的一天，也算市场刚承压
-DROP_SOFT = -0.5     # 跌超 0.5% 且……
-SLUMP_3D = -2.0      # ……近 3 日累计跌超 2%：连续下跌；或者买得极猛（见下）
-EXTREME_Z = 3.0      # 买得极猛：近 60 天最大的一次，且异常度不低于这个值
-CONFIRM_DAYS, CONFIRM_MIN = 3, 2   # 减仓：近 3 个交易日里至少 2 天满足
-CONTINUE_GAP = 3     # 出手日之间隔不超过 3 个交易日，算连续出手
-GONE = 0.30          # 标准化累计回撤超过 3 成，算可能在卖
-RECENT = 5           # 最近 5 个交易日内出现过，算「在出手」；第 5 天强度降到 0
-SELL_WINDOW = 60
+# 行业只提示，不触发。同一主题合并后再去跟全市场排名。
+INDUSTRY = (
+    ("半导体", (
+        ("512760.SH", "国泰半导体芯片ETF"),
+        ("512480.SH", "国联安半导体ETF"),
+        ("159995.SZ", "华夏芯片ETF"),
+    )),
+    ("医药", (
+        ("512170.SH", "华宝医疗ETF"),
+        ("512010.SH", "易方达沪深300医药ETF"),
+        ("513120.SH", "广发港股创新药ETF"),
+    )),
+    ("证券", (
+        ("512880.SH", "国泰证券ETF"),
+        ("512000.SH", "华宝券商ETF"),
+    )),
+    ("军工", (("512660.SH", "国泰军工ETF"),)),
+    ("有色黄金", (
+        ("512400.SH", "南方有色金属ETF"),
+        ("518880.SH", "华安黄金ETF"),
+        ("517520.SH", "永赢黄金股ETF"),
+    )),
+    ("软件科技", (
+        ("515000.SH", "华宝科技ETF"),
+        ("512720.SH", "国泰计算机ETF"),
+        ("159819.SZ", "易方达人工智能ETF"),
+    )),
+    ("卫星", (("159206.SZ", "永赢卫星ETF"),)),
+    ("旅游", (("159766.SZ", "富国旅游ETF"),)),
+)
+# 跨境只参加「钱去哪了」的排名，不触发。
+CROSS = (
+    ("中概互联网", (("513050.SH", "易方达中概互联网ETF"),)),
+    ("恒生科技", (
+        ("513180.SH", "华夏恒生科技ETF"),
+        ("513130.SH", "华泰柏瑞恒生科技ETF"),
+    )),
+    ("港股通互联网", (("159792.SZ", "富国港股通互联网ETF"),)),
+    ("港股通非银", (("513750.SH", "广发港股通非银ETF"),)),
+    ("纳指", (("159941.SZ", "广发纳指ETF"),)),
+)
+
+def _flat(groups) -> tuple:
+    return tuple((code, name) for _group, codes in groups for code, name in codes)
+
+
+TEAM_BOOK = _flat(BROAD)
+INTRADAY_BOOK = tuple(codes[0] for _group, codes in BROAD)
+POOL = (("宽基", BROAD), ("行业", INDUSTRY), ("跨境", CROSS))
+
+BASELINE = 60
+MZ_ON = 3.0
+ABS_FLOOR = 0.005          # 达标的那个窗口，份额变化至少 0.5%
+FALLBACK_DAY = 0.01        # 基线不足：当天 > +1%
+FALLBACK_5 = 0.02          # 基线不足：5 日 > +2%
+SPLIT_RATE = 0.5
+GAP_SKIP = 4               # 跨过长假的份额差不当成一个交易日
+DROP_HARD = -1.0
+DROP_SOFT = -0.5
+SLUMP_3D = -2.0
+DRAWDOWN = 0.10
+DRAWDOWN_NEAR = 0.08
+MERGE_GAP = 3
+RECENT = 5                 # 出手后 5 个交易日内显示「在出手」
+PEAK_DAYS = 10
+GONE_MILD = 0.10
+GONE_HARD = 0.30
+SELL_WINDOW, SELL_MIN, SELL_GROUPS = 3, 2, 3
+TOP_N, TOP_BROAD, MIN_GROUPS = 3, 2, 2
+# 起步值还没回测。None 表示这一条先不挡，避免编一个金额。
+BROAD_MIN_YI = None
+REDEEM_MIN_YI = None
 AFTER = 20
 
 OFFICIAL = {
@@ -72,223 +134,273 @@ OFFICIAL = {
 ACTIONS = ("增持", "降准", "降息", "下调", "回购增持再贷款", "再贷款", "设立", "出台", "印发", "宣布", "稳定")
 STRONG = ("降准", "降息", "下调存款准备金率", "下调政策利率", "下调贷款市场报价利率")
 QUERIES = ("中央汇金 增持", "央行 降准 降息", "央行 回购增持再贷款", "证监会 资本市场 新政")
+HUJIN_WORDS = ("中央汇金", "汇金资管", "汇金")
+OTHER_TEAMS = (("诚通", "中国诚通"), ("国新", "中国国新"))
 
 
-def daily_flows(calendar: list[str], shares: dict[str, dict[str, float]], closes: dict[str, dict[str, float]], codes: list[str]) -> list[tuple[str, float | None]]:
-    """calendar 是上证交易日升序。返回 (日期, 9 只合计净申购·亿元)；这天或前一天有哪只缺份额、缺收盘价，就是 None。
-    份额单位万份，× 元 = 万元，再 / 1e4 = 亿元。"""
-    out: list[tuple[str, float | None]] = [(calendar[0], None)] if calendar else []
-    for prev, day in zip(calendar, calendar[1:]):
-        now, before, price = shares.get(day, {}), shares.get(prev, {}), closes.get(day, {})
-        if all(code in now and code in before and code in price for code in codes):
-            out.append((day, sum((now[code] - before[code]) * price[code] for code in codes) / 1e4))
-        else:
-            out.append((day, None))
+def creation_yi(share_delta: float, close: float) -> float:
+    """份额单位是万份，乘上元是万元，再换成亿元。"""
+    return share_delta * close / 1e4
+
+
+def _member(share_rows: list[dict], bar_rows: list[dict]) -> dict[str, dict]:
+    """拆分当天按比例把份额还原到前一天的口径。金额仍用原始份额差 × 收盘价，拆分当天不记金额。"""
+    bars = {}
+    for row in bar_rows or []:
+        day = tape.ymd(row.get("trade_date"))
+        close = tape.num(row.get("close"))
+        if day and close is not None:
+            bars[day] = {"close": close, "amount": tape.num(row.get("amount"))}
+    raw = []
+    for row in share_rows or []:
+        day = tape.ymd(row.get("trade_date"))
+        share = tape.num(row.get("fd_share"))
+        if day and share is not None and day in bars:
+            raw.append((day, share, bars[day]["close"], bars[day]["amount"]))
+    raw.sort()
+    factor, prev_raw, prev_day = 1.0, None, None
+    out = {}
+    for day, share, close, amount in raw:
+        split, gap = False, None
+        if prev_raw:
+            gap = tape._day_gap(prev_day, day)
+            if prev_raw > 0 and abs(share / prev_raw - 1) > SPLIT_RATE:
+                split = True
+                factor *= prev_raw / share
+        out[day] = {"adj": share * factor, "raw": share, "close": close, "amount": amount, "split": split, "gap": gap}
+        prev_raw, prev_day = share, day
     return out
 
 
-def _mad(values: list[float]) -> float:
-    mid = median(values)
-    return median([abs(item - mid) for item in values])
-
-
-def code_deltas(calendar: list[str], shares: dict[str, dict[str, float]], codes: list[str]) -> dict[str, dict[str, float]]:
-    """每只 ETF 只在相邻两个交易日都有份额时记一天的变化。缺一天就跳过，不把多天拼成一天。"""
-    out = {code: {} for code in codes}
-    for prev, day in zip(calendar, calendar[1:]):
-        before, now = shares.get(prev, {}), shares.get(day, {})
-        for code in codes:
-            if code in before and code in now:
-                out[code][day] = now[code] - before[code]
-    return out
-
-
-def _composite(calendar: list[str], deltas: dict[str, dict[str, float]], index: int) -> tuple[float | None, dict[str, float], dict[str, float]]:
-    """当天 9 只 z 值的中位数。z = (当日变化 − 前 60 日均值) / 前 60 日标准差。"""
-    day = calendar[index]
-    scores, stdevs, spikes = [], {}, {}
-    for code, series in deltas.items():
-        if day not in series:
-            continue
-        history = [series[past] for past in calendar[:index] if past in series][-LOOKBACK:]
-        if len(history) < MIN_BASE:
-            continue
-        sigma = pstdev(history)
-        if sigma == 0:
-            continue
-        scores.append((series[day] - mean(history)) / sigma)
-        stdevs[code] = sigma
-        spikes[code] = series[day]
-    if len(scores) < MIN_NAMES:
-        return None, {}, {}
-    return median(scores), stdevs, spikes
-
-
-def money_totals(calendar: list[str], money: dict[str, dict[str, float]]) -> list[tuple[float | None, dict[str, float]]]:
-    """每个交易日：有数的 ETF 当天净申购金额（亿元）和合计。有数的不到 MIN_NAMES 只，合计记 None。"""
-    out = []
+def _frame(calendar: list[str], members: dict[str, dict]) -> dict:
+    """一组里，上市满 60 个交易日的才进入合计。缺一天的那只跳过；成员集合变了，这一天不产生变化率。"""
+    seen = {code: {} for code in members}
+    running = {code: 0 for code in members}
     for day in calendar:
-        have = {code: series[day] for code, series in money.items() if day in series}
-        out.append((sum(have.values()) if len(have) >= MIN_NAMES else None, have))
+        for code, series in members.items():
+            if day in series:
+                running[code] += 1
+            seen[code][day] = running[code]
+    level, rate, money, turnover = [], [], [], []
+    for i, day in enumerate(calendar):
+        prev = calendar[i - 1] if i else None
+        eligible = [code for code in members if prev and seen[code][prev] >= BASELINE]
+        present = [code for code in eligible if day in members[code] and prev in members[code]]
+        stable = bool(present) and all(
+            day in members[code] and prev in members[code]
+            and not members[code][day]["split"] and (members[code][day]["gap"] or 0) <= GAP_SKIP
+            for code in eligible
+        )
+        if stable:
+            now = sum(members[code][day]["adj"] for code in eligible)
+            before = sum(members[code][prev]["adj"] for code in eligible)
+            level.append(now)
+            rate.append(None if before <= 0 else now / before - 1)
+        else:
+            level.append(None)
+            rate.append(None)
+        yi, traded, have_money, have_trade = 0.0, 0.0, False, False
+        for code in present:
+            row = members[code][day]
+            if row["split"] or (row["gap"] or 0) > GAP_SKIP:
+                continue
+            yi += creation_yi(row["raw"] - members[code][prev]["raw"], row["close"])
+            have_money = True
+            if row["amount"]:
+                traded += row["amount"]
+                have_trade = True
+        money.append(yi if have_money else None)
+        turnover.append(traded if have_trade else None)
+    return {"level": level, "rate": rate, "money": money, "turnover": turnover}
+
+
+def _score(rates: list, index: int, n: int):
+    """n 日累计变化，对照窗口之前 60 个日度变化率。波动按 √n 放大。"""
+    if index < 0 or rates[index] is None:
+        return None, None, False
+    if n == 1:
+        window = [rates[index]]
+        start = index
+    else:
+        if index + 1 < n:
+            return None, None, False
+        window = rates[index + 1 - n:index + 1]
+        if any(item is None for item in window):
+            return None, None, False
+        start = index + 1 - n
+    cum = tape._compound(window)
+    prior = [item for item in rates[:start] if item is not None][-BASELINE:]
+    med, mad, enough = tape._baseline(prior) if len(prior) >= BASELINE else (None, None, False)
+    if not enough:
+        return cum, None, False
+    return cum, tape.modified_z(cum, n * med, mad * math.sqrt(n)), True
+
+
+def group_hit(rates: list, index: int, side: str) -> dict:
+    """side 为 up 时看申购，为 down 时看赎回。基线不足只对申购退回固定百分比。"""
+    cum1, mz1, ok1 = _score(rates, index, 1)
+    cum5, mz5, ok5 = _score(rates, index, 5)
+    picked = []
+    if ok1 and mz1 is not None and cum1 is not None:
+        picked.append((mz1, abs(cum1)))
+    if ok5 and mz5 is not None and cum5 is not None:
+        picked.append((mz5, abs(cum5)))
+    short = not picked
+    hit = False
+    if picked:
+        mz, mag = (max if side == "up" else min)(picked, key=lambda item: item[0])
+        hit = (mz > MZ_ON if side == "up" else mz < -MZ_ON) and mag >= ABS_FLOOR
+    elif side == "up":
+        hit = (cum1 is not None and cum1 > FALLBACK_DAY) or (cum5 is not None and cum5 > FALLBACK_5)
+    return {"hit": hit, "short": short and side == "up", "mz1": mz1, "mz5": mz5, "cum1": cum1, "cum5": cum5}
+
+
+def pressure_of(move, cum3, prev_two: tuple[bool, bool], drawdown, below_ma20) -> dict:
+    """承压：大跌、连跌、前两天已经按前两条承压、或者深回撤且在 20 日线下。8%–10% 只标注。"""
+    rule12 = False
+    kind = None
+    if move is not None and move <= DROP_HARD:
+        rule12, kind = True, "大跌"
+    elif move is not None and cum3 is not None and move <= DROP_SOFT and cum3 <= SLUMP_3D:
+        rule12, kind = True, "连跌"
+    elif prev_two == (True, True):
+        kind = "承接"
+    if kind is None and drawdown is not None and drawdown > DRAWDOWN and below_ma20:
+        kind = "位置"
+    near = drawdown is not None and DRAWDOWN_NEAR <= drawdown <= DRAWDOWN
+    return {"kind": kind, "rule12": rule12, "near": near, "drawdown": drawdown}
+
+
+def _pressures(calendar: list[str], pct: dict[str, float], closes: dict[str, float]) -> list[dict]:
+    out, flags = [], []
+    for i, day in enumerate(calendar):
+        move = pct.get(day)
+        recent = [pct[calendar[j]] for j in range(max(0, i - 2), i + 1) if pct.get(calendar[j]) is not None]
+        cum3 = sum(recent) if len(recent) == 3 else None
+        window = [closes[calendar[j]] for j in range(max(0, i - 119), i + 1) if closes.get(calendar[j])]
+        drawdown, below = None, False
+        if len(window) >= 120 and window[-1]:
+            high = max(window)
+            drawdown = (high - window[-1]) / high if high else None
+            below = window[-1] < sum(window[-20:]) / 20
+        prev = (flags[i - 2], flags[i - 1]) if i >= 2 else (False, False)
+        row = pressure_of(move, cum3, prev, drawdown, below)
+        row["move"] = move
+        row["cum3"] = cum3
+        flags.append(row["rule12"])
+        out.append(row)
     return out
 
 
-def weak_kind(move: float, cum3: float, worst3: float, biggest: bool, signal: float) -> str | None:
-    """市场有没有承压（出手的背景）。越弱要求的买入量越低。
-    返回：大跌（当天跌超 1%）、连跌（跌超 0.5% 且 3 日累计跌超 2%）、承接（前两天刚承压，今天不管涨跌）、极猛（买得极猛，跌超 0.5%）。"""
-    if move <= DROP_HARD:
-        return "大跌"
-    if move <= DROP_SOFT and cum3 <= SLUMP_3D:
-        return "连跌"
-    if cum3 <= SLUMP_3D or worst3 <= DROP_HARD:
-        return "承接"
-    if move <= DROP_SOFT and biggest and signal >= EXTREME_Z:
-        return "极猛"
-    return None
-
-
-def _signals(calendar: list[str], deltas: dict[str, dict[str, float]]) -> list[tuple[str, float | None, dict[str, float], dict[str, float]]]:
-    out = []
-    for index in range(len(calendar)):
-        signal, stdevs, spikes = _composite(calendar, deltas, index)
-        out.append((calendar[index], signal, stdevs, spikes))
-    return out
-
-
-def detect_actions(calendar: list[str], deltas: dict[str, dict[str, float]], pct: dict[str, float],
-                   money: dict[str, dict[str, float]], blue: tuple[str, ...] = BLUE_CHIPS) -> list[dict]:
-    """市场承压时，买得广、买得猛（金额和异常度都超过平时）、主要买的是大盘宽基，算一次出手。当天不一定收跌。"""
-    signals = _signals(calendar, deltas)
-    totals = money_totals(calendar, money)
-    found = []
-    for index in range(1, len(calendar)):
-        day, signal, stdevs, spikes = signals[index]
-        move = pct.get(day)
-        total, have = totals[index]
-        if signal is None or signal <= 0 or move is None or total is None or total <= 0:
-            continue
-        window = range(max(0, index - LOOKBACK), index)
-        prior = [signals[j][1] for j in window if signals[j][1] is not None]
-        history = [totals[j][0] for j in window if totals[j][0] is not None]
-        if len(prior) < MIN_BASE or len(history) < MIN_BASE:
-            continue
-        limit = median(prior) + MAD_K * _mad(prior)
-        money_limit = mean(history) + MONEY_K * pstdev(history)
-        if signal <= limit or total <= money_limit:
-            continue
-        positive = sum(1 for value in have.values() if value > 0)
-        if positive < BREADTH * len(have):
-            continue
-        blue_share = sum(value for code, value in have.items() if code in blue) / total
-        if blue_share < BLUE_SHARE:
-            continue
-        recent = [pct.get(past, 0.0) for past in calendar[max(0, index - 2):index + 1]]
-        cum3, worst3 = sum(recent), min(recent)
-        weak = weak_kind(move, cum3, worst3, total >= max(history), signal)
-        if weak is None:
-            continue
-        found.append({
-            "day": day, "signal": signal, "limit": limit, "index_pct": move, "pos": index, "stdevs": stdevs, "spikes": spikes,
-            "delta": total, "money_limit": money_limit, "positive": positive, "names": len(have), "blue_share": blue_share,
-            "cum3": cum3, "worst3": worst3, "weak": weak,
-            # 给页面说人话用：这天的合计净申购在前 60 个交易日里排第几
-            "rank": 1 + sum(1 for item in history if item >= total), "of": len(history),
-        })
-    for k, item in enumerate(found):   # 连续几天都在买，说一声「连续第 N 天」
-        item["streak"] = found[k - 1]["streak"] + 1 if k and item["pos"] - found[k - 1]["pos"] <= CONTINUE_GAP else 1
-    return found
-
-
-def detect_sells(calendar: list[str], deltas: dict[str, dict[str, float]], pct: dict[str, float],
-                 money: dict[str, dict[str, float]], blue: tuple[str, ...] = BLUE_CHIPS) -> list[dict]:
-    """大盘宽基被广泛、大额净赎回，而且上证没有大跌（不是恐慌割肉），近 3 个交易日里至少 2 天这样，算一次减仓。"""
-    signals = _signals(calendar, deltas)
-    totals = money_totals(calendar, money)
-    hit: dict[int, dict] = {}
-    for index in range(1, len(calendar)):
-        day, signal, stdevs, spikes = signals[index]
-        move = pct.get(day)
-        total, have = totals[index]
-        if signal is None or signal >= 0 or move is None or total is None or total >= 0 or move <= DROP_HARD:
-            continue
-        window = range(max(0, index - LOOKBACK), index)
-        prior = [signals[j][1] for j in window if signals[j][1] is not None]
-        history = [totals[j][0] for j in window if totals[j][0] is not None]
-        if len(prior) < MIN_BASE or len(history) < MIN_BASE:
-            continue
-        limit = median(prior) - MAD_K * _mad(prior)
-        money_limit = mean(history) - MONEY_K * pstdev(history)
-        if signal >= limit or total >= money_limit:
-            continue
-        negative = sum(1 for value in have.values() if value < 0)
-        if negative < BREADTH * len(have):
-            continue
-        blue_share = sum(value for code, value in have.items() if code in blue) / total
-        if blue_share < BLUE_SHARE:
-            continue
-        hit[index] = {
-            "day": day, "signal": signal, "limit": limit, "index_pct": move, "pos": index, "delta": total, "money_limit": money_limit,
-            "negative": negative, "names": len(have), "blue_share": blue_share, "of": len(history),
-            "rank": 1 + sum(1 for item in history if item <= total),
-        }
-    found = []
-    for index, item in sorted(hit.items()):
-        days = sum(1 for j in range(index - CONFIRM_DAYS + 1, index + 1) if j in hit)
-        if days >= CONFIRM_MIN:
-            found.append({**item, "days": days})
-    return found
-
-
-def standardized_gone(calendar: list[str], shares: dict[str, dict[str, float]], action: dict) -> float | None:
-    """各只用出手当天的标准差把累计变化标准化，再取回撤比例的中位数。"""
-    prev = calendar[action["pos"] - 1]
-    last = calendar[-1]
-    gones = []
-    for code, spike in action["spikes"].items():
-        sigma = action["stdevs"].get(code) or 0
-        if spike <= 0 or sigma <= 0:
-            continue
-        if code not in shares.get(prev, {}) or code not in shares.get(last, {}):
-            continue
-        cum = (shares[last][code] - shares[prev][code]) / sigma
-        gones.append(max(0.0, 1 - cum / (spike / sigma)))
-    return None if not gones else min(median(gones), 1.0)
-
-
-def _hold(flows: list[tuple[str, float | None]], action: dict | None, gone: float | None, since: int | None) -> dict | None:
-    """bought / post 仍是净申购金额，方便看规模。gone 是各只标准化回撤的中位数，卖不卖只看它。"""
-    if not action:
-        return None
-    bought = action["delta"]
-    days = 0 if since is None else since
-    post = sum(value for _day, value in flows[action["pos"] + 1:] if value is not None)
+def money_went_broad(amounts: dict[str, float], broad: set[str]) -> dict:
+    """全市场按组合计的净申购，前 3 名里至少 2 个是宽基，并且宽基合计为正。"""
+    ranked = sorted((name for name, value in amounts.items() if value is not None), key=lambda name: amounts[name], reverse=True)
+    top = ranked[:TOP_N]
+    total = sum(amounts[name] for name in broad if amounts.get(name) is not None)
     return {
-        "bought": bought, "post": post, "now": bought + post, "gone": gone,
-        "line": bought * (1 - GONE), "sold": gone is not None and gone > GONE and 0 < days <= SELL_WINDOW,
-        "days": days, "since": action["day"],
+        "ok": sum(1 for name in top if name in broad) >= TOP_BROAD and total > 0,
+        "top": top, "total": total,
     }
 
 
-def strength_of(signal: float, since: int) -> float:
-    """离开出手日越久越弱，第 5 个交易日降到 0。"""
-    return signal * max(0.0, 1 - since / RECENT)
+def _multiple(turnover: list, index: int):
+    today = turnover[index] if 0 <= index < len(turnover) else None
+    prior = [item for item in turnover[:index] if item][-BASELINE:]
+    if not today or len(prior) < BASELINE:
+        return None
+    mid = tape._median(prior)
+    return None if not mid else today / mid
 
 
-def label_of(since: int | None, hold: dict | None, sell_since: int | None = None) -> str:
-    """近 5 天内有出手算「在出手」，有减仓或出手后回吐超 3 成算「可能在卖」；买卖都有，以更近的为准。"""
-    buying = since is not None and since < RECENT
-    selling = sell_since is not None and sell_since < RECENT
-    if buying and (not selling or since < sell_since):
+def _events(hits: list[dict]) -> list[dict]:
+    """相隔不超过 3 个交易日的触发并成一次出手。"""
+    found = []
+    for hit in hits:
+        if found and hit["pos"] - found[-1]["end"] <= MERGE_GAP:
+            found[-1]["end"] = hit["pos"]
+            found[-1]["groups"].update(hit["groups"])
+            found[-1]["days"].append(hit)
+            found[-1]["short"] = found[-1]["short"] or hit["short"]
+            if hit.get("multiple"):
+                found[-1]["multiple"] = max(found[-1]["multiple"] or 0, hit["multiple"])
+            found[-1]["volume"] = found[-1]["volume"] or hit["volume"]
+        else:
+            found.append({
+                "pos": hit["pos"], "end": hit["pos"], "day": hit["day"], "groups": set(hit["groups"]),
+                "days": [hit], "short": hit["short"], "multiple": hit["multiple"], "volume": hit["volume"],
+                "kind": hit["kind"], "index_pct": hit["index_pct"], "delta": hit["delta"], "top": hit["top"],
+            })
+    return found
+
+
+def giveback(levels: dict[str, list], names: list[str], start: int) -> dict | None:
+    """各组 (峰值 − 今天) / (峰值 − 出手前一天)，再取中位数。峰值看出手后 10 个交易日。"""
+    ratios, lines = [], []
+    for name in names:
+        series = levels.get(name) or []
+        if start < 1 or start >= len(series):
+            continue
+        before = series[start - 1]
+        window = [item for item in series[start:start + PEAK_DAYS] if item is not None]
+        now = next((item for item in reversed(series) if item is not None), None)
+        if before is None or not window or now is None:
+            continue
+        peak = max(window)
+        if peak <= before:
+            continue
+        ratios.append((peak - now) / (peak - before))
+        line = peak - GONE_HARD * (peak - before)
+        lines.append((line / 1e4, now / 1e4, (now - line) / 1e4))
+    if not ratios:
+        return None
+    order = sorted(range(len(ratios)), key=lambda i: ratios[i])
+    mid = order[len(order) // 2]
+    return {"gone": max(0.0, ratios[mid]), "line_yi": lines[mid][0], "now_yi": lines[mid][1], "gap_yi": lines[mid][2]}
+
+
+def label_of(since: int | None, gone: float | None, withdrawing: bool, stated: bool) -> str:
+    """5 天内再次触发会回到「在出手」。可能在撤只改状态词，不进总档。"""
+    if since is not None and since < RECENT:
         return "在出手"
-    if selling:
-        return "可能在卖"
-    if hold and hold["sold"] and hold["days"] <= SELL_WINDOW:
-        return "可能在卖"
+    if withdrawing:
+        return "可能在撤"
+    if since is not None:
+        if gone is None or gone < GONE_MILD:
+            return "钱还在"
+        if gone <= GONE_HARD:
+            return "部分回落"
+        return "可能在撤"
+    if stated:
+        return "已表态"
     return "没出手"
 
 
+def strength_of(signal: float, since: int) -> float:
+    """离开出手日越久越弱，第 5 个交易日降到 0。只在国家队这一路里用。"""
+    return signal * max(0.0, 1 - since / RECENT)
+
+
+def _sell_days(calendar, frames, broad_names, pct) -> list[dict]:
+    """不跌过 1% 的日子里，至少 3 组宽基大额赎回。近 3 天里凑满 2 天才算迹象二。"""
+    hits = {}
+    last = len(calendar) - 1
+    for index in range(max(0, last - SELL_WINDOW + 1), last + 1):
+        move = pct.get(calendar[index])
+        if move is None or move <= DROP_HARD:
+            continue
+        names = [name for name in broad_names if group_hit(frames[name]["rate"], index, "down")["hit"]]
+        total = sum(frames[name]["money"][index] or 0 for name in names)
+        if len(names) < SELL_GROUPS:
+            continue
+        if REDEEM_MIN_YI is not None and total > -REDEEM_MIN_YI:
+            continue
+        hits[index] = {"day": calendar[index], "pos": index, "groups": names, "delta": total, "index_pct": move}
+    if sum(1 for index in range(last - SELL_WINDOW + 1, last + 1) if index in hits) < SELL_MIN:
+        return []
+    return [hits[index] for index in sorted(hits)]
+
+
 def history(actions: list[dict], index_days: list[str], pct: dict[str, float]) -> list[dict]:
-    """每次出手后 20 个交易日上证指数的涨跌；还没满 20 天的写进行到第几天。"""
     rows = []
     for action in actions:
         if action["day"] not in index_days:
@@ -305,72 +417,217 @@ def history(actions: list[dict], index_days: list[str], pct: dict[str, float]) -
     return rows
 
 
-def build(today: date) -> dict:
-    start = tape._ymd_offset(today, 400)
-    codes = [code for code, _name in TEAM_BOOK]
-    shares = dict(zip(codes, tape._parallel(codes, lambda code: tape.fund_share_rows(code, today))))
-    closes = dict(zip(codes, tape._parallel(codes, lambda code: tape.fund_bar_rows(code, today))))
-    idx = tape.cached(f"indexpct:{start}", lambda: tape.pro().index_daily(
-        ts_code="000001.SH", start_date=start, end_date=tape._ymd(today), fields="trade_date,pct_chg",
-    ))
-    pct = {tape.ymd(row.get("trade_date")): tape.num(row.get("pct_chg")) for row in idx if tape.num(row.get("pct_chg")) is not None}
-    return summarize(shares, closes, pct)
-
-
-def summarize(shares: dict[str, list[dict]], closes: dict[str, list[dict]], pct: dict[str, float]) -> dict:
-    sh: dict[str, dict[str, float]] = {}
-    px: dict[str, dict[str, float]] = {}
-    codes = []
-    for code, _name in TEAM_BOOK:
-        share_rows = [row for row in shares.get(code) or [] if tape.num(row.get("fd_share")) is not None]
-        bar_rows = [row for row in closes.get(code) or [] if tape.num(row.get("close")) is not None]
-        if len(share_rows) < 2 or len(bar_rows) < 2:
-            continue
-        codes.append(code)
-        for row in share_rows:
-            sh.setdefault(tape.ymd(row.get("trade_date")), {})[code] = tape.num(row.get("fd_share"))
-        for row in bar_rows:
-            px.setdefault(tape.ymd(row.get("trade_date")), {})[code] = tape.num(row.get("close"))
-    covered = sorted(day for day in sh if day in pct)
-    calendar = [day for day in sorted(pct) if covered and covered[0] <= day <= covered[-1]]
-    flows = daily_flows(calendar, sh, px, codes) if codes else []
-    deltas = code_deltas(calendar, sh, codes)
-    money = {code: {day: change * px[day][code] / 1e4 for day, change in series.items() if code in px.get(day, {})} for code, series in deltas.items()}
-    if max((len(series) for series in deltas.values()), default=0) < MIN_BASE:
+def summarize(shares: dict[str, list[dict]], closes: dict[str, list[dict]], pct: dict[str, float], index_close: dict[str, float] | None = None) -> dict:
+    index_close = index_close or {}
+    members = {}
+    for _kind, groups in POOL:
+        for _name, codes in groups:
+            for code, _label in codes:
+                if code in members:
+                    continue
+                series = _member(shares.get(code) or [], closes.get(code) or [])
+                if series:
+                    members[code] = series
+    if not members:
         return {"ok": False, "text": "取到的宽基 ETF 份额不够长，判不了出手日"}
-    actions = detect_actions(calendar, deltas, pct, money)
-    sells = detect_sells(calendar, deltas, pct, money)
-    last = actions[-1] if actions else None
-    since = None if not last else len(calendar) - 1 - last["pos"]
-    hold = _hold(flows, last, None if last is None else standardized_gone(calendar, sh, last), since)
-    sell_last = sells[-1] if sells else None
-    sell_since = None if not sell_last else len(calendar) - 1 - sell_last["pos"]
-    label = label_of(since, hold, sell_since)
-    counts = {n: sum(1 for item in actions if len(calendar) - 1 - item["pos"] < n) for n in (1, 3, 5, 30, 60)}
-    series = []
-    for i in range(max(1, len(flows) - 60), len(flows)):
-        day, value = flows[i]
-        series.append({
-            "date": tape.iso(day), "value": sum(sh[day].values()) / 1e4 if day in sh else None, "delta": value or 0.0,
-            "index_pct": pct.get(day), "action": any(item["day"] == day for item in actions),
+    covered = sorted({day for series in members.values() for day in series})
+    index_days = sorted(day for day in pct if covered and covered[0] <= day <= max(pct))
+    share_last = covered[-1]
+    index_last = max(pct) if pct else share_last
+    calendar = [day for day in index_days if day <= share_last]
+    if len(calendar) < BASELINE + 5:
+        return {"ok": False, "text": "取到的宽基 ETF 份额不够长，判不了出手日"}
+    frames, kinds = {}, {}
+    for kind, groups in POOL:
+        for name, codes in groups:
+            got = {code: members[code] for code, _label in codes if code in members}
+            if not got:
+                continue
+            frames[name] = _frame(calendar, got)
+            kinds[name] = kind
+    broad_names = [name for name, kind in kinds.items() if kind == "宽基"]
+    if len(calendar) < BASELINE + 5 or not any(kind == "宽基" for kind in kinds.values()):
+        return {"ok": False, "text": "取到的宽基 ETF 份额不够长，判不了出手日"}
+    pressures = _pressures(calendar, pct, index_close)
+    hits = []
+    for index, day in enumerate(calendar):
+        if pressures[index]["kind"] is None:
+            continue
+        amounts = {name: frames[name]["money"][index] for name in frames}
+        flow = money_went_broad(amounts, set(broad_names))
+        if not flow["ok"]:
+            continue
+        if BROAD_MIN_YI is not None and flow["total"] < BROAD_MIN_YI:
+            continue
+        scored = {name: group_hit(frames[name]["rate"], index, "up") for name in broad_names}
+        groups = [name for name, row in scored.items() if row["hit"]]
+        if len(groups) < MIN_GROUPS:
+            continue
+        multiples = [value for name in groups if (value := _multiple(frames[name]["turnover"], index)) is not None]
+        hits.append({
+            "pos": index, "day": day, "groups": groups, "kind": pressures[index]["kind"],
+            "index_pct": pressures[index]["move"], "delta": flow["total"], "top": flow["top"],
+            "short": any(scored[name]["short"] for name in groups),
+            "multiple": max(multiples) if multiples else None,
+            "volume": sum(1 for value in multiples if value >= 3) >= 2,
         })
+    events = _events(hits)
+    last_i = len(calendar) - 1
+    last = events[-1] if events else None
+    since = None if not last else last_i - last["pos"]
+    held = None if not last else giveback({name: frames[name]["level"] for name in frames}, sorted(last["groups"]), last["pos"])
+    gone = None if not held else held["gone"]
+    sells = _sell_days(calendar, frames, broad_names, pct)
+    sign2 = bool(sells)
+    sign1 = gone is not None and gone > GONE_HARD and (since is None or since >= RECENT)
+    withdrawing = sign1 or sign2
+    label = label_of(since, gone, withdrawing, False)
+    confirm = None
+    if label == "在出手" and last:
+        confirm = "L3" if last["volume"] else "L4"
+    counts = {n: sum(1 for item in events if last_i - item["pos"] < n) for n in (1, 3, 5, 30, 60)}
+    broad_money = []
+    for index in range(len(calendar)):
+        vals = [frames[name]["money"][index] for name in broad_names if frames[name]["money"][index] is not None]
+        broad_money.append(sum(vals) if vals else None)
+    series = []
+    for index in range(max(1, len(calendar) - 60), len(calendar)):
+        day = calendar[index]
+        series.append({
+            "date": tape.iso(day), "delta": broad_money[index] or 0.0, "index_pct": pct.get(day),
+            "action": any(item["day"] == day for item in events),
+        })
+    industry = []
+    if pressures[last_i]["kind"]:
+        for name, kind in kinds.items():
+            if kind != "行业":
+                continue
+            row = group_hit(frames[name]["rate"], last_i, "up")
+            if row["hit"]:
+                industry.append(name)
+    marks = []
+    if index_last > share_last:
+        marks.append("待更新")
+    if pressures[last_i]["near"] and pressures[last_i]["kind"] is None:
+        marks.append("接近承压")
+    if industry:
+        marks.append("行业异动：" + "、".join(industry))
+    if last and last["short"] and label == "在出手":
+        marks.append("基线不足")
+    if sign1 and sign2:
+        marks.append("迹象较强")
+    if confirm == "L3" and last and last.get("multiple"):
+        marks.append(f"成交确认 {last['multiple']:.1f} 倍")
+    found = None
+    if last and last["pos"] + 1 < len(calendar):
+        found = calendar[last["pos"] + 1]
+    def pack(item: dict) -> dict:
+        return {
+            "day": tape.iso(item["day"]), "since": last_i - item["pos"], "groups": sorted(item["groups"]),
+            "delta": item["delta"], "kind": item["kind"], "index_pct": item["index_pct"], "top": item["top"],
+            "short": item["short"], "multiple": item["multiple"], "volume": item["volume"],
+            "found": tape.iso(found) if item is last and found else "",
+        }
+    today_flow = money_went_broad({name: frames[name]["money"][last_i] for name in frames}, set(broad_names))
     return {
-        "ok": True, "label": label, "codes": codes, "counted": len(codes), "latest": tape.iso(calendar[-1]) if calendar else "",
-        "strength": 0.0 if since is None or label != "在出手" else strength_of(last["signal"], since),
-        "total": sum(sh[calendar[-1]].values()) / 1e4 if calendar and calendar[-1] in sh else None,
-        "actions": [{key: value for key, value in {**item, "day": tape.iso(item["day"])}.items() if key not in ("stdevs", "spikes")} for item in actions[-6:]],
-        "last": None if not last else {key: value for key, value in {**last, "day": tape.iso(last["day"]), "since": since}.items() if key not in ("stdevs", "spikes")},
-        "hold": hold and {**hold, "since": tape.iso(hold["since"])},
-        "sell": None if not sell_last else {**sell_last, "day": tape.iso(sell_last["day"]), "since": sell_since},
-        "sells": [{**item, "day": tape.iso(item["day"])} for item in sells[-6:]],
-        "counts": counts, "series": series,
-        "history": history(actions, calendar, pct),
-        "missing": [name for code, name in TEAM_BOOK if code not in codes],
+        "ok": True, "label": label, "confirm": confirm,
+        "confirm_word": {"L1": "确认是汇金", "L3": "疑似出手（特征强）", "L4": "疑似出手"}.get(confirm, ""),
+        "codes": sorted({code for code in members}), "counted": sum(1 for code, _n in TEAM_BOOK if code in members),
+        "latest": tape.iso(share_last), "stale": index_last > share_last,
+        "strength": 0.0 if since is None or label != "在出手" else strength_of(max((day["multiple"] or 1) for day in last["days"]), since),
+        "last": None if not last else pack(last),
+        "hold": None if not held else {**held, "since": tape.iso(last["day"]), "days": since},
+        "sell": None if not (sign1 or sign2) else {
+            "sign1": sign1, "sign2": sign2, "groups": sells[-1]["groups"] if sells else sorted(last["groups"]) if last else [],
+            "delta": sells[-1]["delta"] if sells else None, "index_pct": sells[-1]["index_pct"] if sells else None,
+            "days": len(sells), "day": tape.iso(sells[-1]["day"]) if sells else "",
+        },
+        "marks": marks, "counts": counts, "series": series,
+        "actions": [pack(item) for item in events[-6:]],
+        "history": history([{"day": item["day"], "delta": item["delta"], "index_pct": item["index_pct"]} for item in events], calendar, pct),
+        "industry": industry, "today_top": today_flow["top"], "today_broad": today_flow["total"],
+        "pressure": pressures[last_i]["kind"] or ("接近承压" if pressures[last_i]["near"] else ""),
     }
 
 
+def build(today: date) -> dict:
+    start = tape._ymd_offset(today, 400)
+    codes = [code for code, _name in _flat(BROAD + INDUSTRY + CROSS)]
+    shares = dict(zip(codes, tape._parallel(codes, lambda code: tape.fund_share_rows(code, today))))
+    closes = dict(zip(codes, tape._parallel(codes, lambda code: tape.fund_bar_rows(code, today))))
+    idx = tape.cached(f"indexpx:{start}", lambda: tape.pro().index_daily(
+        ts_code="000001.SH", start_date=start, end_date=tape._ymd(today), fields="trade_date,pct_chg,close",
+    ))
+    pct, index_close = {}, {}
+    for row in idx:
+        day = tape.ymd(row.get("trade_date"))
+        if tape.num(row.get("pct_chg")) is not None:
+            pct[day] = tape.num(row.get("pct_chg"))
+        if tape.num(row.get("close")) is not None:
+            index_close[day] = tape.num(row.get("close"))
+    return summarize(shares, closes, pct, index_close)
+
+
+def _stance_row(item: dict, now: datetime, days: int) -> dict | None:
+    title = str(item.get("title") or "")
+    stamp = str(item.get("time") or item.get("date") or "")[:10]
+    if not title or len(stamp) < 10:
+        return None
+    try:
+        when = datetime.strptime(stamp, "%Y-%m-%d")
+    except ValueError:
+        return None
+    if now - when > timedelta(days=days):
+        return None
+    if not any(word in title for word in ("增持", "增加持有")):
+        return None
+    who = ""
+    if any(word in title for word in HUJIN_WORDS):
+        who = "汇金"
+    else:
+        who = next((name for name, word in OTHER_TEAMS if word in title or name in title), "")
+    if not who:
+        return None
+    return {"date": stamp, "who": who, "title": title, "url": item.get("url") or ""}
+
+
+def apply_stance(team: dict, items: list[dict], now: datetime | None = None) -> dict:
+    """有汇金增持的公告、但出手日没对上，状态写成「已表态」。对上了才把疑似升级成确认，出手日不变。"""
+    if not team.get("ok"):
+        return team
+    now = now or datetime.now()
+    rows, seen = [], set()
+    for item in items or []:
+        row = _stance_row(item, now, 20)
+        if not row or row["title"] in seen:
+            continue
+        seen.add(row["title"])
+        rows.append(row)
+    out = {**team, "marks": list(team.get("marks") or []), "stance": [row for row in rows if row["who"] == "汇金"][:3],
+           "others": [row for row in rows if row["who"] != "汇金"][:3]}
+    huijin = out["stance"]
+    if not huijin:
+        return out
+    action_days = {row["day"] for row in out.get("actions") or []}
+    matched = False
+    for row in huijin:
+        for day in action_days:
+            if abs((datetime.strptime(row["date"], "%Y-%m-%d") - datetime.strptime(day, "%Y-%m-%d")).days) <= 2:
+                matched = True
+    if matched:
+        out["confirm"] = "L1"
+        out["confirm_word"] = "确认是汇金"
+    if not matched:
+        if "已表态未见资金" not in out["marks"]:
+            out["marks"].append("已表态未见资金")
+        if out.get("label") == "没出手":
+            out["label"] = "已表态"
+            out["stated"] = huijin[0]
+    return out
+
+
 def official_items(items: list[dict], now: datetime, days: int = 20) -> list[dict]:
-    """从新闻搜索结果里留下官方主体 + 明确动作的标题，近 days 天。"""
+    """从新闻搜索结果里留下官方主体 + 明确动作的标题，近 days 天。降准降息仍留给宏观，不改国家队状态。"""
     out, seen = [], set()
     for item in items:
         title = str(item.get("title") or "")

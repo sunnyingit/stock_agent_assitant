@@ -1,7 +1,7 @@
 """盘中同一时刻：今天、昨天、前几天平均的累计成交额放在一起比。
 
 tushare 的分钟接口一分钟才让调一次，这里用东方财富的分钟走势（一次 5 个交易日）。
-全市场成交额 = 上证指数 + 深证综指；ETF 异动看国家队 9 只合计。盘中数据只提醒，不改结论。
+全市场成交额 = 上证指数 + 深证综指；ETF 异动看每组宽基里规模最大的那一只合计。盘中数据只提醒，不改结论。
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import urllib.request
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from app.services.market_team import TEAM_BOOK
+from app.services.market_team import INTRADAY_BOOK
 from app.tools import cache
 
 _ZONE = ZoneInfo("Asia/Shanghai")
@@ -157,7 +157,7 @@ def build(now: datetime | None = None) -> dict:
         out["market"] = None
     try:
         etf_rows = []
-        for code, _name in TEAM_BOOK:
+        for code, _name in INTRADAY_BOOK:
             try:
                 etf_rows += fetch(secid_of(code))
             except Exception:

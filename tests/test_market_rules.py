@@ -172,6 +172,17 @@ class SummaryTest(unittest.TestCase):
         self.assertTrue(worse["指数跌破前低"]["met"])
         self.assertIn("创业板指", worse["指数跌破前低"]["now"])
 
+    def test_missing_money_series_keeps_the_page(self):
+        parts = _parts()
+        parts["turnover"] = {"label": "没有"}
+        out = summarize(parts, date(2026, 11, 7))
+        money = next(item for item in out["conclusion"]["signals"] if item["key"] == "money")
+        self.assertIsNone(money["tier"])
+        self.assertEqual(money["label"], "没有")
+        self.assertEqual(out["money"]["label"], "没有")
+        self.assertEqual(tab_of("fund", parts, date(2026, 11, 7))["label"], "没有")
+        self.assertEqual(out["conclusion"]["count"], 1)
+
     def test_every_tab_builds(self):
         parts = _parts()
         for name in ("fund", "team", "sector", "mood", "cal", "macro"):

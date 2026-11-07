@@ -15,7 +15,7 @@ from app.services import market_rules as rules
 from app.services import market_changes, market_emotion, market_intraday, market_notify, market_sector, market_team
 from app.services.market_store import get_store
 from app.services import market_disk
-from app.services.market_tape import build, judge_pulse, judge_turnover
+from app.services.market_tape import build, judge_pulse
 from app.tools import cache
 
 _ZONE = ZoneInfo("Asia/Shanghai")
@@ -71,13 +71,10 @@ def _pctile_info(label: str, pctile) -> dict | None:
     return {"label": label, "value": pctile, "word": _word(pctile), "text": f"{round(pctile * 100)}% 分位"}
 
 
-def _age(day: str, today: date, previous: str = "") -> str:
+def _age(day: str, today: date | None = None, previous: str = "") -> str:
+    """统一写月-日。today、previous 保留是为了旧的调用签名。"""
     if not day:
         return ""
-    if day == today.isoformat():
-        return "今日"
-    if previous and day == previous:
-        return "昨日"
     return day[5:]
 
 
@@ -101,6 +98,8 @@ def _stored(bucket, n: int):
 
 
 def _etf_marks(etf: dict) -> list[int]:
+    if etf.get("votes") is not None:
+        return etf["votes"]
     label, windows = etf.get("label"), etf.get("windows")
     marks = []
     for n in (5, 30, 60):
@@ -115,6 +114,8 @@ def _etf_marks(etf: dict) -> list[int]:
 
 
 def _margin_marks(margin: dict) -> list[int]:
+    if margin.get("votes") is not None:
+        return margin["votes"]
     label, windows = margin.get("label"), margin.get("windows")
     day30, day60 = _stored(windows, 30), _stored(windows, 60)
     if label == "加速下降":
@@ -124,6 +125,21 @@ def _margin_marks(margin: dict) -> list[int]:
     if label == "在升" and day30 is not None and day30 > 0.02:
         return [30, 60] if day60 is not None and day60 > 0 else [30]
     return []
+
+
+def _mz_unit(value) -> str:
+    if value is None:
+        return "—"
+    rounded = round(float(value), 1)
+    if rounded == 0:
+        return "0.0 Mz"
+    sign = "+" if rounded > 0 else "−"
+    return f"{sign}{abs(rounded):.1f} Mz"
+
+
+def _mz_stats(mz, days, mark=()) -> list[dict]:
+    marks = {mark} if isinstance(mark, int) else set(mark or [])
+    return [_stat(f"{n} 日", _mz_unit(_stored(mz, n)), n in marks) for n in days]
 
 
 def _span_stats(bucket, fmt, mark=()) -> list[dict]:
@@ -330,23 +346,32 @@ def conclusion(turnover: str, etf: str, margin: str) -> dict:
     """短期「钱」的结论只看成交、宽基份额和两融。南向、流动性和增减持不改这一档。"""
     lean = judge_pulse(turnover, etf, margin)
     gate = "通过" if lean == "在进" else "不过"
+    notes = []
+    if etf == "净流入" and turnover == "平时" and margin == "加速下降":
+        notes.append("资金在进、热度中性、杠杆在退")
+    elif etf == "净流入" and margin == "加速下降":
+        notes.append("杠杆背离：宽基在净流入，两融在加速下降")
     toward_in = []
     if etf != "净流入":
-        toward_in.append("宽基 5 日超过 +1% 且至少 4 天在买，同时 30 日和 60 日也超过 +1%")
+        toward_in.append("宽基 5 日偏离超过自身近 60 天常态，且 30 日、60 日也同向")
     if turnover == "冷清":
-        toward_in.append("1 / 3 / 5 / 30 日成交里，冷清不到三档")
+        toward_in.append("成交不再冷清")
+    if turnover == "平时" and margin == "加速下降" and etf == "净流入":
+        toward_in.append("成交转活跃，或两融不再加速下降")
     toward_weak_met = []
     toward_weak_open = []
     if margin in ("在降", "加速下降"):
         toward_weak_met.append(f"两融{margin}")
     else:
-        toward_weak_open.append("两融 30 日下降超过 2%")
+        toward_weak_open.append("两融 5 日偏离落到在降")
     if turnover == "冷清":
         toward_weak_met.append("成交冷清")
     else:
         toward_weak_open.append("成交转为冷清")
     if lean == "在进":
         summary = "宽基在净流入，成交也不冷清，短期可以看成有钱进来。"
+    elif notes:
+        summary = "宽基在净流入，成交平时，两融在加速下降：资金在进、热度中性、杠杆在退，总档仍是观望。"
     elif lean == "偏弱" and etf == "净流入":
         summary = "成交冷清、借钱炒股的在还钱，但宽基 ETF 在净流入：有钱往 ETF 里去，要等成交回到平时才算「在进」。"
     elif lean == "偏弱":
@@ -358,6 +383,7 @@ def conclusion(turnover: str, etf: str, margin: str) -> dict:
         "gate": gate,
         "gate_text": "只减不加" if lean == "偏弱" else ("可以看增量" if lean == "在进" else "先看，不加码"),
         "summary": summary,
+        "notes": notes,
         "toward_in": toward_in,
         "toward_weak_met": toward_weak_met,
         "toward_weak_open": toward_weak_open,
@@ -454,6 +480,11 @@ def _mood_notes(indexes: list[dict], breadth: dict, limits: dict, emotion: dict,
     return notes
 
 
+def _money_word(tier: str | None) -> str:
+    """数据没齐时档位是空的，页面显示「没有」，不能拿空档位去查词表。"""
+    return rules.MONEY_WORD.get(tier) or "没有"
+
+
 def _money_signal(parts: dict) -> dict:
     turn, etf, margin = parts["turnover"], parts["etf"], parts["margin"]
     labels = (turn.get("label") or "没有", etf.get("label") or "没有", margin.get("label") or "没有")
@@ -461,10 +492,16 @@ def _money_signal(parts: dict) -> dict:
         head = {
             "label": "没有", "gate": "不过", "gate_text": "数据没齐",
             "summary": "成交、宽基或两融有一项没取到，这一档先不算进总判断。",
+            "notes": [],
             "toward_in": [], "toward_weak_met": [], "toward_weak_open": [],
         }
         return {"head": head, "tier": None, "tone": "flat"}
     head = conclusion(*labels)
+    for part, name in ((turn, "成交"), (etf, "宽基"), (margin, "两融")):
+        if part.get("baseline") == "不足":
+            head.setdefault("notes", []).append(f"{name}基线不足，这档退回固定阈值")
+    for mark in margin.get("marks") or []:
+        head.setdefault("notes", []).append(mark)
     tier = rules.money_tier(head["label"])
     tone = {"顺": "good", "平": "warn", "逆": "bad"}[tier]
     return {"head": head, "tier": tier, "tone": tone}
@@ -572,14 +609,15 @@ def _better_worse(parts: dict, mood: dict) -> tuple[list[dict], list[dict]]:
     etf_met = etf.get("label") == "净流入"
     margin_now = _pct(_stored(margin.get("windows"), 30) if margin.get("windows") else margin.get("ratio4"))
     margin5 = _stored(margin.get("windows"), 5)
-    better.append({"short": "宽基 5 日", "text": "宽基 ETF 近 5 天净流入超过 1%，且至少 4 天在买", "met": etf_met,
+    better.append({"short": "宽基 5 日", "text": "宽基近 5 日份额变化明显高于自身近 60 天常态", "met": etf_met,
                    "now": f"现在 {_pct(etf.get('ratio'), 2)}，{etf.get('buy_days', '—')} 天在买"})
     if turn.get("label") == "冷清":
         better.append({"short": "成交回暖", "text": "成交回到平时水平，不再冷清", "met": False, "now": f"现在近 5 日 {_pct(turn.get('ratio5'))}"})
-    better.append({"short": "两融止跌", "text": "两融近 5 日不再减少，不低于 −2% 算止跌", "met": margin5 is not None and margin5 >= -0.02,
+    margin_easing = margin.get("label") not in ("在降", "加速下降")
+    better.append({"short": "两融止跌", "text": "两融近 5 日偏离不再落到在降或加速下降", "met": margin_easing and margin.get("label") not in (None, "没有"),
                    "now": "现在没有" if margin5 is None else f"现在 5 日 {_pct(margin5)}"})
     broken = [row["name"] for row in indexes if row.get("broke_low")]
-    worse.append({"short": "两融 30 日", "text": "借钱炒股的 30 日减少超过 5%", "met": margin.get("label") == "加速下降", "now": f"现在 30 日 {margin_now}"})
+    worse.append({"short": "两融 5 日", "text": "两融近 5 日明显低于自身常态，且 30 日也在降", "met": margin.get("label") == "加速下降", "now": f"现在 30 日 {margin_now}"})
     worse.append({"short": "跌破前低", "text": "指数跌破前低", "met": bool(broken), "now": "现在 " + ("、".join(broken) + "已破" if broken else "都没破")})
     worse.append({"short": "成交冷清", "text": "成交转为冷清", "met": turn.get("label") == "冷清", "now": f"现在近 5 日 {_pct(turn.get('ratio5'))}"})
     return better, worse
@@ -780,157 +818,199 @@ def _sector_headline(rows: list[dict]) -> str:
 
 
 # ---------------------------------------------------------------- 国家队
-# 在出手发生在大跌里，说明市场正弱，托底不等于顺风，所以只展示不加分；托底的钱撤走才扣分
-_TEAM_TIER = {"在出手": "平", "没出手": "平", "可能在卖": "逆"}
-_TEAM_TONE = {"在出手": "good", "没出手": "flat", "可能在卖": "bad"}
+# 出手、钱还在、回落、可能在撤、已表态，都只展示，不进总档
+_TEAM_TONE = {"在出手": "good", "钱还在": "flat", "部分回落": "warn", "可能在撤": "bad", "没出手": "flat", "已表态": "warn"}
 
 
-def _team_signal(team: dict) -> dict:
+def _team_ready(team: dict, announce: dict | None) -> dict:
+    if not team.get("ok"):
+        return team
+    return market_team.apply_stance(team, (announce or {}).get("items") or [])
+
+
+def _team_signal(team: dict, announce: dict | None = None) -> dict:
     if not team.get("ok"):
         return {"key": "team", "n": "②", "name": "国家队", "tier": None, "label": "没取到", "tone": "flat", "text": team.get("text") or "份额数据没取到，不参与总档位"}
-    return {"key": "team", "n": "②", "name": "国家队", "tier": _TEAM_TIER[team["label"]], "label": team["label"], "tone": _TEAM_TONE[team["label"]], "text": _team_headline(team)}
-
-
-def _team_event(last: dict) -> str:
-    """一次出手发生了什么，不带术语：上证怎么样、9 只 ETF 买了多少、买的是什么、在近 60 天里算不算猛。"""
-    move = last["index_pct"]
-    market = f"上证{'跌' if move < 0 else '涨'} {abs(move):.1f}%"
-    if last.get("weak") == "连跌":
-        market += f"，近 3 日累计跌 {abs(last['cum3']):.1f}%"
-    elif last.get("weak") == "承接":
-        market += f"，但刚承过压（近 3 日累计 {last['cum3']:+.1f}%，最弱一天 {last['worst3']:+.1f}%）"
-    names, positive = last.get("names", 9), last.get("positive")
-    buying = f"{names} 只大盘 ETF 里 {positive} 只当天在净申购" if positive is not None else f"{names} 只大盘 ETF 当天一起大额申购"
-    rank = last.get("rank")
-    size = "" if not rank else ("，是近 60 个交易日里最多的一次" if rank == 1 else f"，在近 60 个交易日里排第 {rank}")
-    blue = "" if last.get("blue_share") is None else f"，其中大盘宽基占 {last['blue_share'] * 100:.0f}%"
-    text = f"{market}；{buying}，合计净申购约 {last['delta']:.0f} 亿元{size}{blue}"
-    if last.get("weak") == "极猛":
-        text += "。上证跌得不算多，但这笔买入是近 60 天里最猛的，所以也算"
-    if last.get("streak", 1) > 1:
-        text += f"。这是连续出手的第 {last['streak']} 次"
-    return text
-
-
-def _team_sell_event(sell: dict) -> str:
-    move = sell["index_pct"]
-    return (f"近 3 个交易日里有 {sell['days']} 天，{sell['names']} 只大盘 ETF 里 {sell['negative']} 只在被净赎回；"
-            f"{sell['day'][5:]} 合计净赎回约 {abs(sell['delta']):.0f} 亿元，大盘宽基占 {sell['blue_share'] * 100:.0f}%，"
-            f"当天上证{'跌' if move < 0 else '涨'} {abs(move):.1f}%，不是恐慌割肉的样子，更像是有大资金在减仓")
-
-
-def _team_headline(team: dict) -> str:
-    last, hold, sell = team.get("last"), team.get("hold"), team.get("sell")
-    if team["label"] == "在出手":
-        return (f"出手了：{last['day'][5:]} {_team_event(last)}。出手后 5 个交易日内算「在出手」，"
-                f"今天是第 {last['since'] + 1} 天，信号会逐天变弱")
-    if team["label"] == "可能在卖":
-        if sell and sell["since"] < 5:
-            return f"可能在卖：{_team_sell_event(sell)}。只看份额，分不清是不是国家队"
-        return f"之前托底的钱在撤：出手后新增的份额，9 只 ETF 中间已经还回去 {hold['gone'] * 100:.0f}%，超过 3 成"
-    if last:
-        return f"最近没出手。上一次是 {last['day'][5:]}（{last['since']} 个交易日前）"
-    return "近一年没有出现「市场承压、大盘 ETF 一起大额买入」的日子"
+    team = _team_ready(team, announce)
+    return {"key": "team", "n": "②", "name": "国家队", "tier": "平", "label": team["label"], "tone": _TEAM_TONE[team["label"]], "text": _team_headline(team)}
 
 
 def _signed(value: float, digits: int = 1, suffix: str = "%") -> str:
     return f"{value:+.{digits}f}{suffix}".replace("-", "−")
 
 
+def _team_event(last: dict) -> str:
+    """一次疑似出手：哪一天、几组宽基、合计多少钱、上证当时怎么样。"""
+    move = last.get("index_pct")
+    market = "" if move is None else f"上证{'跌' if move < 0 else '涨'} {abs(move):.1f}%。"
+    groups = "、".join(last.get("groups") or [])
+    found = f"{last['found'][5:]} 发现。" if last.get("found") else ""
+    kind = {"大跌": "当天大跌", "连跌": "连续下跌", "承接": "前两天刚承压", "位置": "距高点回撤较深"}.get(last.get("kind") or "", "")
+    where = f"{kind}。" if kind else ""
+    return f"{last['day'][5:]} 出手，{found}{where}{market}{groups}异常申购，合计约 {last['delta']:.0f} 亿元"
+
+
+def _team_headline(team: dict) -> str:
+    last, hold, sell = team.get("last"), team.get("hold"), team.get("sell")
+    word = team.get("confirm_word") or "疑似出手"
+    if team["label"] == "在出手" and last:
+        return (f"{last['day'][5:]} {word}：{len(last.get('groups') or [])} 组宽基异常申购，合计 {last['delta']:.0f} 亿元。"
+                f"出手后 5 个交易日内算「在出手」，今天是第 {last['since'] + 1} 天")
+    if team["label"] == "可能在撤":
+        if sell and sell.get("sign1") and hold and hold.get("gone") is not None:
+            return f"份额回落 {hold['gone'] * 100:.0f}%，超过 3 成。可能是国家队在减，也可能是散户赎回"
+        if sell and sell.get("sign2"):
+            return "不跌的日子里，宽基被广泛赎回。可能是国家队在减，也可能是散户赎回"
+        return "可能在撤。只看份额，分不清是国家队还是别的资金"
+    if team["label"] == "钱还在" and hold and hold.get("gone") is not None:
+        if hold["gone"] <= 0:
+            return "上次出手之后，份额没有回落"
+        return f"上次出手的份额只回落 {hold['gone'] * 100:.0f}%，还在"
+    if team["label"] == "部分回落" and hold and hold.get("gone") is not None:
+        gap = hold.get("gap_yi")
+        tail = "" if gap is None else f"，离 30% 的警戒线还差 {gap:.0f} 亿份"
+        return f"已回落 {hold['gone'] * 100:.0f}%{tail}"
+    if team["label"] == "已表态":
+        return "汇金已发公告，尚未看到资金进场"
+    if last:
+        return f"近 20 天没有出手迹象。上一次是 {last['day'][5:]}"
+    return "近一年没有出现出手迹象"
+
+
+def _team_brief(team: dict) -> str:
+    last = team.get("last")
+    if team["label"] == "在出手" and last:
+        return f"{last['day'][5:]} {team.get('confirm_word') or '疑似出手'}，今天是第 {last['since'] + 1} 天"
+    if team["label"] == "可能在撤":
+        return "可能在撤"
+    if team["label"] == "已表态":
+        return "已表态，尚未看到资金进场"
+    if team["label"] == "钱还在":
+        return "钱还在"
+    if team["label"] == "部分回落":
+        return "部分回落"
+    if last:
+        return f"最近没出手。上一次是 {last['day'][5:]}"
+    return "近一年没有出手迹象"
+
+
+def _team_lead(team: dict) -> str:
+    last, hold = team.get("last"), team.get("hold")
+    if team["label"] == "在出手" and last:
+        return _team_event(last) + "。信号逐天变弱，不进总档。"
+    if team["label"] == "可能在撤":
+        return _team_headline(team) + "。这一条只展示，不进总档。"
+    if hold and hold.get("gone") is not None and team["label"] in ("钱还在", "部分回落"):
+        return _team_headline(team) + "。"
+    return ""
+
+
 def _last_facts(last: dict | None) -> list[dict]:
     if not last:
         return []
-    facts = [
-        {"k": "出手日", "v": last["day"][5:], "tone": "flat"},
-        {"k": "上证", "v": _signed(last["index_pct"]), "tone": "bad" if last["index_pct"] < 0 else "good"},
-    ]
-    if last.get("weak") == "承接" and last.get("cum3") is not None:
-        facts.append({"k": "近 3 日", "v": _signed(last["cum3"]), "tone": "flat"})
-        facts.append({"k": "最弱一天", "v": _signed(last["worst3"]), "tone": "bad"})
-    elif last.get("weak") == "连跌" and last.get("cum3") is not None:
-        facts.append({"k": "近 3 日", "v": _signed(last["cum3"]), "tone": "bad"})
-    if last.get("positive") is not None:
-        facts.append({"k": "当天在买", "v": f"{last['positive']}/{last.get('names', 9)}", "tone": "good"})
+    facts = [{"k": "出手日", "v": last["day"][5:], "tone": "flat"}]
+    if last.get("found"):
+        facts.append({"k": "发现日", "v": last["found"][5:], "tone": "flat"})
+    if last.get("index_pct") is not None:
+        facts.append({"k": "上证", "v": _signed(last["index_pct"]), "tone": "bad" if last["index_pct"] < 0 else "good"})
+    if last.get("groups"):
+        facts.append({"k": "达标", "v": f"{len(last['groups'])} 组", "tone": "good"})
     facts.append({"k": "净申购", "v": f"{last['delta']:.0f} 亿", "tone": "good" if last["delta"] > 0 else "bad"})
-    if last.get("blue_share") is not None:
-        facts.append({"k": "宽基占比", "v": f"{last['blue_share'] * 100:.0f}%", "tone": "flat"})
-    if last.get("rank"):
-        facts.append({"k": "近 60 日", "v": "最多一次" if last["rank"] == 1 else f"第 {last['rank']}", "tone": "flat"})
-    if last.get("signal") is not None:
-        facts.append({"k": "异常度", "v": f"{last['signal']:.1f}", "tone": "flat"})
-    if last.get("limit") is not None:
-        facts.append({"k": "异常门槛", "v": f"{last['limit']:.1f}", "tone": "flat"})
-    if last.get("money_limit") is not None:
-        facts.append({"k": "金额门槛", "v": f"{last['money_limit']:.0f} 亿", "tone": "flat"})
-    facts.append({"k": "距今", "v": f"{last['since']} 天", "tone": "good" if last["since"] < 5 else "flat"})
-    if last.get("streak", 1) > 1:
-        facts.append({"k": "连续", "v": f"第 {last['streak']} 次", "tone": "good"})
     return facts
+
+
+def _hold_facts(hold: dict | None) -> list[dict]:
+    if not hold or hold.get("gone") is None:
+        return []
+    gap = hold.get("gap_yi")
+    line, now = hold.get("line_yi"), hold.get("now_yi")
+    return [
+        {"k": "回落", "v": f"{hold['gone'] * 100:.0f}%", "tone": "bad" if hold["gone"] > 0.3 else "flat"},
+        {"k": "警戒线", "v": "—" if line is None else f"{line:.0f} 亿份", "tone": "flat"},
+        {"k": "现在", "v": "—" if now is None else f"{now:.0f} 亿份", "tone": "flat"},
+        {"k": "还差", "v": "已过线" if gap is not None and gap < 0 else ("" if gap is None else f"{gap:.0f} 亿份"), "tone": "flat"},
+    ]
 
 
 def _sell_facts(sell: dict | None) -> list[dict]:
     if not sell:
         return []
-    return [
-        {"k": "减仓日", "v": sell["day"][5:], "tone": "bad"},
-        {"k": "上证", "v": _signed(sell["index_pct"]), "tone": "flat"},
-        {"k": "净赎回", "v": f"{abs(sell['delta']):.0f} 亿", "tone": "bad"},
-        {"k": "在赎回", "v": f"{sell['negative']}/{sell['names']}", "tone": "bad"},
-        {"k": "宽基占比", "v": f"{sell['blue_share'] * 100:.0f}%", "tone": "flat"},
-        {"k": "近 3 日", "v": f"{sell['days']} 天", "tone": "bad"},
-    ]
+    facts = []
+    if sell.get("sign1"):
+        facts.append({"k": "迹象一", "v": "份额回落超 3 成", "tone": "bad"})
+    if sell.get("sign2"):
+        facts.append({"k": "迹象二", "v": f"近 3 日 {sell.get('days') or 0} 天大额赎回", "tone": "bad"})
+    return facts
+
+
+_TEAM_RULE = (
+    "只看份额，不猜是谁，也不预测明天会不会买。四条同一天都碰上，才记一次疑似出手。"
+    "①市场在跌：上证跌超 1%；或跌超 0.5% 且近 3 日合计跌超 2%；或前两天已经是这种跌法，今天涨跌都算；"
+    "或离近 120 天高点跌掉超过 10%，并且收在 20 日均线下面。只跌了 8% 到 10%，标「接近承压」，不算。"
+    "②钱进的是宽基：同指数的 ETF 先合并，再和行业、跨境比当天净申购。前 3 名里至少 2 个是宽基，宽基加总还要是净申购。"
+    "③至少两组宽基买得不像平时：只跟自己过去 60 个交易日比。当天和近 5 天各算一个偏离，更大的那个要超过 3，并且份额至少变 0.5%。"
+    "过去 60 天不够时，当天超过 1% 或 5 天超过 2% 也算，并标「基线不足」。"
+    "④合计要达到多少亿，还没拿历史对过，这一条先不拦。"
+    "隔了不超过 3 个交易日的两次，算同一次。出手后的 5 个交易日都标「在出手」。"
+    "份额从高点掉不到 10% 是钱还在，10% 到 30% 是部分回落，超过 30% 是可能在撤。"
+    "不跌的日子里，至少 3 组宽基被大额赎回，近 3 天里有 2 天这样，也是可能在撤。两种一起出现，标「迹象较强」。"
+    "可能在撤只写在这张卡上。行业和跨境不触发出手。"
+)
 
 
 def _team_card(team: dict, announce: dict) -> dict:
     if not team.get("ok"):
         return {"pending": True, "text": team.get("text") or "份额数据没取到，这一项暂时判不了。"}
-    last, hold, counts = team.get("last"), team.get("hold"), team["counts"]
+    team = _team_ready(team, announce)
+    last, hold = team.get("last"), team.get("hold")
     tone = _TEAM_TONE[team["label"]]
-    if last:
-        tech = ""
-        if last.get("money_limit") is not None and last.get("signal") is not None and last.get("limit") is not None:
-            tech = (f"（技术细节：各只申购跟自己平时比的异常度，中间值 {last['signal']:.1f}，超过 {last['limit']:.1f} 才算异常；"
-                    f"合计净申购要超过 {last['money_limit']:.0f} 亿元）")
-        first = (f"{last['day'][5:]} 出过一次手：{_team_event(last)}"
-                 + (f"；之后 {last['since']} 个交易日没有再出现。" if last["since"] > 0 else "。")
-                 + tech
-                 + (f"。出手后 5 个交易日内算「在出手」，今天是第 {last['since'] + 1} 天，信号会逐天变弱" if team["label"] == "在出手" else ""))
-    else:
-        first = "近一年没有出现「市场承压、大盘 ETF 一起大额买入」的日子。"
-    gone = None if not hold else hold["gone"]
-    count_facts = [{"k": f"{n} 日", "v": f"{_stored(counts, n) or 0} 次", "tone": "good" if _stored(counts, n) else "flat"} for n in (1, 3, 5, 30, 60)]
-    hold_facts = [] if not hold else [
-        {"k": "出手日", "v": f"{hold['bought']:.0f} 亿", "tone": "flat"},
-        {"k": "之后累计", "v": f"{hold['post']:+.0f} 亿".replace("-", "−"), "tone": "bad" if hold["post"] < 0 else "good" if hold["post"] > 0 else "flat"},
-        {"k": "已还回去", "v": "没有" if hold["gone"] is None else f"{hold['gone'] * 100:.0f}%", "tone": "bad" if hold["sold"] else "flat"},
-        {"k": "之后天数", "v": f"{hold['days']} 天", "tone": "flat"},
-    ]
+    gone = None if not hold else hold.get("gone")
     rows = [
-        {"q": "最近有没有出手托底？", "a": f"近 5 天 {_stored(counts, 5) or 0} 次", "tone": "good" if _stored(counts, 5) else "flat",
-         "facts": count_facts + _last_facts(last), "detail": first},
-        {"q": "之前买进去的钱还在吗？", "a": "没有出手记录" if not hold else ("撤走超过 3 成" if hold["sold"] else "有一部分撤走" if gone > 0.15 else "大部分还在"),
-         "tone": "bad" if hold and hold["sold"] else "flat", "facts": hold_facts,
-         "detail": "没有可追踪的出手日" if not hold else (
-             f"出手日净申购 {hold['bought']:.0f} 亿元；之后 {hold['days']} 个交易日累计 {hold['post']:+.0f} 亿元。"
-             f"9 只 ETF 把出手当天新增的份额还回去的比例，中间值是 {0 if hold['gone'] is None else hold['gone'] * 100:.0f}%，超过 30% 才算撤走"
+        {"q": "最近有没有出手？", "a": "确认是汇金" if team.get("confirm") == "L1" else ((team.get("confirm_word") or "疑似出手") if team["label"] == "在出手" else ("已表态" if team["label"] == "已表态" else (f"{last['day'][5:]} 有过" if last else "没有"))),
+         "tone": "good" if team["label"] == "在出手" else "flat",
+         "facts": _last_facts(last),
+         "detail": "近一年没有出现四条同时成立的日子。" if not last else _team_event(last) + "。出手后 5 个交易日内显示「在出手」。"},
+        {"q": "出手的钱还在吗？", "a": "没有出手记录" if not hold else ("明显回落" if gone is not None and gone > 0.3 else "部分回落" if gone is not None and gone >= 0.1 else "钱还在"),
+         "tone": "bad" if gone is not None and gone > 0.3 else "warn" if gone is not None and gone >= 0.1 else "flat",
+         "facts": _hold_facts(hold),
+         "detail": "没有可追踪的出手。" if not hold or gone is None else (
+             f"出手后 10 个交易日里的最高份额，现在{'没有回落' if gone <= 0 else f'回落了 {gone * 100:.0f}%'}。"
+             + ("" if hold.get("line_yi") is None or hold.get("now_yi") is None else f"30% 警戒线大约在 {hold['line_yi']:.0f} 亿份，现在 {hold['now_yi']:.0f} 亿份。")
+             + "这是整组份额的净额，散户赎回也会让它下降。"
          )},
-        {"q": "有没有在悄悄卖？", "a": "有迹象" if team["label"] == "可能在卖" else "暂时没有迹象", "tone": "bad" if team["label"] == "可能在卖" else "good",
-         "facts": _sell_facts(team.get("sell")) if team.get("sell") and team["sell"]["since"] < 5 else [],
-         "detail": ((_team_sell_event(team["sell"]) + "。") if team.get("sell") and team["sell"]["since"] < 5 else
-                    "两种迹象才算：出手后新增的份额被还回去超过 30%；或者大盘宽基被连续、广泛、大额地赎回（上证没大跌）。现在两种都没有。")
-                   + "只看份额，不确认是谁"},
+        {"q": "有没有在撤？", "a": "迹象较强" if "迹象较强" in (team.get("marks") or []) else ("可能在撤" if team["label"] == "可能在撤" or (team.get("sell") or {}).get("sign2") else "暂时没有"),
+         "tone": "bad" if team["label"] == "可能在撤" else "flat",
+         "facts": _sell_facts(team.get("sell")),
+         "detail": "两种情况出现一种就写出来，不改市场总档。一种是上次买进去的份额掉了超过 30%。另一种是最近 3 天里至少 2 天，上证没有大跌，同时至少 3 组宽基在明显赎回。赎回要达到多少亿才算，还没对过历史，先不拦。没有季报对上之前，只是「可能」，散户赎回也会让份额下降。"},
     ]
+    if team["label"] == "已表态":
+        rows[0]["a"] = "已表态"
+        rows[0]["detail"] = "有汇金增持的公开表态，份额上还没有看到对应的出手。"
     means = {
-        "在出手": "有人在市场承压时接盘，但这是跌出来的托底，不代表马上反转。",
-        "可能在卖": "大盘宽基在被大额撤出，下方支撑变弱；但只看份额，分不清是国家队还是别的大资金。",
-        "没出手": "有人托底但不追涨：大跌时它可能再出手，但别指望它推着市场往上走。",
+        "在出手": "有人在市场承压时申购宽基。这是疑似，不是确认，也不代表马上反转。",
+        "钱还在": "上次出手留下的份额大部分还在。份额是所有人申赎相抵后的净额。",
+        "部分回落": "上次出手留下的份额回落了一部分，还没到 30% 的警戒线。",
+        "可能在撤": "份额在回落，或宽基在不跌的日子里被大额赎回。可能是国家队，也可能是别人。",
+        "没出手": "最近没有「承压时宽基被集中申购」的日子。",
+        "已表态": "公告已经出来，份额上还没看到对应的资金。",
     }[team["label"]]
     return {
-        "pending": False, "tier": _TEAM_TIER[team["label"]], "label": team["label"], "tone": tone, "summary": _team_headline(team),
-        "qa": rows, "means": means, "when": "市场承压（当天大跌，或前两天刚承压），同时大盘宽基 ETF 一起被大额买入 → 「在出手」；大盘宽基被连续大额赎回而上证没大跌，或出手后新增的份额被还回去超过 3 成 → 「可能在卖」",
-        "scope": "看的是 9 只大盘 ETF 的大额净申购（份额变化 × 收盘价），这类资金通常来自国家队，不确认具体是谁；份额晚一天公布；出手只展示，不加总档位的分", "date": team.get("latest", ""),
-        "announce": announce.get("items", [])[:1],
+        "pending": False, "tier": "平", "label": team["label"], "tone": tone, "summary": _team_headline(team),
+        "marks": team.get("marks") or [], "qa": rows, "means": means,
+        "when": "市场在跌，同时钱集中进了宽基，至少两组买得不像平时，才是疑似出手。汇金的公告和这次份额对得上，才写成确认。份额掉超过 3 成，或者不跌的日子里宽基被大额赎回，是可能在撤。这张卡不改市场总档。",
+        "scope": "看按指数合并后的宽基份额。行业和跨境只用来看钱去了哪。份额第二天早上才到。合计要多少亿才算，还没对过历史，先不拦。",
+        "date": team.get("latest", ""),
+        "announce": [row for row in (team.get("stance") or [])[:1] or announce.get("items", [])[:1]],
     }
+
+
+def _book_rows() -> list[dict]:
+    rows = []
+    for kind, groups in market_team.POOL:
+        for name, codes in groups:
+            for code, label in codes:
+                rows.append({"left": label, "mid": code[:6], "right": f"{kind} · {name}", "code": code})
+    return rows
 
 
 def _team_tab(parts: dict, day: date) -> dict:
@@ -939,57 +1019,63 @@ def _team_tab(parts: dict, day: date) -> dict:
         return {"title": "国家队", "label": "没取到", "tone": "flat", "pending": True, "sections": [],
                 "summary": team.get("text") or "份额数据没取到，这一项暂时判不了。", "footnote": ""}
     card = _team_card(team, announce)
-    last, hold, counts = team["last"], team["hold"], team["counts"]
+    team = _team_ready(team, announce)
+    last, hold, counts = team.get("last"), team.get("hold"), team["counts"]
     previous = _previous_open(parts, day)
     act = _block(
-        "act", "最近有没有出手", "大跌时有没有人托底", f"近 5 天 {_stored(counts, 5) or 0} 次", _age(team["latest"], day, previous), team["label"], card["tone"],
+        "act", "最近有没有出手", "承压时宽基有没有被集中申购", f"近 5 天 {_stored(counts, 5) or 0} 次", _age(team["latest"], day, previous), team["label"], card["tone"],
         _span_stats(counts, lambda value: f"{0 if value is None else value} 次", 5),
-        "国家队出手的样子：市场承压时逆势、大额、广泛地买大盘宽基。四条同时满足才记一次出手：①市场承压——当天上证跌超 1%；或跌超 0.5% 且近 3 日累计跌超 2%；或前两天刚承压（近 3 日累计跌超 2%，或有一天跌超 1%），今天不管涨跌（护盘买进去，指数当天可能已经拉红）；②9 只 ETF 里至少 7 只当天净申购；③合计净申购和各只的申购都明显超过平时（近 60 天均值加 2 倍正常波动）；④这笔钱一半以上流向沪深 300、上证 50、中证 500、A500 这类大盘宽基，而不是科创 50、芯片这类热点。出手后 5 个交易日内显示「在出手」，信号逐天变弱。减仓看反方向：大盘宽基被广泛、大额地净赎回，上证没有大跌（恐慌割肉不算），近 3 个交易日里至少 2 天这样。只比相邻两个交易日，只看份额，不猜是谁。",
-        story=card["qa"][0]["detail"], open=True,
+        _TEAM_RULE, story=card["qa"][0]["detail"], open=False,
         chart={"kind": "team", "unit": "亿元", "points": team["series"], "legend": ["出手日", "净申购", "净赎回"]},
-        listing={"title": f"看的是哪几只 ETF（国家队通道 {team['counted']} 只，和「宽基观察池」不是一套）",
-                 "rows": [{"left": f"{name}", "mid": code[:6], "right": "", "code": code} for code, name in market_team.TEAM_BOOK if code in team["codes"]]},
+        listing={"title": "宽基按指数合并后才触发出手；行业和跨境只参加排名", "rows": _book_rows()},
     )
     holdblock = _block(
-        "hold", "买进去的钱还在吗", "有没有在悄悄卖", "没有出手记录" if not hold else f"已还回去 {0 if hold['gone'] is None else hold['gone'] * 100:.0f}%", _age(team["latest"], day, previous),
-        card["qa"][1]["a"], card["qa"][1]["tone"],
-        [_stat("出手日", "—" if not hold else f"{hold['bought']:.0f} 亿元"), _stat("之后累计", "—" if not hold else f"{hold['post']:+.0f} 亿元", True),
-         _stat("已还回去", "—" if not hold or hold["gone"] is None else f"{hold['gone'] * 100:.0f}%")],
-        "出手后，每只 ETF 把出手当天新增的份额还回去了多少（按各自的波动折算，大 ETF 不会单独把比例拉高或压低），取 9 只的中间值；超过 30% 才改成「可能在卖」。",
+        "hold", "买进去的钱还在吗", "有没有在撤", "没有出手记录" if not hold or hold.get("gone") is None else f"回落 {hold['gone'] * 100:.0f}%",
+        _age(team["latest"], day, previous), card["qa"][1]["a"], card["qa"][1]["tone"],
+        [_stat("回落", "—" if not hold or hold.get("gone") is None else f"{hold['gone'] * 100:.0f}%"),
+         _stat("警戒线", "—" if not hold or hold.get("line_yi") is None else f"{hold['line_yi']:.0f} 亿份"),
+         _stat("现在", "—" if not hold or hold.get("now_yi") is None else f"{hold['now_yi']:.0f} 亿份")],
+        "回落比例 =（出手后 10 天内的最高份额 − 今天）÷（最高份额 − 出手前一天）。只算那次出手里达标的宽基组，再取中位数。超过 30% 是「可能在撤」的迹象一，只展示，不进总档。",
     )
     live = _block(
-        "live", "今天盘中", "有没有异动", "未接入", "今日", "未接入", "flat", [],
-        "盘中成交放大、价格比净值溢价，需要实时 ETF 行情；这一期没接，晚上的份额数据才算数。",
+        "live", "今天盘中", "只能提示，不能改状态", "待份额" if team.get("stale") else "看份额", _age(team.get("latest") or "", day),
+        "待更新" if team.get("stale") else "已更新", "warn" if team.get("stale") else "flat", [],
+        "盘中看不到份额。成交放到 60 日中位数的 3 倍、价格比净值溢价，都只是提示。尾盘拉升和溢价这一期没有接进状态。结论等第二天份额出来再定。",
     )
-    items = [{"left": f"{row['who']}：{row['title']}", "mid": row["date"][5:], "right": "强信号" if row["strong"] else "", "url": row["url"]} for row in announce.get("items") or []]
+    items = [{"left": f"{row['who']}：{row['title']}", "mid": (row.get("date") or "")[5:], "right": "强信号" if row.get("strong") else row.get("who") or "", "url": row.get("url") or ""} for row in (announce.get("items") or [])]
+    for row in team.get("others") or []:
+        items.append({"left": f"{row['who']}：{row['title']}", "mid": row["date"][5:], "right": "单独展示", "url": row.get("url") or ""})
     ann = _block(
-        "ann", "官方说了什么", "汇金、央行、证监会", f"近 20 天 {len(items)} 条" if items else "没有筛到", "近 20 天", "只做确认", "flat",
-        [], "新闻搜索里标题带官方主体和明确动作的才算；公告只用来确认，不单独改状态。搜索可能有遗漏。",
+        "ann", "官方说了什么", "汇金对上才叫确认", f"近 20 天 {len(items)} 条" if items else "没有筛到", "近 20 天",
+        "确认是汇金" if team.get("confirm") == "L1" else "只做确认", "flat", [],
+        "汇金公开说增持，并且份额对得上，才从疑似升级为确认，出手日不变。只有公告、没有份额异动，写成「已表态，尚未看到资金进场」。诚通、国新单独展示，不写成汇金出手。降准降息不改这一路。",
         listing={"title": "标题（来自东方财富新闻搜索）", "rows": items} if items else None,
     )
     quarter = _block(
-        "qtr", "季报核对", "事后确认有没有卖过", "没有接口", "上季", "不判断", "flat", [],
-        "季报持有人和倒挂核对没有稳定接口，这一块不填示意数据。2026 年 5 月起年报、中报也不再列实名。",
+        "qtr", "季报核对", "事后才能确认是不是汇金", "该季度无法核对", "上季", "不判断", "flat", [],
+        "季报持有人没有稳定接口。2026 年 5 月起年报、中报也不再列实名，这一季的 L2 无法核对，不填示意数据。",
     )
     hist = team.get("history") or []
     history_block = _block(
         "hist", "历次出手后 20 个交易日", "上证指数的表现", f"{len(hist)} 次", "近一年", "样本少", "flat", [],
-        "只有这一年的几次可比样本，不能用来推测会涨到哪、什么时候涨。",
-        listing={"title": "出手日 · 当天净申购 · 之后 20 日上证", "rows": [
-            {"left": row["day"], "mid": f"+{row['delta']:.0f} 亿元", "right": ("进行中 · 第 %d 天" % row["progress"]) if row["ret20"] is None else _pct(row["ret20"])}
+        "已知的大规模出手只有个位数，不能用来推测会涨到哪。",
+        listing={"title": "出手日 · 当天宽基净申购 · 之后 20 日上证", "rows": [
+            {"left": row["day"], "mid": f"{row['delta']:+.0f} 亿元".replace("-", "−"), "right": ("进行中 · 第 %d 天" % row["progress"]) if row["ret20"] is None else _pct(row["ret20"])}
             for row in reversed(hist)
         ]} if hist else None,
     )
     return {
-        "title": "国家队", "label": team["label"], "tone": card["tone"], "age": _age(team["latest"], day, previous), "summary": _team_headline(team),
-        "means": card["means"], "when": card["when"],
+        "title": "国家队", "label": team["label"], "tone": card["tone"], "age": _age(team["latest"], day, previous),
+        "summary": _team_brief(team), "lead": _team_lead(team), "means": card["means"], "when": card["when"],
         "sections": [
-            {"title": "三件事看懂国家队", "hint": "第一块是判断用的，点标题可收起", "blocks": [act, holdblock, live]},
+            {"title": "三件事", "hint": "点开看图和判定", "blocks": [act, holdblock, live]},
             {"title": "辅助确认 · 公告和季报", "hint": "", "blocks": [ann, quarter]},
             {"title": "历次出手", "hint": "", "blocks": [history_block]},
         ],
-        "footnote": "我们不看什么：席位、托管行、龙虎榜、盘中「尾盘拉权重」都在猜「是谁」，猜不准，也不影响判断，所以不进结论。只看「钱进没进、出没出」，不猜「谁在买卖」。",
+        "footnote": "二级市场直接买入、不走申购的部分，不会出现在份额里。份额第二天早上才到。盘中的成交和溢价只提示，不改状态。",
     }
+
+
 
 
 # ---------------------------------------------------------------- 摘要
@@ -1040,7 +1126,7 @@ def _intraday_items(data: dict) -> list[dict]:
                       "detail": "市场" + ("更热了" if rate > 0 else "更冷了") + "；盘中数据只提醒，不改结论", "tone": "good" if rate > 0 else "warn", "tab": "fund"})
     etf = data.get("etf")
     if data.get("live") and etf and etf.get("alert"):
-        items.append({"kind": "intraday", "title": "大盘 ETF 盘中成交放大", "tag": "盘中预警", "detail": "大盘跌超 1%，9 只 ETF 成交是前几天同一时刻的 3 倍以上；要等晚上的份额数据才算数", "tone": "good", "tab": "team"})
+        items.append({"kind": "intraday", "title": "宽基 ETF 盘中成交放大", "tag": "盘中预警", "detail": "大盘跌超 1%，宽基 ETF 成交是前几天同一时刻的 3 倍以上；这只是提示，要等第二天的份额才算数", "tone": "good", "tab": "team"})
     return items
 
 
@@ -1066,9 +1152,9 @@ def summarize(parts: dict, day: date) -> dict:
     sector_rows = _sector_rows(parts["sectors"], parts.get("catalysts"))
     good_sectors = [row["name"] for row in sector_rows if row["bucket"] in ("main", "next")]
     signals = [
-        {"key": "money", "n": "①", "name": "钱", "tier": money["tier"], "label": rules.MONEY_WORD[money["tier"]],
+        {"key": "money", "n": "①", "name": "钱", "tier": money["tier"], "label": _money_word(money["tier"]),
          "tone": money["tone"], "text": money["head"]["summary"]},
-        _team_signal(parts.get("team") or {}),
+        _team_signal(parts.get("team") or {}, parts.get("announce") or {}),
         {"key": "mood", "n": "③", "name": "好不好做", "tier": mood["tier"], "label": mood["label"], "tone": mood["tone"],
          "text": mood["summary"]},
     ]
@@ -1082,13 +1168,13 @@ def summarize(parts: dict, day: date) -> dict:
         "indexes": [{"name": row["name"], "close": row.get("close"), "pct": row.get("pct"), "date": row.get("date")} for row in indexes],
         "dates": {
             "quote": indexes[0]["date"] if indexes else "",
-            "money": (parts["margin"] or {}).get("date") or (parts["turnover"] or {}).get("date") or "",
+            "money": (parts["turnover"] or {}).get("date") or (parts["margin"] or {}).get("date") or "",
             "macro": (parts["macro"] or {}).get("month") or "",
         },
         "conclusion": {
             "level": total["level"], "tilt": total["tilt"], "count": total["count"],
             "gate": money["head"]["gate"], "gate_text": money["head"]["gate_text"],
-            "headline": "、".join(item["text"] for item in signals if (item["tier"] and item["tier"] != "平") or item.get("label") == "在出手") or "成交、宽基、两融和指数没有一起指向一边",
+            "headline": "、".join(item["text"] for item in signals if (item["tier"] and item["tier"] != "平") or item.get("label") in ("在出手", "可能在撤", "已表态")) or "成交、宽基、两融和指数没有一起指向一边",
             "action": rules.action_text(total["level"], total["tilt"], good_sectors),
             "signals": signals, "better": better, "worse": worse,
             "note": "按框架规则得出，不构成投资建议。" + ("" if (parts.get("team") or {}).get("ok") else "国家队没取到，总档位只用已经取到的信号。"),
@@ -1146,35 +1232,66 @@ def _span_facts(bucket, days: tuple[int, ...], low: float, high: float, below: s
     return facts
 
 
+def _mz_text(value) -> str:
+    if value is None:
+        return "基线不足"
+    rounded = round(float(value), 1)
+    if rounded == 0:
+        return "Mz 0.0"
+    sign = "+" if rounded > 0 else "−"
+    return f"Mz {sign}{abs(rounded):.1f}"
+
+
+def _mz_fact(mz, n: int, hot: float, cold: float) -> dict:
+    value = _stored(mz, n)
+    tone = "flat" if value is None else "good" if value > hot else "bad" if value < cold else "flat"
+    return {"k": f"{n} 日", "v": _mz_text(value), "tone": tone}
+
+
 def _money_card(parts: dict, money: dict) -> dict:
-    turn, etf, margin, supply = parts["turnover"], parts["etf"], parts["margin"], parts["supply"]
+    turn, etf, margin = parts["turnover"], parts["etf"], parts["margin"]
     etf_word = {"净流入": "有", "净流出": "没有，在流出", "基本没变": "基本没有"}.get(etf.get("label"), "没有")
-    taking = margin.get("label") in ("在降", "加速下降") or supply.get("label") == "在拿走"
-    turn_facts = _span_facts(turn.get("windows"), (1, 3, 5, 30), -0.05, 0.05, "低于平时", "接近平时", "高于平时")
-    turn_facts.append({"k": "今天", "v": _yi(turn.get("amount")), "tone": "flat"})
-    etf_facts = _span_facts(etf.get("windows"), (1, 3, 5, 30, 60), -0.01, 0.01, "在减", "基本没变", "在增", 2)
-    etf_facts.append({"k": "近 5 日在买", "v": f"{etf.get('buy_days', '—')} 天", "tone": "good" if (etf.get("buy_days") or 0) >= 4 else "flat"})
-    etf_facts.append({"k": "净申购", "v": _yi(etf.get("money"), True), "tone": "good" if (etf.get("money") or 0) > 0 else "bad" if (etf.get("money") or 0) < 0 else "flat"})
-    margin_facts = _span_facts(margin.get("windows"), (1, 3, 5, 30, 60), -0.02, 0.02, "在降", "持平", "在升")
-    margin_facts.append({"k": "增减持 28 日", "v": _yi(supply.get("net"), True), "tone": "bad" if supply.get("label") == "在拿走" else "good" if supply.get("label") == "有人在接" else "flat"})
+    taking = margin.get("label") in ("在降", "加速下降")
+    if turn.get("mz"):
+        turn_facts = [_mz_fact(turn.get("mz"), n, 1.5, -1.0) for n in (1, 3, 5, 30)]
+        turn_facts.append({"k": "今天", "v": _yi(turn.get("amount")), "tone": "flat"})
+    else:
+        turn_facts = _span_facts(turn.get("windows"), (1, 3, 5, 30), -0.05, 0.05, "低于平时", "接近平时", "高于平时")
+        turn_facts.append({"k": "今天", "v": _yi(turn.get("amount")), "tone": "flat"})
+    if etf.get("mz"):
+        etf_facts = [_mz_fact(etf.get("mz"), n, 1.5, -1.5) for n in (1, 3, 5, 30, 60)]
+        etf_facts.append({"k": "净申购", "v": _yi(etf.get("money"), True), "tone": "good" if (etf.get("money") or 0) > 0 else "bad" if (etf.get("money") or 0) < 0 else "flat"})
+    else:
+        etf_facts = _span_facts(etf.get("windows"), (1, 3, 5, 30, 60), -0.01, 0.01, "在减", "基本没变", "在增", 2)
+        etf_facts.append({"k": "净申购", "v": _yi(etf.get("money"), True), "tone": "good" if (etf.get("money") or 0) > 0 else "bad" if (etf.get("money") or 0) < 0 else "flat"})
+    if margin.get("mz"):
+        margin_facts = [_mz_fact(margin.get("mz"), n, 1.5, -1.5) for n in (1, 3, 5)]
+        margin_facts.append(_mz_fact(margin.get("mz"), 30, 0, -1.0))
+        net = margin.get("net")
+        margin_facts.append({"k": "当日净买入", "v": _yi(net, True), "tone": "good" if (net or 0) > 0 else "bad" if (net or 0) < 0 else "flat"})
+    else:
+        margin_facts = _span_facts(margin.get("windows"), (5, 30), -0.02, 0.02, "在降", "持平", "在升")
+        net = margin.get("net")
+        margin_facts.append({"k": "当日净买入", "v": _yi(net, True), "tone": "good" if (net or 0) > 0 else "bad" if (net or 0) < 0 else "flat"})
     return {
-        "tier": money["tier"], "label": rules.MONEY_WORD[money["tier"]], "tone": money["tone"],
+        "tier": money["tier"], "label": _money_word(money["tier"]), "tone": money["tone"],
         "summary": money["head"]["summary"],
         "qa": [
             {"q": "最近交易活跃吗？", "a": {"冷清": "比平时冷清", "活跃": "比平时活跃", "平时": "和平时差不多"}.get(turn.get("label"), "没有"),
              "tone": {"冷清": "bad", "活跃": "good"}.get(turn.get("label"), "flat"),
              "facts": turn_facts,
-             "detail": "1 日是今天，3 日是近 3 天，都相对 60 日均。四档里三档低于 −5% 才算冷清，三档高于 +5% 才算活跃。"},
+             "detail": "对数成交额的均值直接算 Mz。活跃要 Mz > +1.5，冷清要 Mz < −1.0，对数偏离还要至少 5%。30 日要和另外至少一档同向，最近两天也要同向。"},
             {"q": "有新钱进场吗？", "a": etf_word, "tone": {"净流入": "good", "净流出": "bad"}.get(etf.get("label"), "flat"),
              "facts": etf_facts,
-             "detail": "1 日、3 日是最近份额变化，和 5 / 30 / 60 日一起看。算有新钱要 5 日超过 +1% 且至少 4 天在买，30 日和 60 日也都超过 +1%。"},
+             "detail": "每只单独算 Mz。累计变化对照 n × M，MAD 按 √n 放大。净流入要 5 日 Mz > +1.5，30 日和 60 日同向，5 日累计至少 0.5%，且没有连续两天净流出。净流出要 5 日 Mz < −1.5，至少 3 天在卖。"},
             {"q": "有人在拿钱走吗？", "a": "有" if taking else "暂时没有", "tone": "bad" if taking else "good",
              "facts": margin_facts,
-             "detail": "1 日、3 日、5 日是近几天余额变化；加速下降要 30 日和 60 日都低于 −5%，30 日低于 −2% 算在降。回购是累计公告，不算进增减持。"},
+             "detail": "累计变化算 Mz，对照 n × M，MAD 按 √n 放大。加速下降要 5 日 Mz < −2.0 且 30 日 Mz < −1.0。在降要 5 日 Mz < −1.5，或 5 日 Mz < −1.0 且 30 日 Mz < −1.5。在升要 5 日 Mz > +1.5 且 30 日 Mz > −1.0。1 日、3 日只展示。回购是累计公告，不算进增减持。"},
         ],
         "means": money["head"]["summary"],
-        "when": "1 / 3 / 5 / 30 日成交里冷清不到三档，并且宽基 5 日超过 +1%（至少 4 天在买）、30 日和 60 日也都超过 +1% → 「在进」",
-        "scope": "成交额只说明热不热；宽基份额变化乘收盘价；回购按公司只留最新一条实施公告",
+        "when": "宽基净流入且成交不冷清 → 「在进」。成交平时并且两融加速下降时仍是「观望」。成交冷清且两融在降或加速下降 → 「偏弱」。",
+        "scope": "成交、宽基、两融都按自身近 60 个交易日的常态偏离来判；回购按公司只留最新一条实施公告",
+        "marks": money["head"].get("notes") or [],
         "date": margin.get("date") or turn.get("date") or "",
     }
 
@@ -1217,8 +1334,8 @@ def _fund_tab(parts: dict, day: date) -> dict:
         _block(
             "turnover", "成交额", "市场热不热", _yi(turn.get("amount")), _age(turn.get("date", ""), day, previous),
             turn.get("label") or "没有", {"冷清": "bad", "活跃": "good"}.get(turn.get("label"), "flat"),
-            _span_stats(turn.get("windows"), _pct, [n for n in (1, 3, 5, 30) if judge_turnover(_stored(turn.get("windows"), n)) == turn.get("label")])[:-1] + [_stat("60 日均", _yi(turn.get("avg60")))],
-            "1 / 3 / 5 / 30 日都是这段日均成交相对过去 60 日，±5% 分冷清和活跃。四档里要有三档同向，才把成交判成冷清或活跃；单独 5 日不够。成交额只说明热不热，不代表钱在进还是出。",
+            _mz_stats(turn.get("mz"), (1, 3, 5, 30), turn.get("votes") or []),
+            "Modified Z-Score。对数成交额的均值直接算 Mz = 0.6745 × (均值 − M) / MAD。活跃要 Mz > +1.5，冷清要 Mz < −1.0，对数偏离还要至少 5%。30 日要和另外至少一档同向，最近两天也同向。基线不足时退回 ±10%。",
             story=(f"近 5 天里 {turn['down_days']} 天指数下跌，成交" + ("一直比平时少" if (turn.get("ratio5") or 0) < 0 else "比平时多") + "。") if turn.get("down_days") else "",
             pctile=_pctile_info("成交额处在一年里", turn.get("pctile")),
             chart={"kind": "bars", "unit": "亿元", "points": turn.get("series") or [], "legend": ["上涨日", "下跌日"]}, open=True,
@@ -1226,8 +1343,8 @@ def _fund_tab(parts: dict, day: date) -> dict:
         _block(
             "etf", "宽基 ETF 份额", "有没有新钱买入", f"{_plain(etf.get('total'), 0)} 亿份", _age(etf.get("latest_date", ""), day, previous),
             etf.get("label") or "没有", {"净流入": "good", "净流出": "bad"}.get(etf.get("label"), "flat"),
-            _span_stats(etf.get("windows"), lambda value: _pct(value, 2), _etf_marks(etf)),
-            "净流入要 5 日超过 +1% 且至少 4 天在买，同时 30 日和 60 日也都超过 +1%。净流出要 5 日和 30 日都低于 −1%。按份额算，不受涨跌影响。金额是份额变化乘收盘价。",
+            _mz_stats(etf.get("mz"), (1, 3, 5, 30, 60), _etf_marks(etf)),
+            "每只单独估 Modified Z-Score。累计变化对照 n × M，MAD 按 √n 放大。净流入要 5 日 Mz > +1.5，30 日和 60 日同向或没有数，5 日累计至少 0.5%，且没有连续两天净流出。净流出要 5 日 Mz < −1.5，至少 3 天在卖。基线不足时，5 日超过 +1% 算流入、低于 −1% 算流出。拆分合并日不进计算。",
             story=f"最近一天份额 {_delta(etf.get('day_change'))} 亿份，5 日 {_pct(etf.get('ratio'), 2)}，净申购 {etf.get('buy_days', '—')} 天。大盘 {_yi(groups.get('大盘'), True)}，中小盘 {_yi(groups.get('中小盘'), True)}，科创创业 {_yi(groups.get('科创创业'), True)}。",
             pctile=_pctile_info("宽基 ETF 总份额处在一年里", etf.get("pctile")),
             chart={"kind": "area", "unit": "亿份", "points": etf.get("series") or [], "legend": ["当天净买入", "当天净卖出"]},
@@ -1236,8 +1353,8 @@ def _fund_tab(parts: dict, day: date) -> dict:
         _block(
             "margin", "两融余额", "借钱炒股的人多不多", _yi(margin.get("balance")), _age(margin.get("date", ""), day, previous),
             margin.get("label") or "没有", {"在降": "bad", "加速下降": "bad", "在升": "good"}.get(margin.get("label"), "flat"),
-            _span_stats(margin.get("windows"), _pct, _margin_marks(margin)),
-            "加速下降要 30 日和 60 日都低于 −5%。30 日低于 −2% 算在降，高于 +2% 且 60 日不降才算在升。1 / 3 / 5 日只展示，不单独改档。",
+            _mz_stats(margin.get("mz"), (1, 3, 5, 30, 60), _margin_marks(margin)),
+            "Modified Z-Score，累计变化对照 n × M，MAD 按 √n 放大。加速下降要 5 日 Mz < −2.0 且 30 日 Mz < −1.0。在降要 5 日 Mz < −1.5，或 5 日 Mz < −1.0 且 30 日 Mz < −1.5。在升要 5 日 Mz > +1.5，且 30 日 Mz > −1.0。样本不足时不判升也不判降。1 日、3 日只展示。",
             story=f"融资买入占成交 {_pct(margin.get('share'))}；当日融资净买入 {_yi(margin.get('net'), True)}。",
             pctile=_pctile_info("两融余额处在一年里", margin.get("pctile")),
             chart={"kind": "area", "unit": "亿元", "points": margin.get("series") or [], "legend": ["当天净借入", "当天净还款"]},
@@ -1276,9 +1393,9 @@ def _fund_tab(parts: dict, day: date) -> dict:
         ),
     ]
     return {
-        "title": "钱有没有进来", "label": rules.MONEY_WORD[money["tier"]], "tone": money["tone"],
-        "age": _age(margin.get("date", ""), day, previous), "summary": money["head"]["summary"],
-        "means": f"{money['head']['summary']}等到宽基 ETF 5 天净买入超过 1%、成交不再冷清，才会改成「在进」。",
+        "title": "钱有没有进来", "label": _money_word(money["tier"]), "tone": money["tone"],
+        "age": _age(margin.get("date", ""), day, previous),         "summary": money["head"]["summary"],
+        "means": "改成「在进」要宽基净流入，并且成交不冷清。成交平时、两融又在加速下降时，仍停在观望。成交转活跃，或两融不再加速下降，才会离开这档。",
         "sections": [
             {"title": "三个数看懂资金", "hint": "第一块是判断用的，点标题可收起", "blocks": core},
             {"title": "钱去哪了 · 钱贵不贵", "hint": "", "blocks": where},
@@ -1292,28 +1409,28 @@ def _mood_tab(parts: dict) -> dict:
     mood = _mood_card(parts)
     breadth, limits = parts["breadth"], parts["limits"]
     return {
-        "title": "好不好做", "label": mood["label"], "tone": mood["tone"], "age": "今日", "summary": mood["summary"],
+        "title": "好不好做", "label": mood["label"], "tone": mood["tone"], "age": _age(breadth.get("date") or limits.get("date") or ""), "summary": mood["summary"],
         "means": mood["means"], "when": mood["when"], "indexes": mood["indexes"],
         "sections": [{"title": "看懂好不好做", "hint": "", "blocks": [
-            _block("trend", "大盘趋势", "指数在均线上还是下", mood["qa"][0]["a"], "今日", mood["qa"][0]["a"], mood["qa"][0]["tone"], [],
+            _block("trend", "大盘趋势", "指数在均线上还是下", mood["qa"][0]["a"], _age(breadth.get("date") or limits.get("date") or ""), mood["qa"][0]["a"], mood["qa"][0]["tone"], [],
                    "看 60 日线定方向，前低 = 今天之前 20 个交易日的最低收盘价，今天收在它下面算破位。", story=mood["qa"][0]["detail"], open=True),
-            _block("breadth", "多数股票", "涨的多还是跌的多", f"{breadth.get('up', '—')} / {breadth.get('down', '—')}", "今日", mood["qa"][1]["a"], mood["qa"][1]["tone"],
+            _block("breadth", "多数股票", "涨的多还是跌的多", f"{breadth.get('up', '—')} / {breadth.get('down', '—')}", _age(breadth.get("date") or limits.get("date") or ""), mood["qa"][1]["a"], mood["qa"][1]["tone"],
                    [_stat("上涨", str(breadth.get("up", "—")), True), _stat("下跌", str(breadth.get("down", "—"))), _stat("新高 / 新低", f"{breadth.get('highs', '—')} / {breadth.get('lows', '—')}")],
                    "全 A 不含 ST；新高、新低按近 25 个交易日。", story=mood["qa"][1]["detail"]),
-            _block("limits", "短线情绪", "追涨能不能赚钱", f"涨停 {limits.get('up', '—')}", "今日", mood["qa"][2]["a"], mood["qa"][2]["tone"],
+            _block("limits", "短线情绪", "追涨能不能赚钱", f"涨停 {limits.get('up', '—')}", _age(breadth.get("date") or limits.get("date") or ""), mood["qa"][2]["a"], mood["qa"][2]["tone"],
                    [_stat("跌停", str(limits.get("down", "—"))), _stat("炸板", str(limits.get("broken", "—"))), _stat("最高连板", str(limits.get("height", "—")), True)],
                    "不含 ST、北交所；20cm（创业板、科创板）的涨跌幅折成 10cm 再平均。连板高度来自 limit_times。", story=mood["qa"][2]["detail"]),
-        ] + ([_block("volume", "成交量", "放量还是缩量", mood["volume"]["word"], "今日", mood["volume"]["word"], "flat",
+        ] + ([_block("volume", "成交量", "放量还是缩量", mood["volume"]["word"], _age(breadth.get("date") or limits.get("date") or ""), mood["volume"]["word"], "flat",
                      [_stat("今天", _yi(mood["volume"]["amount"]), True), _stat("前 20 日均", _yi(mood["volume"]["base"])),
                       _stat("近一年分位", "—" if mood["volume"]["pctile"] is None else f"{round(mood['volume']['pctile'] * 100)}%")],
                      "今天成交额是前 20 个交易日均值的 1.2 倍以上算放量，0.8 倍以下算缩量；近一年分位在最低 10% 算地量，最高 10% 算天量。"
                      "放量、缩量要和涨跌一起看：放量下跌是抛压还没完，缩量下跌是抛压在减弱，放量反抽比缩量反弹可信。不单独改「好不好做」的档位。",
                      story=next((row["detail"] for row in mood["qa"] if row["q"] == "成交量怎么样？"), ""), chart={"kind": "bars", "unit": "亿元", "points": (parts.get("turnover") or {}).get("series") or [], "legend": ["上涨日", "下跌日"]})] if mood.get("volume") else [])
-          + ([_block("theme", "涨停主线", "涨停集中在哪几个行业", mood["theme"]["word"], "今日", mood["theme"]["word"], mood["theme"]["tone"], [],
+          + ([_block("theme", "涨停主线", "涨停集中在哪几个行业", mood["theme"]["word"], _age(breadth.get("date") or limits.get("date") or ""), mood["theme"]["word"], mood["theme"]["tone"], [],
                      "看今天涨停最集中的前三个行业，占全部涨停的多少；再看昨天的主线今天平均涨跌。前三占 35% 以上算有主线，20% 以下算没主线；"
                      "昨天的主线今天平均亏过 1.5%，算主线在退，接力常在这时断掉。",
                      story=mood["theme"]["detail"])] if mood.get("theme") else [])
-          + ([_block("stage", "情绪阶段", "近 20 个交易日每天所处阶段", mood["stage"], "今日", mood["stage"], mood["qa"][3]["tone"], [],
+          + ([_block("stage", "情绪阶段", "近 20 个交易日每天所处阶段", mood["stage"], _age(breadth.get("date") or limits.get("date") or ""), mood["stage"], mood["qa"][3]["tone"], [],
                      "冰点 → 修复 → 发酵 → 高潮 → 退潮，一圈通常几周。按当天的涨停数、跌停数、昨涨停今日平均涨跌（20cm 折成 10cm）、炸板率、最高连板和昨天主线今天的表现判，并且接着前一天走；"
                      "高标断板、主线大面也算退潮的信号。阈值按这一年的行情定。",
                      story=mood["qa"][3]["detail"], chart={"kind": "stages", "points": mood["stages"]})] if mood.get("stage") else [])}],
@@ -1342,7 +1459,7 @@ def _sector_tab(parts: dict, day: date) -> dict:
     rows = _sector_rows(parts["sectors"], parts.get("catalysts"))
     coverage = parts["sectors"].get("coverage") or {}
     return {
-        "title": "板块", "label": "", "tone": "flat", "age": "昨日", "summary": _sector_headline(rows),
+        "title": "板块", "label": "", "tone": "flat", "age": _age(parts["sectors"].get("date") or "", day), "summary": _sector_headline(rows),
         "rows": rows, "buckets": _sector_buckets(rows), "indexes": _index_rows(parts),
         "windows": parts["sectors"].get("windows"), "conclusion_days": parts["sectors"].get("conclusion_days"),
         "coverage": coverage, "coverage_l1": [{"l1": name, **item} for name, item in market_sector.coverage().items()],
@@ -1355,7 +1472,7 @@ def _sector_tab(parts: dict, day: date) -> dict:
 def _cal_tab(parts: dict, day: date) -> dict:
     card = _calendar_card(parts, parts["watch"], day)
     return {
-        "title": "日历", "label": card["label"], "tone": card["tone"], "age": "今日",
+        "title": "日历", "label": card["label"], "tone": card["tone"], "age": _age(day.isoformat(), day),
         "summary": f"未来两周{card['label']}" + (f"，有 {card['mine_count']} 件涉及你的自选" if card["mine_count"] else ""),
         "rows": card["rows"], "unlock": card["unlock"], "days": (parts["calendar"] or {}).get("days") or [],
         "footnote": card["scope"],
