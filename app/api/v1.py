@@ -440,7 +440,10 @@ def market_summary():
         return jsonify(build_summary())
     except Exception as exc:
         log.exception("market summary failed")
-        return jsonify({"error": str(exc)}), 500
+        text = str(exc).strip()
+        if not text or text == "None":
+            text = type(exc).__name__
+        return jsonify({"error": text}), 500
 
 
 @bp.route("/market/tab/<name>", methods=["GET"])

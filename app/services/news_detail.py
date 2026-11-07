@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 from datetime import date, datetime
 from threading import Lock
@@ -1121,6 +1122,8 @@ def _writer(model, live: bool):
         return None
     if model is not None:
         return model
+    if os.environ.get("NEWS_EXTRACT", "1").strip() == "0":
+        return None      # 服务端部署时关掉：服务端不调模型，新闻只做规则分类，判断交给客户端的新闻分析师
     if not live or not config.LLM_API_KEY:
         return None
     try:

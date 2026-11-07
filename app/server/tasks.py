@@ -38,7 +38,7 @@ def probe(gate: str, date: str) -> bool:
     return False
 
 
-def build(ctx_store, relay_quotes=None, relay_closes=None, prober=None, facts=None, snapshot=None, news=None) -> list[TaskSpec]:
+def build(ctx_store, relay_quotes=None, relay_closes=None, prober=None, facts=None, snapshot=None, news=None, details=None) -> list[TaskSpec]:
     """把服务端任务装成 TaskSpec 列表。依赖（行情源、探测器）从参数注入，方便测试。"""
     from app.server import relay
 
@@ -89,7 +89,7 @@ def build(ctx_store, relay_quotes=None, relay_closes=None, prober=None, facts=No
         TaskSpec("server.purge", "清理过期数据", purge, {"kind": "daily", "at": "03:30", "days": "any"},
                  placement="server", placement_reason="shared：服务端自己的库维护", queue="light", timeout_s=120),
     ]
-    return specs + warm_specs(ctx_store, facts, snapshot, news)
+    return specs + warm_specs(ctx_store, facts, snapshot, news, details)
 
 
 def install(registry: Registry, specs: list[TaskSpec]) -> Registry:
@@ -98,7 +98,7 @@ def install(registry: Registry, specs: list[TaskSpec]) -> Registry:
     return registry
 
 
-def warm_specs(store, facts=None, snapshot=None, news=None) -> list[TaskSpec]:
+def warm_specs(store, facts=None, snapshot=None, news=None, details=None) -> list[TaskSpec]:
     """订阅并集预热个股事实表；收盘后发布市场快照。skip_if_fresh：同一天同一口径已经有了就不重算。"""
     from app.server import facts as F
 
@@ -107,6 +107,13 @@ def warm_specs(store, facts=None, snapshot=None, news=None) -> list[TaskSpec]:
         if store.has_fresh("stock.facts", ctx.unit_key, day, "close", F.FACTS_SCHEMA):
             return {"skipped": "fresh", "ts_code": ctx.unit_key}
         made = ctx.step("facts", lambda: (facts or F.produce_facts)(store, ctx.unit_key, day, "close", ctx.now_ms()))
+        return {"ts_code": ctx.unit_key, "facts_hash": made["facts_hash"]}
+
+    def warm_details(ctx):
+        day = ctx.trade_date or clocks.day_of(ctx.now_ms()).isoformat()
+        if store.has_fresh("stock.details", ctx.unit_key, day, "close", F.DETAILS_SCHEMA):
+            return {"skipped": "fresh", "ts_code": ctx.unit_key}
+        made = ctx.step("details", lambda: (details or F.produce_details)(store, ctx.unit_key, day, "close", ctx.now_ms()))
         return {"ts_code": ctx.unit_key, "facts_hash": made["facts_hash"]}
 
     def publish_market(ctx):
@@ -126,6 +133,9 @@ def warm_specs(store, facts=None, snapshot=None, news=None) -> list[TaskSpec]:
         TaskSpec("stock.facts.warm", "预热个股事实表", warm, {"kind": "data_ready", "gate": "daily_bars", "deadline": "23:30", "days": "trading"},
                  placement="server", placement_reason="shared、no_private、costly：同一只股票的事实表所有用户一样，集中算一次省限流", queue="data",
                  timeout_s=240, max_attempts=3, backoff_s=(120, 600, 1800), fanout="subscriptions.union", skip_if_fresh="facts_hash", gates=("daily_bars",)),
+        TaskSpec("stock.details.warm", "预热个股五维详情", warm_details, {"kind": "data_ready", "gate": "daily_bars", "deadline": "23:30", "days": "trading"},
+                 placement="server", placement_reason="shared、no_private、costly：五维详情是确定性的计算，所有用户一样，集中算一次省限流；分析师在客户端本机读它", queue="data",
+                 timeout_s=300, max_attempts=3, backoff_s=(120, 600, 1800), fanout="subscriptions.union", skip_if_fresh="facts_hash", gates=("daily_bars",)),
         TaskSpec("market.publish", "发布市场快照", publish_market, {"kind": "data_ready", "gate": "daily_bars", "deadline": "23:30", "days": "trading"},
                  placement="server", placement_reason="shared、no_private、costly：市场页的计算所有用户一样", queue="data", timeout_s=600, max_attempts=3, backoff_s=(300, 900, 1800)),
     ]

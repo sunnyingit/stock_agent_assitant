@@ -35,7 +35,7 @@ def build(store: ServerStore | None = None, clock: clocks.Clock | None = None, s
     sched.listeners.append(lambda run, spec: record_run(store, sched, clock, run, spec))
 
     app = Flask(__name__)
-    app.config.update(SERVER_STORE=store, SERVER_CLOCK=clock, ARTIFACT_PRODUCERS={"stock.facts": F.on_demand})
+    app.config.update(SERVER_STORE=store, SERVER_CLOCK=clock, ARTIFACT_PRODUCERS={"stock.facts": F.on_demand, "stock.details": F.details_on_demand})
     app.register_blueprint(v1_bp)
 
     from flask import request

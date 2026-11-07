@@ -8,6 +8,7 @@ from flask import Blueprint, jsonify, request
 
 from app.synthesis import policy, quotes, watchlist, worker
 from app.synthesis.calendar import last_close_date, now_cn, session_of
+from app.synthesis.gateway import Gateway
 from app.synthesis.service import compute, current_mode
 from app.synthesis.types import FactTable
 from app.tools.stock import resolve_stock
@@ -59,13 +60,10 @@ def synthesis(ts_code: str):
     try:
         record = store.latest(stock.ts_code)
         if record is None:
-            reply = compute(stock, store, mode="rule")
-            if mode != "rule" or reply.get("pending"):
-                worker.request(stock.ts_code, "first_view", delay=1.0)
+            # 还没有任何存档：先出一份不调模型的规则版让页面有东西看，真正的结论交给本机定时任务那条线排队生成
+            reply = compute(stock, store, gateway=Gateway(None), mode="rule")
             body = {"display": reply["display"], "internal": reply["internal"]}
         else:
-            if _stale(record):
-                worker.request(stock.ts_code, "stale", delay=5.0)
             body = {
                 "display": _page(record, mode),
                 "internal": {"run_id": record["id"], "source": record["source"], "mode": record["mode"]},
@@ -123,15 +121,29 @@ def refresh(ts_code: str):
     stock = resolve_stock(ts_code)
     if stock is None:
         return jsonify({"error": f"未找到股票: {ts_code}"}), 404
-    worker.request(stock.ts_code, "manual", delay=0.0)
-    return jsonify({"status": "queued", "ts_code": stock.ts_code}), 202
+    # 数据服务不重算结论：结论由客户端的定时任务生成，「重新分析」请在客户端点。
+    return jsonify({"status": "ignored", "ts_code": stock.ts_code, "note": "结论由客户端生成"}), 202
+
+
+def _saved_detail_record(stock):
+    """结论详情只读已经存下的那一版：优先本机定时任务出的结论包，没有才退回最近一次运行。"""
+    record = worker.get_store().latest(stock.ts_code)
+    data = (record or {}).get("data") or {}
+    if data.get("display_agent") or data.get("display_rule"):
+        return record
+    return None
+
+
+class ConclusionPending(LookupError):
+    """这里没有存下这只股票的结论。结论由客户端的定时任务生成，数据服务从不就地生成。"""
 
 
 def _agent_record(stock):
-    """算完主分析师再读存档。算过的会命中同一份缓存。"""
-    store = worker.get_store()
-    compute(stock, store, mode="agent", timeout=policy.COLLECT_TIMEOUT_BACKGROUND)
-    return store.latest(stock.ts_code)
+    """只读已经存下的结论；没有就如实说没有。"""
+    saved = _saved_detail_record(stock)
+    if saved is not None:
+        return saved
+    raise ConclusionPending("这里还没有这只股票的结论")
 
 
 @bp.route("/stocks/<ts_code>/chief/stream", methods=["GET"])
@@ -164,40 +176,28 @@ def chief_stream(ts_code: str):
 
 
 def _side_context(stock, side: str, *, allow_empty: bool = False):
-    from app import config
+    """看多、看空读结论包里存下的那一轮，不再就地调模型。追问用的「上一轮」也是这一份。"""
     from app.synthesis.chief_board import side_message
-    from app.synthesis.decider.debate import run_side
-    from app.synthesis.gateway import Gateway
-    from app.synthesis.service import load_table
 
-    store = worker.get_store()
-    *_, table, _now = load_table(stock, store, timeout=policy.COLLECT_TIMEOUT_BACKGROUND)
-    gateway = Gateway.from_config()
-    model_tag = config.LLM_MODEL if gateway.available else ""
-    packed = run_side(gateway, table, side, store, model_tag)
-    if packed.get("failed"):
+    record = _agent_record(stock)
+    data = (record or {}).get("data") or {}
+    decision = data.get("decision") or {}
+    packed = (decision.get("sides") or {}).get(side)
+    if not isinstance(packed, dict) or not data.get("table"):
+        if not allow_empty:
+            raise RuntimeError("这份结论里没有这一方的发言")
+        packed = {"points": [], "errors": ["这份结论里没有这一方的发言"], "failed": True}
+    elif packed.get("failed"):
         if not allow_empty:
             raise RuntimeError("；".join(packed.get("errors") or ["模型没有返回"]))
         packed = {"points": [], "errors": packed.get("errors") or [], "failed": True}
-    final = _saved_verdict(store, stock.ts_code, packed.get("points") or [])
+    table = FactTable.from_dict(data["table"]) if data.get("table") else FactTable()
+    final = decision.get("final") if decision.get("source") == "agent" and isinstance(decision.get("final"), dict) else None
     return side_message(side, packed, table, final), table
 
 
 def _side_events(stock, side: str):
     return _side_context(stock, side)[0]
-
-
-def _saved_verdict(store, ts_code: str, points: list[dict]) -> dict | None:
-    record = store.latest(ts_code)
-    decision = ((record or {}).get("data") or {}).get("decision") or {}
-    final = decision.get("final") if decision.get("source") == "agent" else None
-    if not isinstance(final, dict):
-        return None
-    refs = {item.get("ref") for item in points}
-    judged = {item.get("ref") for item in (final.get("adopted") or []) + (final.get("rejected") or [])}
-    if refs and refs <= judged:
-        return final
-    return None
 
 
 def _side_stream(ts_code: str, side: str, name: str):
@@ -329,7 +329,11 @@ def chief_detail(ts_code: str):
     from app.synthesis.chief_board import detail
 
     try:
-        record = _agent_record(stock)
+        record = _saved_detail_record(stock)
+        if record is None:
+            record = _agent_record(stock)
+    except ConclusionPending as exc:
+        return jsonify({"status": "pending", "ts_code": stock.ts_code, "stock_name": stock.name, "error": str(exc)}), 202
     except Exception as exc:
         return jsonify({"status": "error", "ts_code": stock.ts_code, "stock_name": stock.name, "error": str(exc)}), 500
     body = detail((record or {}).get("data") or {})
@@ -359,8 +363,6 @@ def watchlist_add():
         return jsonify({"error": f"未找到股票: {query}"}), 404
     store = worker.get_store()
     added = store.watch_add(stock.ts_code, stock.name)
-    if added:
-        worker.request(stock.ts_code, "watch_add", delay=1.0)   # 新加的股票马上排队出判断
     items = _items(store, only=[stock.ts_code])
     return jsonify({"status": "ok", "added": added, "item": items[0] if items else None}), 201 if added else 200
 

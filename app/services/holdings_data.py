@@ -267,6 +267,26 @@ class Data:
         row = rows[0] if rows else {}
         return {key: str(row.get(key) or "") for key in ("l1_name", "l2_name", "l3_name", "l1_code", "l2_code", "l3_code")}
 
+    def sector_series(self, ts_code: str) -> dict:
+        """这只票所在申万行业（二级，没有就一级）的日收盘序列，按日期升序。预测战绩拿它当「同板块」的基准。"""
+        info = self.industry(ts_code)
+        code = info.get("l2_code") or info.get("l1_code") or ""
+        name = _norm(info.get("l2_name") or info.get("l1_name"))
+        if not code:
+            return {"name": "", "code": "", "items": []}
+        start = tape._ymd_offset(self.today, 400)
+        try:
+            rows = tape.cached(f"swser:{code}:{start}", lambda: tape.pro().sw_daily(
+                ts_code=code, start_date=start, end_date=tape._ymd(self.today), fields="trade_date,close",
+            ))
+        except Exception:
+            rows = []
+        items = sorted(
+            ([tape.iso(tape.ymd(row.get("trade_date"))), tape.num(row.get("close"))] for row in rows if tape.num(row.get("close"))),
+            key=lambda pair: pair[0],
+        )
+        return {"name": name, "code": code, "items": items}
+
     def tracked_sectors(self) -> list[dict]:
         """市场页跟踪的板块（代表 ETF 的钱、热度、杠杆）。"""
         hit = cache.get("holdings:tracked")

@@ -235,7 +235,7 @@ class ApiTest(unittest.TestCase):
         body = response.get_json()
         self.assertTrue(body["added"])
         self.assertEqual(body["item"]["subtitle"]["text"], "偏多 · 适中")
-        self.assertTrue(self.store.pending("600001.SH"))   # 新加的马上排队出判断
+        self.assertFalse(self.store.pending("600001.SH"))   # 数据服务不排队出判断：结论由客户端的定时任务生成
         again = self.client.post("/api/v1/watchlist", json={"q": "600001.SH"})
         self.assertEqual((again.status_code, again.get_json()["added"]), (200, False))
         listing = self.client.get("/api/v1/watchlist").get_json()

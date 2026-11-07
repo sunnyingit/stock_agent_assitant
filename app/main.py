@@ -4,7 +4,7 @@ import os
 
 from flask import Flask
 
-from app.api.holdings import bp as holdings_bp
+from app.api.shared import bp as shared_bp
 from app.notify.api import bp as notify_bp
 from app.scheduler.api import bp as sched_bp
 from app.api.stocks import bp
@@ -47,7 +47,7 @@ _ROUTES = (
     ("看空流式", "/api/v1/stocks/{ts_code}/bear/stream", ""),
     ("看空追问", "/api/v1/stocks/{ts_code}/bear/reply", "POST question"),
     ("自选诊断", "/api/v1/watchlist", ""),
-    ("持仓", "/api/v1/holdings/summary", ""),
+    ("共享数据：板块判断", "/api/v1/shared/sector/{ts_code}", ""),
     ("资金面体检", "/api/v1/stocks/{ts_code}/dimensions/volume_flow/review", ""),
     ("基本面体检", "/api/v1/stocks/{ts_code}/dimensions/fundamental/review", ""),
     ("财报解读", "/api/v1/stocks/{ts_code}/dimensions/finance/review", ""),
@@ -77,7 +77,7 @@ def create_app() -> Flask:
 
     app.register_blueprint(bp)
     app.register_blueprint(v1_bp)
-    app.register_blueprint(holdings_bp)
+    app.register_blueprint(shared_bp)   # 持仓页在客户端本机算，这里只提供和个人无关的共享输入
     app.register_blueprint(sched_bp)
     app.register_blueprint(notify_bp)
     app.register_blueprint(synthesis_bp)
@@ -85,6 +85,11 @@ def create_app() -> Flask:
     app.register_blueprint(fundamental_review_bp)
     app.register_blueprint(finance_review_bp)
     app.register_blueprint(sector_review_bp)
+
+    @app.route("/healthz")
+    def healthz():
+        return {"status": "ok"}
+
     return app
 
 
@@ -92,12 +97,9 @@ def main() -> None:
     port = int(os.environ.get("PORT", "8090"))
     app = create_app()
     from app.reviews import attach
-    from app.synthesis import worker
 
-    worker.start()
-    from app.scheduler import runtime
-
-    runtime.start()   # 定时任务：交易日 08:30 盘前简报、15:35 收盘复盘等，见 app/scheduler/tasks
+    # 这里是数据服务：各维度详情、市场页。定时任务、分析师、通知、收件箱都在客户端（go-harness）里跑，
+    # 所以不再启动调度器和后台重算线程，也不在这里调模型。
     from app.services import market_page
 
     market_page.warm()   # 有昨天的结果就先用，今天的在后台算

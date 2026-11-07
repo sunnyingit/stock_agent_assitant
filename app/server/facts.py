@@ -15,6 +15,7 @@ from app.server.store import ServerStore, hash_of
 log = logging.getLogger("server")
 FACTS_SCHEMA = "facts@1"
 SNAPSHOT_SCHEMA = "market@1"
+DETAILS_SCHEMA = "details@1"
 
 
 def facts_payload(table_dict: dict) -> dict:
@@ -41,6 +42,39 @@ def produce_facts(store: ServerStore, ts_code: str, as_of: str | None = None, se
     table = (loader or _load_table)(ts_code, now)
     payload = facts_payload(table.as_dict() if hasattr(table, "as_dict") else table)
     return store.put_artifact("stock.facts", ts_code, day, session, FACTS_SCHEMA, payload, now_ms, policy_version=policy.POLICY_VERSION)
+
+
+def _json_safe(value):
+    import json
+
+    return json.loads(json.dumps(value, ensure_ascii=False, default=str))
+
+
+def collect_details(ts_code: str, now: datetime) -> dict:
+    """五个维度的详情和对齐后的日线，都是确定性的计算，所有用户一样。"""
+    from app.synthesis import policy
+    from app.synthesis.producer.collect import collect
+    from app.synthesis.watchlist import stock_of
+
+    stock = stock_of({"ts_code": ts_code, "name": ts_code})
+    bundle = collect(stock, now, None, None, policy.COLLECT_TIMEOUT_BACKGROUND)
+    return {"payloads": bundle.payloads, "errors": bundle.errors, "aligned": bundle.aligned, "timed_out": sorted(bundle.timed_out)}
+
+
+def produce_details(store: ServerStore, ts_code: str, as_of: str | None = None, session: str = "close", now_ms: int | None = None, collector=None) -> dict:
+    """个股五维详情（stock.details）。不含任何模型输出，也不含用户信息；LLM 分析师在客户端本机读它。"""
+    from app.synthesis import policy
+    from app.synthesis.calendar import last_close_date
+
+    now_ms = now_ms or clocks.Clock().now_ms()
+    now = clocks.from_ms(now_ms)
+    day = as_of or last_close_date(now).isoformat()
+    body = _json_safe((collector or collect_details)(ts_code, now))
+    return store.put_artifact("stock.details", ts_code, day, session, DETAILS_SCHEMA, body, now_ms, policy_version=policy.POLICY_VERSION)
+
+
+def details_on_demand(store: ServerStore, subject: str, as_of: str | None, session: str | None) -> dict | None:
+    return produce_details(store, subject, as_of, session or "close")
 
 
 def on_demand(store: ServerStore, subject: str, as_of: str | None, session: str | None) -> dict | None:

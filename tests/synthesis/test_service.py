@@ -394,26 +394,26 @@ class ApiTest(unittest.TestCase):
         self.assertIn("run_id", body["internal"])
         self.assertEqual(self.client.get("/api/v1/stocks/000000.SZ/synthesis").status_code, 404)
 
-    def test_stale_record_is_served_and_queued_for_refresh(self):
+    def test_stale_record_is_served_as_it_is_and_nothing_is_queued(self):
         self.client.get("/api/v1/stocks/600001.SH/synthesis")
         with patch("app.synthesis.api.now_cn", lambda: NOW.replace(day=30)), \
                 patch("app.synthesis.api.last_close_date", lambda now: now.date()):
             body = self.client.get("/api/v1/stocks/600001.SH/synthesis").get_json()
-        self.assertTrue(body["computing"])
+        self.assertFalse(body["computing"])        # 数据服务不重算，过期的结论照样返回，由客户端的定时任务更新
         self.assertEqual(body["headline"]["status"], "support")
 
-    def test_records_from_an_older_policy_are_queued_for_recompute(self):
+    def test_records_from_an_older_policy_are_served_and_nothing_is_queued(self):
         self.client.get("/api/v1/stocks/600001.SH/synthesis")
         with self.store._conn() as conn:
             conn.execute("UPDATE runs SET policy_version='policy-0'")
         body = self.client.get("/api/v1/stocks/600001.SH/synthesis").get_json()
-        self.assertTrue(body["computing"])
+        self.assertFalse(body["computing"])
 
-    def test_manual_refresh_is_queued(self):
+    def test_manual_refresh_is_ignored_because_the_client_makes_the_conclusion(self):
         response = self.client.post("/api/v1/stocks/600001.SH/synthesis/refresh")
         self.assertEqual(response.status_code, 202)
-        self.assertTrue(self.store.pending("600001.SH"))
-        self.assertEqual(len(self.store.claim_due(time.time() + 1)), 1)
+        self.assertEqual(response.get_json()["status"], "ignored")
+        self.assertFalse(self.store.pending("600001.SH"))
 
 
 if __name__ == "__main__":

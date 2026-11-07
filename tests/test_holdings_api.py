@@ -1,7 +1,9 @@
 import unittest
 from unittest import mock
 
-from app.main import create_app
+from flask import Flask
+
+from app.api.holdings import bp as holdings_bp
 from app.services import holdings_store
 from app.services.holdings_store import HoldingsStore
 from test_holdings_page import FakeData
@@ -21,7 +23,9 @@ class ApiTest(unittest.TestCase):
         from app.notify.store import NotifyStore
         pipeline.install(Notifier(NotifyStore(":memory:")))
         self.addCleanup(pipeline.install, None)
-        self.client = create_app().test_client()
+        app = Flask(__name__)
+        app.register_blueprint(holdings_bp)   # 持仓接口已不在数据服务里注册（客户端本机算），这里单独测这套逻辑
+        self.client = app.test_client()
 
     def post(self, url, body):
         return self.client.post(f"/api/v1/holdings{url}", json=body)
