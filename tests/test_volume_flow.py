@@ -123,7 +123,9 @@ class VolumeFlowTest(unittest.TestCase):
         self.assertGreaterEqual(metrics["flow"]["rate_z"], 1.5)       # 大资金比这只股票自己平时明显更流入
         self.assertEqual(verdict["flow_state"], "in_strong")
         self.assertEqual(verdict["level"], 3)
-        self.assertEqual(verdict["certainty"], "high")
+        # 中单反向只降把握，不翻方向
+        self.assertEqual(verdict["certainty"], "medium")
+        self.assertEqual(verdict["structure"]["medium"], "against")
 
     def test_opposite_flow_does_not_flip_direction(self):
         changes = [1.0] * 260
@@ -223,6 +225,61 @@ class VolumeFlowTest(unittest.TestCase):
         days.append({"date": "2026-10-10", "net": -50})
         self.assertEqual(flow_trend(days), "turning_out")
 
+    def test_v_shape_is_turning_in(self):
+        from app.services.volume_flow.rules import flow_structure, flow_trend
+
+        # 前半流出、后半流入
+        days = [{"net": -10}] * 5 + [{"net": 12}] * 5
+        self.assertEqual(flow_trend(days), "turning_in")
+        # 末日由负翻正
+        flip = [{"net": -8}] * 8 + [{"net": -3}, {"net": 5}]
+        self.assertEqual(flow_trend(flip), "turning_in")
+        # 超大单强、中单反向：方向仍跟大额，把握降低
+        structure = flow_structure(30.0, 10.0, -20.0)
+        self.assertEqual(structure["direction"], "in")
+        self.assertEqual(structure["medium"], "against")
+        self.assertLess(structure["certainty_delta"], 0)
+
+    def test_robust_z_agrees_in_direction_with_mean_on_clean_spike(self):
+        from app.services.volume_flow.metrics import _robust_z
+
+        ref = [1.0 + (i % 5) * 0.1 for i in range(80)]
+        z = _robust_z(8.0, ref)
+        self.assertIsNotNone(z)
+        self.assertGreater(z, 3)
+
+    def test_diagnosis_headline_caps_at_fifty(self):
+        from app.flow_review.tools import diagnosis_headline
+        from app.services.volume_flow.rules import DIAGNOSIS_MAX_CHARS
+
+        text = diagnosis_headline(
+            {"text": "资金回升"},
+            {"state_text": "比自己平时明显更流入"},
+            {"text": "加权后大额偏流入，中单反向略降把握"},
+            {"text": "价涨资弱"},
+            mode="diagnosis",
+        )
+        self.assertLessEqual(len(text), DIAGNOSIS_MAX_CHARS)
+        reply = diagnosis_headline(
+            {"text": "资金回升"},
+            {"state_text": "比自己平时明显更流入"},
+            {"text": "加权后大额偏流入，中单反向略降把握"},
+            {"text": "价涨资弱"},
+            mode="reply",
+        )
+        self.assertGreaterEqual(len(reply), len(text))
+
+    def test_tools_short_horizon_uses_window_three(self):
+        from app.flow_review.tools import compute_flow_level, resolve_horizon
+
+        self.assertEqual(resolve_horizon("short")["window"], 3)
+        changes = [1.0] * 120
+        volumes = [100.0] * 120
+        flows = _wobble(1.0, 100) + [(20.0, 10.0, -5.0, -1.0)] * 20
+        level = compute_flow_level(_aligned(changes, volumes, flows), horizon="short")
+        self.assertEqual(level["window"], 3)
+        self.assertEqual(level["rule_version"], "volume_price-6")
+
     def test_prior_peak_skips_the_previous_session(self):
         closes = [10] * 10 + [12, 11, 10, 11, 13, 14]
         volumes = [100] * 15 + [50]
@@ -245,7 +302,7 @@ class VolumeFlowTest(unittest.TestCase):
         self.assertNotIn("status", payload)
         self.assertEqual(payload["meta"]["window"], 3)
         self.assertEqual(payload["meta"]["state"], "ok")
-        self.assertEqual(payload["meta"]["rule_version"], "volume_price-5")
+        self.assertEqual(payload["meta"]["rule_version"], "volume_price-6")
         self.assertIn("+08:00", payload["meta"]["updated_at"])
         self.assertTrue(payload["meta"]["status_text"].startswith("昨收"))
         self.assertEqual(len(payload["price_volume"]["bars"]), 3)
@@ -265,10 +322,10 @@ class VolumeFlowTest(unittest.TestCase):
                              ("marked_dates", payload["flow_daily"]), ("hit_count", payload["position_hints"])):
             self.assertNotIn(gone, parent)
         self.assertNotIn("is_up", payload["price_volume"]["bars"][0])
-        self.assertLessEqual(len(payload["verdict"]["text"]), 120)
+        self.assertLessEqual(len(payload["verdict"]["text"]), 50)
         self.assertNotIn("None", payload["verdict"]["text"])
         self.assertNotIn("还要看后面", payload["verdict"]["text"])
-        self.assertIn("大资金", payload["verdict"]["text"])
+        self.assertTrue(payload["verdict"]["text"])  # 诊断页头：路径/力度/结构，≤50 字
 
         stale = dict(fresh)
         stale["as_of"] = "2026-06-30"
@@ -371,7 +428,8 @@ class VolumeFlowTest(unittest.TestCase):
         self.assertEqual(len(payload["price_volume"]["bars"]), 20)  # 本用例主窗口也是 20
         # 对外响应里 verdict 和 headline 同一套字段；lean/level/certainty 只给综合判断
         self.assertEqual(set(public(payload)["verdict"]), {"source", "status", "status_text", "text"})
-        self.assertIn("有人跟", verdict["text"])
+        self.assertLessEqual(len(verdict["text"]), 50)
+        self.assertTrue(any(token in verdict["text"] for token in ("流入", "流出", "资金", "价资")))
         self.assertNotIn("缺少增量资金确认", verdict["text"])
         stale = dict(data)
         stale["as_of"] = "2026-01-01"

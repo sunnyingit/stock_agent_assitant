@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 from app import config
 from app.services.sector_detail.copy import write_text
-from app.services.sector_detail.rules import DISCLAIMER, RULE_VERSION, combine, evaluate, relative_verdict
+from app.services.sector_detail.rules import DISCLAIMER, RULE_VERSION, evaluate, relative_verdict, tape_verdict
 from app.services.verdict_view import rule_fields, slim
 from app.tools import cache
 from app.tools.stock import Stock, is_hk
@@ -91,19 +91,29 @@ def _assemble(stock: Stock, data: dict, today: date) -> dict:
         warns = [] if primary is None else [item["text"] for item in bodies["primary"]["sustain_items"] if item["status"] == "warn"]
         bits = relative_verdict(gap, warns)
         text = write_text(bits["tag_text"], bits["gaps"], bits["counter_text"], True)
-        merged = {"lean": bits["lean"], "level": bits["level"], "certainty": bits["certainty"], "certainty_reasons": bits["certainty_reasons"], "divergent": False}
+        merged = {
+            "lean": bits["lean"], "level": bits["level"], "certainty": bits["certainty"],
+            "certainty_reasons": bits["certainty_reasons"], "divergent": False,
+            "lens_role": None, "vs_belong": "独立",
+        }
     else:
-        merged = combine(bodies["primary"], bodies.get("secondary"), weights)
-        text = _text(sector_names={"primary": primary["name"], "secondary": None if secondary is None else secondary["name"]}, bodies=bodies, driver=driver, divergent=merged["divergent"])
+        merged = tape_verdict(bodies["primary"], bodies.get("secondary"), weights)
+        text = _text(
+            sector_names={"primary": primary["name"], "secondary": None if secondary is None else secondary["name"]},
+            bodies=bodies, driver=driver, divergent=merged["divergent"],
+            lens_role=merged.get("lens_role"), vs_belong=merged.get("vs_belong"),
+        )
     payload["verdict"] = {
         **rule_fields(merged["lean"], text),
         "lean": merged["lean"], "level": merged["level"], "certainty": merged["certainty"],
         "certainty_reasons": list(merged["certainty_reasons"]),
     }
+    tape = _tape_block(merged, primary, secondary, bodies)
     payload["sectors"] = {
         "primary": None if primary is None else _sector_block("primary", primary, bodies["primary"], driver),
         "secondary": None if secondary is None else _sector_block("secondary", secondary, bodies["secondary"], driver),
         "driver": _driver_block(driver, secondary is not None),
+        "tape": tape,
         "independent": independent,
         "divergence": _divergence(bodies, merged["divergent"]),
         "candidates": affiliation.get("candidates") or [],
@@ -118,20 +128,60 @@ def _assemble(stock: Stock, data: dict, today: date) -> dict:
     return payload
 
 
-def _text(sector_names: dict, bodies: dict, driver: dict, divergent: bool) -> str:
-    """规则版的一句话。单板块沿用「阶段，角色；差距。不过……」；两个板块各说阶段，再说驱动占比，分歧时点明。"""
+def _text(sector_names: dict, bodies: dict, driver: dict, divergent: bool, lens_role: str | None = None, vs_belong: str | None = None) -> str:
+    """规则版的一句话。点名归属与行情镜头；背离/对立时写清，不把弱势归属板直接打成偏空。"""
     primary = bodies["primary"]
     if "secondary" not in bodies:
-        return write_text(primary["tag_text"], primary["gaps"], primary["counter_text"], False)
+        base = write_text(primary["tag_text"], primary["gaps"], primary["counter_text"], False)
+        if vs_belong == "背离":
+            return f"{base}归属板偏弱与个股相对强弱背离，板块不构成支撑。"
+        return base
     weights = driver.get("weights") or {}
     head = f"{sector_names['primary']}{_short(primary)}，{sector_names['secondary']}{_short(bodies['secondary'])}"
     share = f"两者对本股走势的解释约 {weights.get('primary', 0) * 100:.0f}% 和 {weights.get('secondary', 0) * 100:.0f}%"
-    tail = "两个板块阶段对立，方向不取平均" if divergent else (primary["counter_text"] or "还没有看到反向信号")
-    return f"{head}；{share}。不过{tail}。"
+    lens_name = sector_names["primary"] if lens_role != "secondary" else sector_names["secondary"]
+    lens_bit = f"行情镜头取{lens_name}"
+    if divergent or vs_belong == "对立":
+        tail = "两个板块阶段对立，方向不取平均"
+    elif vs_belong == "背离":
+        tail = f"归属与行情{vs_belong}，{lens_bit}"
+    else:
+        tail = primary["counter_text"] or "还没有看到反向信号"
+    return f"{head}；{share}；{lens_bit}。不过{tail}。"
 
 
 def _short(body: dict) -> str:
     return body["tag_text"].split("，")[0].replace("板块", "")
+
+
+def _tape_block(merged: dict, primary: dict | None, secondary: dict | None, bodies: dict) -> dict:
+    """开场用的行情镜头摘要：跟哪块板、与归属是否同向。"""
+    vs = merged.get("vs_belong") or "同向"
+    if merged.get("lens_role") is None or primary is None:
+        return {"lens_role": None, "lens_name": None, "vs_belong": vs, "vs_belong_text": "走势独立，板块解释力不足", "lean": merged.get("lean")}
+    role = merged.get("lens_role") or "primary"
+    sector = primary if role == "primary" else secondary
+    body = bodies.get(role) or bodies.get("primary")
+    name = None if sector is None else sector.get("name")
+    stock_strong = (body or {}).get("role") in {"resilient", "independent", "leader"} and (body or {}).get("stage") in {"weak", "ebb", "diverge"}
+    if vs == "背离" and (role == "primary" or stock_strong):
+        vs_text = f"板块偏弱但本股相对更强，板块不构成支撑（{name}）"
+    else:
+        vs_text = {
+            "同向": f"行情镜头与主板块归属同向（{name}）",
+            "背离": f"行情镜头与主板块归属背离（镜头 {name}）",
+            "对立": "主次板块阶段对立，方向不取平均",
+            "独立": "走势独立，板块解释力不足",
+        }.get(vs, vs)
+    return {
+        "lens_role": role,
+        "lens_name": name,
+        "lens_stage": None if body is None else body.get("stage"),
+        "lens_role_in_board": None if body is None else body.get("role"),
+        "vs_belong": vs,
+        "vs_belong_text": vs_text,
+        "lean": merged.get("lean"),
+    }
 
 
 def _sector_block(role: str, sector: dict, body: dict, driver: dict) -> dict:

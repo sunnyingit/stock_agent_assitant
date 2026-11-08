@@ -21,10 +21,10 @@ TITLES = {key: title for key, title, _ in QUESTIONS}
 
 # 每个问题该看的事实：给模型一张"看哪几条"的索引，减少漏看和乱引用
 RELEVANT = {
-    "q1": ["fr.vs_self_5d", "fr.vs_self_1d", "fr.vs_self_3d", "fr.vs_self_10d", "fr.vs_self_20d", "fr.ret_5d", "fr.ret_3d", "fr.ret_10d", "fr.ret_20d", "fr.ret_60d", "fr.big_net_5d", "fr.big_net_10d", "fr.big_net_60d", "fr.net_rate_10d", "fr.net_rate_60d", "fr.big_net_20d", "fr.net_rate_5d", "fr.net_rate_3d", "fr.net_rate_20d", "fr.pattern", "fr.high_vol_down", "fr.close_pos"],
-    "q2": ["fr.elg_net_5d", "fr.lg_net_5d", "fr.md_net_5d", "fr.sm_net_5d", "fr.concentration", "fr.elg_net_20d", "fr.lg_net_20d"],
-    "q3": ["fr.vs_self_3d", "fr.vs_self_5d", "fr.vs_self_10d", "fr.vs_self_20d", "fr.streak", "fr.in_out_days", "fr.trend", "fr.net_rate_5d", "fr.net_rate_3d", "fr.net_rate_20d", "fr.last_day_net", "fr.last_day_z", "fr.last_share_5d"],
-    "q4": ["fr.vs_self_5d", "fr.vs_self_20d", "fr.net_rate_5d", "fr.net_rate_3d", "fr.net_rate_20d", "fr.net_to_circ", "fr.circ_mv", "fr.flow_pctile", "fr.last_day_rate", "fr.last_day_z"],
+    "q1": ["fr.path", "fr.path_detail", "fr.level_z", "fr.price_flow", "fr.vs_self_3d", "fr.vs_self_5d", "fr.vs_self_1d", "fr.vs_self_10d", "fr.vs_self_20d", "fr.ret_3d", "fr.ret_5d", "fr.ret_10d", "fr.ret_20d", "fr.ret_60d", "fr.big_net_3d", "fr.big_net_5d", "fr.big_net_10d", "fr.big_net_60d", "fr.net_rate_10d", "fr.net_rate_60d", "fr.big_net_20d", "fr.net_rate_5d", "fr.net_rate_3d", "fr.net_rate_20d", "fr.pattern", "fr.high_vol_down", "fr.close_pos"],
+    "q2": ["fr.structure", "fr.elg_net_3d", "fr.lg_net_3d", "fr.md_net_3d", "fr.sm_net_3d", "fr.elg_net_5d", "fr.lg_net_5d", "fr.md_net_5d", "fr.sm_net_5d", "fr.concentration", "fr.elg_net_20d", "fr.lg_net_20d"],
+    "q3": ["fr.path", "fr.path_detail", "fr.trend", "fr.vs_self_3d", "fr.vs_self_5d", "fr.vs_self_10d", "fr.vs_self_20d", "fr.streak", "fr.in_out_days", "fr.net_rate_5d", "fr.net_rate_3d", "fr.net_rate_20d", "fr.last_day_net", "fr.last_day_z", "fr.last_share_3d", "fr.last_share_5d"],
+    "q4": ["fr.level_z", "fr.vs_self_3d", "fr.vs_self_5d", "fr.vs_self_20d", "fr.net_rate_5d", "fr.net_rate_3d", "fr.net_rate_20d", "fr.net_to_circ", "fr.circ_mv", "fr.flow_pctile", "fr.last_day_rate", "fr.last_day_z"],
     "q5": [
         "fr.ret_5d", "fr.sector_ret", "fr.index_ret", "fr.sector_flow", "fr.net_rate_vs_sector",
         "fr.ret_3d", "fr.sector_ret_3d", "fr.index_ret_3d", "fr.sector_flow_3d", "fr.net_rate_vs_sector_3d",
@@ -53,94 +53,98 @@ def answers(d: dict, text: dict[str, str], anomalies: list[dict]) -> list[dict]:
     has = text.__contains__
     out = []
 
-    # q1：主结论近 5 日
-    if d.get("ret_5d") is None or d.get("big_net_5d") is None:
+    # q1：Path + Level（主窗 3 日）+ 价对照
+    ret_main = d.get("ret_3d") if d.get("ret_3d") is not None else d.get("ret_5d")
+    big_main = d.get("big_net_3d") if d.get("big_net_3d") is not None else d.get("big_net_5d")
+    ret_fact = "fr.ret_3d" if d.get("ret_3d") is not None else "fr.ret_5d"
+    big_fact = "fr.big_net_3d" if d.get("big_net_3d") is not None else "fr.big_net_5d"
+    if ret_main is None or big_main is None:
         out.append(_missing("q1", "缺少价格或资金流数据"))
     else:
-        up, inflow = d["ret_5d"] > 0, d["big_net_5d"] > 0
-        cites = ["fr.ret_5d", "fr.big_net_5d"]
-        own = (d.get("vs_self_5d") or {}).get("state")
+        up = ret_main > 0
+        cites = [c for c in ("fr.path", "fr.level_z", "fr.price_flow", ret_fact, big_fact, "fr.vs_self_3d") if has(c)]
+        own = (d.get("vs_self_3d") or d.get("vs_self_5d") or {}).get("state")
+        path_bit = f"{text['fr.path']}。" if has("fr.path") else ""
+        level_bit = f"{text['fr.level_z']}。" if has("fr.level_z") else (f"{text['fr.vs_self_3d']}。" if has("fr.vs_self_3d") else "")
+        price_bit = f"{text['fr.price_flow']}。" if has("fr.price_flow") else ""
+        said = f"{path_bit}近 3 日股价 {text.get(ret_fact, '')}，大资金净额 {text.get(big_fact, '')}。{level_bit}{price_bit}"
         if own:
-            # 和自己平时比：大单净流出是常态，只有比平时明显更流出，涨时才算背离
-            cites.append("fr.vs_self_5d")
-            said = f"近 5 日股价 {text['fr.ret_5d']}，大资金同期净额 {text['fr.big_net_5d']}，{text['fr.vs_self_5d']}。"
             if up:
                 status = "support" if own in ("in", "in_strong") else "warn" if own in ("out", "out_strong") else "neutral"
-                said += {"support": "涨的同时大资金在加码，价格和资金方向一致。", "warn": "涨的同时大资金反而比平时撤得多，出现背离。",
-                         "neutral": "涨的同时大资金和平时差不多，没有明显的配合，也没有撤退。"}[status]
             else:
                 status = "warn" if own in ("out", "out_strong") else "neutral"
-                said += {"warn": "跌的同时大资金比平时撤得多，价格和资金同步走弱。",
-                         "neutral": "跌的同时大资金没有比平时撤得更多，看不出集中出逃；若比平时更流入，则是有资金承接，但未必企稳。"}[status]
-        elif up and inflow:
-            said = f"近 5 日股价 {text['fr.ret_5d']}，大资金同期净额 {text['fr.big_net_5d']}，价格和资金方向一致。"
-            status = "support"
-        elif up:
-            said = f"近 5 日股价 {text['fr.ret_5d']}，但大资金同期净额 {text['fr.big_net_5d']}，上涨没有大资金配合；历史不够长，还没法和自己平时比。"
-            status = "neutral"
-        elif inflow:
-            said = f"近 5 日股价 {text['fr.ret_5d']}，大资金同期净额 {text['fr.big_net_5d']}，下跌中有资金承接，需要观察是否企稳。"
-            status = "neutral"
+        elif has("fr.price_flow"):
+            label = (d.get("price_flow") or {}).get("label") or ""
+            status = "support" if label.startswith("align") else "warn" if label.startswith("diverge") else "neutral"
         else:
-            said = f"近 5 日股价 {text['fr.ret_5d']}，大资金同期净额 {text['fr.big_net_5d']}，价格和资金同步走弱；历史不够长，还没法和自己平时比。"
-            status = "neutral"
+            status = "support" if up and big_main > 0 else "warn" if (not up) and big_main < 0 else "neutral"
         if d.get("high_vol_down"):
             said += f"其中放量下跌 {text['fr.high_vol_down']}。"
             cites.append("fr.high_vol_down")
-        if has("fr.close_pos"):
-            said += f"近 5 日收盘强度 {text['fr.close_pos']}。"
-            cites.append("fr.close_pos")
         out.append(_item("q1", status, said, cites))
 
-    # q2：近 5 日分档；东财四档净额合计约等于 0，要看超大单和大单是否同向
-    sizes = [d.get(f"{key}_net_5d") for key in ("elg", "lg", "md", "sm")]
-    if any(value is None for value in sizes):
+    # q2：近 3 日分档加权；中单只调把握
+    sizes3 = [d.get(f"{key}_net_3d") for key in ("elg", "lg", "md", "sm")]
+    sizes5 = [d.get(f"{key}_net_5d") for key in ("elg", "lg", "md", "sm")]
+    use3 = all(value is not None for value in sizes3[:2])
+    sizes = sizes3 if use3 else sizes5
+    tag = "3" if use3 else "5"
+    if any(value is None for value in sizes[:2]):
         out.append(_missing("q2", "缺少分档资金流"))
     else:
         elg, lg = sizes[0], sizes[1]
-        cites = ["fr.elg_net_5d", "fr.lg_net_5d", "fr.md_net_5d", "fr.sm_net_5d"]
-        tail = (f"近 5 日超大单 {text['fr.elg_net_5d']}，大单 {text['fr.lg_net_5d']}，中单 {text['fr.md_net_5d']}，小单 {text['fr.sm_net_5d']}。"
-                "各档净额合计接近 0，大额和小额方向相反是统计口径的必然，真正要看的是超大单和大单是否同向。")
-        if elg > 0 and lg > 0:
-            out.append(_item("q2", "support", "超大单和大单同时净流入，大额资金内部方向一致。" + tail, cites))
-        elif elg < 0 and lg < 0:
-            out.append(_item("q2", "warn", "超大单和大单同时净流出，大额资金内部方向一致地在撤。" + tail, cites))
+        cites = [c for c in (f"fr.elg_net_{tag}d", f"fr.lg_net_{tag}d", f"fr.md_net_{tag}d", f"fr.sm_net_{tag}d", "fr.structure") if has(c)]
+        struct = text["fr.structure"] + "。" if has("fr.structure") else ""
+        tail = (f"近 {tag} 日超大单 {text.get(f'fr.elg_net_{tag}d', '')}，大单 {text.get(f'fr.lg_net_{tag}d', '')}。"
+                f"{struct}小单不进方向；中单只修正把握度。")
+        direction = (d.get("structure") or {}).get("direction")
+        if direction == "in" or (direction is None and elg is not None and lg is not None and elg > 0 and lg > 0):
+            out.append(_item("q2", "support", "大额加权偏流入。" + tail, cites))
+        elif direction == "out" or (direction is None and elg is not None and lg is not None and elg < 0 and lg < 0):
+            out.append(_item("q2", "warn", "大额加权偏流出。" + tail, cites))
         else:
-            out.append(_item("q2", "neutral", "超大单和大单方向不一致，大额资金内部有分歧。" + tail, cites))
+            out.append(_item("q2", "neutral", "大额加权接近平衡或内部分歧。" + tail, cites))
 
-    # q3
-    if not has("fr.trend") and not has("fr.streak"):
+    # q3：Path 为主，多窗 z 作加速/放缓旁证
+    if not has("fr.path") and not has("fr.trend") and not has("fr.streak"):
         out.append(_missing("q3", "缺少逐日资金流"))
     else:
-        streak, cites = d.get("streak") or 0, [c for c in ("fr.vs_self_3d", "fr.vs_self_5d", "fr.vs_self_20d", "fr.streak", "fr.trend", "fr.in_out_days", "fr.last_share_5d") if has(c)]
+        streak = d.get("streak") or 0
+        cites = [c for c in ("fr.path", "fr.path_detail", "fr.trend", "fr.vs_self_3d", "fr.vs_self_5d", "fr.vs_self_20d", "fr.streak", "fr.in_out_days", "fr.last_share_3d") if has(c)]
         parts = [text[c] for c in cites]
-        own = (d.get("vs_self_5d") or {}).get("state")
-        if own:                      # 连续净流出天数在 A 股很常见，只有同时比自己平时更流出才算要警惕
+        label = (d.get("path") or {}).get("label") or d.get("trend") or ""
+        own = (d.get("vs_self_3d") or d.get("vs_self_5d") or {}).get("state")
+        if label in ("turning_in", "accelerating_in", "steady_in"):
+            status = "support"
+        elif label in ("turning_out", "accelerating_out"):
+            status = "warn"
+        elif own:
             status = "support" if streak >= 3 and own in ("normal", "in", "in_strong") else "warn" if streak <= -3 and own in ("out", "out_strong") else "neutral"
         else:
             status = "support" if streak >= 3 else "neutral"
         out.append(_item("q3", status, "；".join(parts) + "。", cites))
 
-    # q4：力度看近 5 日
-    if d.get("net_rate_5d") is None:
+    # q4：力度看近 3 日稳健 z
+    rate = d.get("net_rate_3d") if d.get("net_rate_3d") is not None else d.get("net_rate_5d")
+    rate_fact = "fr.net_rate_3d" if d.get("net_rate_3d") is not None else "fr.net_rate_5d"
+    if rate is None:
         out.append(_missing("q4", "缺少资金流和成交额"))
     else:
-        rate = d["net_rate_5d"]
-        own = d.get("vs_self_5d")
-        cites = [c for c in ("fr.vs_self_5d", "fr.net_rate_5d", "fr.flow_pctile", "fr.net_to_circ", "fr.net_rate_20d") if has(c)]
+        own = d.get("vs_self_3d") or d.get("vs_self_5d")
+        own_fact = "fr.level_z" if has("fr.level_z") else ("fr.vs_self_3d" if d.get("vs_self_3d") else "fr.vs_self_5d")
+        cites = [c for c in (own_fact, rate_fact, "fr.flow_pctile", "fr.net_to_circ", "fr.net_rate_20d") if has(c)]
         side = "流入" if rate > 0 else "流出"
-        extra = "，".join(f"{text[c]}" if c != "fr.flow_pctile" else f"单日强度处于近一年 {text[c]} 分位" for c in cites if c not in ("fr.vs_self_5d", "fr.net_rate_5d"))
-        if own:                      # 力度看和自己平时的差距，不看绝对的百分比
+        extra = "，".join(f"{text[c]}" if c != "fr.flow_pctile" else f"单日强度处于近一年 {text[c]} 分位" for c in cites if c not in (own_fact, rate_fact))
+        if own:
             z = own["z"]
             strength = "较强" if abs(z) >= 1.5 else "一般" if abs(z) >= 0.8 else "很弱"
             status = ("support" if z > 0 else "warn") if strength != "很弱" else "neutral"
-            lead = f"近 5 日大资金净{side}占成交额 {text['fr.net_rate_5d']}，{text['fr.vs_self_5d']}，力度{strength}"
+            lead = f"近 3 日大资金净{side}占成交额 {text.get(rate_fact, '')}，{text.get(own_fact, '')}，力度{strength}"
         else:
             strength = "较强" if abs(rate) >= 0.05 else "一般" if abs(rate) >= 0.02 else "很弱"
             status = ("support" if rate > 0 else "neutral") if strength != "很弱" else "neutral"
-            lead = f"近 5 日大资金净{side}占成交额 {text['fr.net_rate_5d']}，力度{strength}（历史不够长，按绝对比例看）"
+            lead = f"近 3 日大资金净{side}占成交额 {text.get(rate_fact, '')}，力度{strength}（历史不够长，按绝对比例看）"
         out.append(_item("q4", status, lead + (f"；{extra}" if extra else "") + "。", cites))
-
     # q5：主结论近 5 日；3 / 20 日对照说明是个股强还是大家一起涨
     cites = [c for c in ("fr.sector_ret", "fr.index_ret", "fr.sector_flow", "fr.sector_rank", "fr.market_turnover") if has(c)]
     if not cites or d.get("ret_5d") is None:
@@ -234,20 +238,34 @@ def answers(d: dict, text: dict[str, str], anomalies: list[dict]) -> list[dict]:
     else:
         out.append(_item("q9", "support", "按目前的数据，没有发现需要特别留意的异常。", ["fr.coverage"] if has("fr.coverage") else []))
 
-    # q10
+    # q10：诊断一句话 ≤50 字（路径 + 力度 + 结构 + 价对照）
+    from app.services.volume_flow.rules import DIAGNOSIS_MAX_CHARS
+
     by_key = {item["key"]: item for item in out}
-    lead = []
-    if d.get("ret_5d") is not None:
-        lead.append(f"近 5 日股价 {text['fr.ret_5d']}")
-    if d.get("big_net_5d") is not None:
-        lead.append(f"大资金净{'流入' if d['big_net_5d'] > 0 else '流出'} {text['fr.big_net_5d'].lstrip('+-')}")
+    bits = []
+    cites = []
+    for fact_id in ("fr.path", "fr.level_z", "fr.structure", "fr.price_flow"):
+        if has(fact_id):
+            bits.append(text[fact_id])
+            cites.append(fact_id)
+    if not bits:
+        if d.get("ret_3d") is not None and has("fr.ret_3d"):
+            bits.append(f"近 3 日股价 {text['fr.ret_3d']}")
+            cites.append("fr.ret_3d")
+        elif d.get("ret_5d") is not None and has("fr.ret_5d"):
+            bits.append(f"近 5 日股价 {text['fr.ret_5d']}")
+            cites.append("fr.ret_5d")
+        big = d.get("big_net_3d") if d.get("big_net_3d") is not None else d.get("big_net_5d")
+        big_fact = "fr.big_net_3d" if d.get("big_net_3d") is not None else "fr.big_net_5d"
+        if big is not None and has(big_fact):
+            bits.append(f"大资金净{'流入' if big > 0 else '流出'}")
+            cites.append(big_fact)
     statuses = [by_key[k]["status"] for k in ("q1", "q2", "q3", "q4") if k in by_key and by_key[k]["status"] != "missing"]
     pos, neg = statuses.count("support"), statuses.count("warn")
     status = "support" if pos > neg + 1 else "warn" if neg > pos + 1 else "neutral"
-    risk = f"需要留意：{anomalies[0]['title']}。" if anomalies else "暂未发现明显异常。"
-    cites = [c for c in ("fr.ret_5d", "fr.big_net_5d") if has(c)]
-    if lead:
-        out.append(_item("q10", status, "，".join(lead) + "；" + risk, cites))
+    if bits:
+        summary = "；".join(bits)[:DIAGNOSIS_MAX_CHARS]
+        out.append(_item("q10", status, summary, cites))
     else:
         out.append(_missing("q10", "缺少价格和资金流数据"))
     return out

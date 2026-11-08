@@ -15,7 +15,7 @@ KIND_TEXT = {"industry": "申万行业", "concept": "同花顺概念"}
 BULLISH, BEARISH = ("start", "main", "climax"), ("diverge", "ebb", "weak")
 HANG_LIMIT = 3
 
-GROUP_ORDER = ("主板块归属", "次板块归属", "主营构成", "只挂名", "驱动", "主板块状态", "次板块状态", "综合")
+GROUP_ORDER = ("主板块归属", "次板块归属", "主营构成", "只挂名", "驱动", "行情镜头", "主板块状态", "次板块状态", "综合")
 
 
 def _put(facts: FactSheet, fact_id: str, label: str, group: str, kind: str, value, text: str) -> None:
@@ -153,6 +153,24 @@ def build(payload: dict) -> tuple[FactSheet, dict]:
         w = driver["weights"]
         _put(facts, "sp.driver.weights", "两个板块在已解释部分里的占比", "驱动", "text", [w.get("primary"), w.get("secondary")],
              f"主板块 {_pct(w['primary'])}，次板块 {_pct(w['secondary'])}")
+
+    tape = sectors.get("tape") or {}
+    d["tape"] = tape
+    if tape.get("lens_name") or tape.get("vs_belong"):
+        if tape.get("lens_name"):
+            stage = STAGE_TEXT.get(tape.get("lens_stage"), "")
+            role = ROLE_TEXT.get(tape.get("lens_role_in_board"), "")
+            bit = "，".join(x for x in (stage, role) if x)
+            _put(
+                facts, "sp.tape.lens", "当前解释本股走势的行情镜头", "行情镜头", "text",
+                tape["lens_name"],
+                f"{tape['lens_name']}" + (f"（{bit}）" if bit else ""),
+            )
+        vs = tape.get("vs_belong") or "同向"
+        _put(
+            facts, "sp.tape.vs_belong", "行情镜头与主板块归属是否同向", "行情镜头", "text",
+            vs, tape.get("vs_belong_text") or vs,
+        )
 
     divergence = sectors.get("divergence") or {}
     d["divergent"] = bool(divergence.get("active"))

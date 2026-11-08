@@ -60,7 +60,7 @@ def build(
     rule_anomalies = anomaly_rules.detect(d, facts)
     items = template.answers(d, text, rule_anomalies)
 
-    key = f"flow_review:v4:{stock.ts_code}:{digest([text, extra['missing'], rule_anomalies])}:{prompt.PROMPT_VERSION}:template"
+    key = f"flow_review:v6:{stock.ts_code}:{digest([text, extra['missing'], rule_anomalies])}:{prompt.PROMPT_VERSION}:template"
     hit = core.cached(store, key, stock.ts_code, KIND, refresh)
     if hit:
         return hit

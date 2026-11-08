@@ -267,7 +267,34 @@ def _dc(stock: Stock, days=None) -> dict:
     except Exception:
         return _doc(stock, "dc", [], "没有取到东财个股资金流")
     body = format_dc(payload.get("items") or [], days)
-    return _doc(stock, "dc", body["facts"], body["text"])
+    facts = list(body["facts"])
+    # 追问也接同一套 path/level/structure 算法（与 flow_review/tools 一致）
+    try:
+        from app.flow_review import tools as flow_tools
+        from app.services.volume_flow.align import load_aligned
+
+        aligned = load_aligned(stock)
+        path = flow_tools.compute_flow_path(aligned, horizon="short")
+        level = flow_tools.compute_flow_level(aligned, horizon="short")
+        structure = flow_tools.compute_flow_structure(aligned, horizon="short")
+        price = flow_tools.compare_price_flow(aligned, horizon="short")
+        extra = []
+        if path.get("text"):
+            extra.append({"id": "fl.path", "text": f"路径：{path['text']}（{path.get('label')}，前半 {path.get('older')} / 后半 {path.get('newer')}）"})
+        if level.get("state_text") or level.get("z") is not None:
+            from app.services.volume_flow.rules import vs_self_user_text
+            plain = vs_self_user_text(level.get("z")) or level.get("state_text") or ""
+            if plain:
+                extra.append({"id": "fl.level", "text": f"近 3 日力度：{plain}"})
+        if structure.get("text"):
+            extra.append({"id": "fl.structure", "text": f"结构：{structure['text']}"})
+        if price.get("text"):
+            extra.append({"id": "fl.price_flow", "text": f"价资对照：{price['text']}"})
+        facts = extra + facts
+    except Exception:
+        pass
+    text = " ".join(item["text"] for item in facts)
+    return _doc(stock, "dc", facts, text)
 
 
 def _factor(stock: Stock, days=None) -> dict:

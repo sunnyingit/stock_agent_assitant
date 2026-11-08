@@ -37,11 +37,16 @@ def detect(d: dict, facts: list[Fact]) -> list[dict]:
     if z is not None and abs(z) >= 2.5:
         word = "流入" if z > 0 else "流出"
         out.append(_row("high" if abs(z) >= 3.5 else "medium", f"最近一天大资金{word}异常大", f"最近一个交易日大资金净额 {text.get('fr.last_day_net', '')}，偏离近 60 日均值 {text['fr.last_day_z']}。", ["fr.last_day_net", "fr.last_day_z"], ids))
-    trend = d.get("trend")
+    trend = d.get("trend") or ((d.get("path") or {}).get("label") if isinstance(d.get("path"), dict) else None)
     if trend == "turning_out":
-        out.append(_row("medium", "大资金由流入转为流出", "近期大资金方向出现反转，前几天还在流入，最近转为流出。", ["fr.trend"], ids))
+        out.append(_row("medium", "大资金由流入转为流出", "近期大资金方向出现反转，前几天还在流入，最近转为流出。", ["fr.path", "fr.trend"], ids))
+    elif trend == "turning_in":
+        out.append(_row("medium", "大资金由流出转为流入", "近期大资金出现 V 形回升，前半偏流出、后半转为流入，需结合力度看是否站稳。", ["fr.path", "fr.trend", "fr.level_z"], ids))
     elif trend == "accelerating_out":
-        out.append(_row("high", "大资金流出在加快", "大资金连续净流出，并且力度越来越大。", ["fr.trend", "fr.streak"], ids))
+        out.append(_row("high", "大资金流出在加快", "大资金连续净流出，并且力度越来越大。", ["fr.path", "fr.trend", "fr.streak"], ids))
+    share3 = d.get("last_share_3d")
+    if share3 is not None and abs(share3) >= 0.6:
+        out.append(_row("medium", "最近一日主导近 3 日资金", f"最近一日大资金净额占近 3 日 {text.get('fr.last_share_3d', '')}，勿一日定乾坤。", ["fr.last_share_3d", "fr.last_day_net"], ids))
 
     hints = d.get("hints") or []
     if hints:

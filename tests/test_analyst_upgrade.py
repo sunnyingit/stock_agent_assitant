@@ -73,9 +73,11 @@ class PromptTest(unittest.TestCase):
 
     def test_flow_rubric_judges_by_comparison_with_the_stock_itself(self):
         from app.flow_review import prompt
-        self.assertIn("fr.vs_self_5d", prompt.RUBRIC)
+        self.assertIn("fr.vs_self_3d", prompt.RUBRIC)
+        self.assertIn("fr.level_z", prompt.RUBRIC)
         self.assertIn("约六成", prompt.RUBRIC)
         self.assertIn("没有稳定的预测力", prompt.RULES)
+        self.assertIn("fr.vs_self_5d", prompt.RUBRIC)
         self.assertNotIn("价格涨但大资金净流出（背离）→ warn", prompt.RUBRIC)
 
     def test_news_prompt_has_the_a_share_reading_and_ignores_instructions_in_news(self):
@@ -89,7 +91,7 @@ class PromptTest(unittest.TestCase):
         from app.fundamental_review import prompt as fund
         from app.sector_review import prompt as sector
         self.assertEqual((flow.PROMPT_VERSION, fin.PROMPT_VERSION, sector.PROMPT_VERSION, fund.PROMPT_VERSION, prompts.PROMPT_VERSION),
-                         ("flow-review-14", "fin-review-12", "sector-review-6", "fund-review-7", "prompt-12"))
+                         ("flow-review-15", "fin-review-12", "sector-review-6", "fund-review-7", "prompt-12"))
 
     def test_the_fundamental_prompt_no_longer_lets_the_model_invent_partners(self):
         from app.fundamental_review import prompt

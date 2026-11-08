@@ -23,7 +23,7 @@ from app.services.volume_flow.rules import (
     position_hints,
 )
 
-FORMULA_TEXT = "相对量能 = 窗口日均成交量 ÷ 窗口之前 60 日均量（两段不重叠）；净流入率 = 大资金（超大单 + 大单）净流入 ÷ 成交额；强弱 = 净流入率和这只股票自己过去同长度窗口比，高于平时几个标准差。"
+FORMULA_TEXT = "相对量能 = 窗口日均成交量 ÷ 窗口之前 60 日均量（两段不重叠）；净流入率 = 大资金（超大单 + 大单）净流入 ÷ 成交额；强弱 = 净流入率相对自身历史的稳健 z（中位数+MAD，不够则均值标准差）；短线主窗 3 日。"
 
 
 def build_detail(stock: Stock, window: int = DEFAULT_WINDOW, aligned: dict | None = None, today: date | None = None) -> dict:
@@ -53,10 +53,15 @@ def build_detail(stock: Stock, window: int = DEFAULT_WINDOW, aligned: dict | Non
         "meta": _meta(data, window, stale, today),
         "verdict": {
             **rule_fields(verdict.get("lean") or "", text),
-            # 下面三项只给综合判断读，对外响应里由 public() 去掉
+            # 下面几项只给综合判断读，对外响应里由 public() 去掉
             "lean": verdict.get("lean") or "",
             "level": verdict.get("level"),
             "certainty": verdict.get("certainty"),
+            "path": (verdict.get("path") or {}).get("label") or verdict.get("trend") or "",
+            "path_text": (verdict.get("path") or {}).get("text") or "",
+            "structure_text": (verdict.get("structure") or {}).get("text") or "",
+            "price_flow": verdict.get("price_flow") or "",
+            "rate_z": metrics["flow"].get("rate_z"),
         },
         "follow": _follow_public(follow),
         "disclaimer_text": DISCLAIMER_TEXT,
@@ -89,6 +94,8 @@ def build_detail(stock: Stock, window: int = DEFAULT_WINDOW, aligned: dict | Non
             "days": metrics["daily"]["days"],
             "history": (metrics.get("history") or {}).get("days") or [],
             "trend": verdict.get("trend") or "",
+            "path": verdict.get("path") or {},
+            "structure": verdict.get("structure") or {},
         },
         "relative_strength": {
             **_relative_public(metrics["relative"]),

@@ -113,11 +113,11 @@ def _big(metrics: dict, sign: int) -> dict:
     z = metrics["flow"].get("rate_z")
     if z is not None:
         if z >= FLOW_Z_EDGE:
-            side, brief, text = 1, "大资金比平时明显更流入", f"{net}，净流入率比这只股票自己平时高（{_num(z, 1)} 个标准差）"
+            side, brief, text = 1, "大资金比平时明显更流入", f"{net}，比这只股票自己平时更偏流入"
         elif z <= -FLOW_Z_EDGE:
-            side, brief, text = -1, "大资金比平时明显更流出", f"{net}，净流入率比这只股票自己平时低（{_num(abs(z), 1)} 个标准差）"
+            side, brief, text = -1, "大资金比平时明显更流出", f"{net}，比这只股票自己平时更偏流出"
         else:
-            return _item("big_money", "大资金", "neutral", "大资金和平时差不多", f"{net}，净流入率和这只股票自己平时差不多")
+            return _item("big_money", "大资金", "neutral", "大资金和平时差不多", f"{net}，和这只股票自己平时差不多")
         return _item("big_money", "大资金", "agree" if side == sign else "disagree", brief, text)
     total = daily["in_days"] + daily["out_days"]
     if not total:

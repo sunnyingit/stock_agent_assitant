@@ -14,6 +14,9 @@ from app.tools import cache
 from app.tools.stock import Stock, is_hk
 
 PARTS = ("membership", "tape", "position", "rank", "heat", "dc", "sw")
+DAY_MAX = 120
+# 默认多窗口：不再把最长窗口钉死在 20 日。
+DEFAULT_WINDOWS = (5, 20, 60, 120)
 _ZONE = ZoneInfo("Asia/Shanghai")
 _STAGE = {
     "start": "启动", "main": "主升", "climax": "高潮", "diverge": "分歧",
@@ -22,19 +25,39 @@ _STAGE = {
 _LIMIT = {"U": "涨停", "D": "跌停", "Z": "炸板"}
 
 
-def build(stock: Stock, part: str) -> dict:
+def clamp_days(value) -> int | None:
+    """None/缺省 → 多窗口；否则夹到 1～120。"""
+    if value is None or value == "":
+        return None
+    try:
+        days = int(float(value))
+    except (TypeError, ValueError):
+        return None
+    if days <= 0:
+        return None
+    return max(1, min(DAY_MAX, days))
+
+
+def windows_for(days: int | None) -> tuple[int, ...]:
+    if days is None:
+        return DEFAULT_WINDOWS
+    return (days,) if days != 5 else (5, 20)
+
+
+def build(stock: Stock, part: str, days=None) -> dict:
     if part not in PARTS:
         raise ValueError(f"未知切片 {part}")
     if is_hk(stock):
         return _doc(stock, part, [], "港股暂不按这套板块口径比较")
+    horizon = clamp_days(days)
     return {
-        "membership": _membership,
-        "tape": _tape,
-        "position": _position,
-        "rank": _rank,
-        "heat": _heat,
-        "dc": _dc,
-        "sw": _sw,
+        "membership": lambda s: _membership(s),
+        "tape": lambda s: _tape(s, horizon),
+        "position": lambda s: _position(s, horizon),
+        "rank": lambda s: _rank(s, horizon),
+        "heat": lambda s: _heat(s),
+        "dc": lambda s: _dc(s, horizon),
+        "sw": lambda s: _sw(s, horizon),
     }[part](stock)
 
 
@@ -68,13 +91,29 @@ def format_tape(block: dict | None, money: dict | None) -> dict:
     days = block.get("days")
     lasted = f"，这一轮已 {int(days)} 个交易日" if days else ""
     facts.append({"id": "sm.stage", "text": f"{name}（{kind}）当前阶段：{stage}{lasted}"})
-    for key, label in (("ret_sector", f"{name}近 20 日"), ("ret_stock", "本股近 20 日"), ("ret_index", "沪深300 近 20 日")):
-        text = _pct(block.get(key))
-        if text:
-            facts.append({"id": f"sm.{key}", "text": f"{label} {text}"})
-    versus = _pct(block.get("stock_vs_sector"))
-    if versus:
-        facts.append({"id": "sm.stock_vs_sector", "text": f"本股近 20 日相对{name} {versus}"})
+    windows = block.get("ret_windows") or {}
+    if windows:
+        for horizon in sorted(int(key) for key in windows):
+            row = windows.get(horizon) or windows.get(str(horizon)) or {}
+            for key, label in (
+                ("sector", f"{name}近 {horizon} 日"),
+                ("stock", f"本股近 {horizon} 日"),
+                ("index", f"沪深300 近 {horizon} 日"),
+            ):
+                text = _pct(row.get(key))
+                if text:
+                    facts.append({"id": f"sm.ret_{key}_{horizon}d", "text": f"{label} {text}"})
+            versus = _pct(row.get("stock_vs_sector"))
+            if versus:
+                facts.append({"id": f"sm.stock_vs_sector_{horizon}d", "text": f"本股近 {horizon} 日相对{name} {versus}"})
+    else:
+        for key, label in (("ret_sector", f"{name}近 20 日"), ("ret_stock", "本股近 20 日"), ("ret_index", "沪深300 近 20 日")):
+            text = _pct(block.get(key))
+            if text:
+                facts.append({"id": f"sm.{key}", "text": f"{label} {text}"})
+        versus = _pct(block.get("stock_vs_sector"))
+        if versus:
+            facts.append({"id": "sm.stock_vs_sector", "text": f"本股近 20 日相对{name} {versus}"})
     facts.extend(_money_facts(block, money or {}))
     return _body(facts, " ".join(item["text"] for item in facts))
 
@@ -88,10 +127,11 @@ def format_position(block: dict | None, flow: dict | None) -> dict:
         facts.append({"id": "sm.role", "text": f"本股在{name}里是{block['role_text']}"})
     if block.get("mv_rank") and block.get("mv_total"):
         facts.append({"id": "sm.mv_rank", "text": f"市值排名 {block['mv_rank']}/{block['mv_total']}"})
+    horizon = int(block.get("ret_days") or 20)
     if block.get("ret_rank") and block.get("ret_total"):
-        facts.append({"id": "sm.ret_rank", "text": f"近 20 日涨幅排名 {block['ret_rank']}/{block['ret_total']}"})
-    leaders = _names(block.get("leaders") or [])
-    laggards = _names(block.get("laggards") or [])
+        facts.append({"id": "sm.ret_rank", "text": f"近 {horizon} 日涨幅排名 {block['ret_rank']}/{block['ret_total']}"})
+    leaders = _names(block.get("leaders") or [], horizon)
+    laggards = _names(block.get("laggards") or [], horizon)
     if leaders:
         facts.append({"id": "sm.leaders", "text": "涨幅靠前：" + "、".join(leaders)})
     if laggards:
@@ -103,18 +143,18 @@ def format_position(block: dict | None, flow: dict | None) -> dict:
     return _body(facts, " ".join(item["text"] for item in facts))
 
 
-def format_rank(rows: list[dict], subject: str) -> dict:
+def format_rank(rows: list[dict], subject: str, days: int = 20) -> dict:
     ordered = sorted(
         [row for row in rows if row.get("ret") is not None and row.get("code")],
         key=lambda row: (-float(row["ret"]), row.get("code") or ""),
     )
     index = next((i for i, row in enumerate(ordered) if row.get("code") == subject), None)
     if index is None or len(ordered) < 5:
-        return _body([], "没有取到申万一级近 20 日排行")
+        return _body([], f"没有取到申万一级近 {days} 日排行")
     start, end = max(0, index - 2), min(len(ordered), index + 3)
     facts = [{
         "id": "sm.l1_rank",
-        "text": f"{ordered[index].get('name') or subject}近 20 日在申万一级中排第 {index + 1}/{len(ordered)}",
+        "text": f"{ordered[index].get('name') or subject}近 {days} 日在申万一级中排第 {index + 1}/{len(ordered)}",
     }]
     bits = []
     for place, row in enumerate(ordered[start:end], start=start + 1):
@@ -168,8 +208,16 @@ def format_heat(groups: list[dict], lists: dict, stock_code: str) -> dict:
     return _body(facts, text, unavailable)
 
 
-def format_dc(boards: list[dict], trends: dict, hot_rows: list[dict], peers: list[dict], stock_code: str, unavailable: list[str] | None = None) -> dict:
-    """东财板块。boards 的涨跌幅是百分数，trends 的近 20 日是小数。"""
+def format_dc(
+    boards: list[dict],
+    trends: dict,
+    hot_rows: list[dict],
+    peers: list[dict],
+    stock_code: str,
+    unavailable: list[str] | None = None,
+    trend_days: int = 20,
+) -> dict:
+    """东财板块。boards 的涨跌幅是百分数，trends 的区间涨跌是小数。"""
     missing = list(unavailable or [])
     facts = []
     industries = [row for row in boards if row.get("idx_type") == "行业板块"]
@@ -197,9 +245,9 @@ def format_dc(boards: list[dict], trends: dict, hot_rows: list[dict], peers: lis
         seen.add(code)
         trend_bits.append(f"{row.get('name') or code} {_pct(trends[code])}")
     if trend_bits:
-        facts.append({"id": "sm.dc_trend", "text": "东财板块近 20 日：" + "；".join(trend_bits)})
+        facts.append({"id": "sm.dc_trend", "text": f"东财板块近 {trend_days} 日：" + "；".join(trend_bits)})
     elif "东财行情" in missing:
-        facts.append({"id": "sm.dc_trend", "text": "东财板块近 20 日行情这次没有取到"})
+        facts.append({"id": "sm.dc_trend", "text": f"东财板块近 {trend_days} 日行情这次没有取到"})
     mine = next((row for row in hot_rows if row.get("ts_code") == stock_code), None)
     if mine and mine.get("rank") is not None:
         change = _pts(mine.get("pct_change"))
@@ -234,7 +282,7 @@ def _dc_bit(row: dict) -> str:
 
 
 def format_sw(levels: list[dict]) -> dict:
-    """申万行业日线。pct、pe、pb 用原值；amount、total_mv 是万元；ret_20d 是小数。"""
+    """申万行业日线。pct、pe、pb 用原值；amount 是万元；区间涨跌是小数。"""
     facts = []
     for row in levels:
         name = row.get("name") or row.get("level") or "申万行业"
@@ -259,9 +307,16 @@ def format_sw(levels: list[dict]) -> dict:
                 days.append(f"{_short_date(item['date'])} {pct}")
         if days:
             facts.append({"id": f"sm.sw_{level}_days", "text": f"{name}近 5 日：" + "，".join(days)})
-        trend = _pct(row.get("ret_20d"))
-        if trend:
-            facts.append({"id": f"sm.sw_{level}_20d", "text": f"{name}近 20 日 {trend}"})
+        rets = row.get("ret_windows") or {}
+        if rets:
+            for horizon in sorted(int(key) for key in rets):
+                trend = _pct(rets.get(horizon) if horizon in rets else rets.get(str(horizon)))
+                if trend:
+                    facts.append({"id": f"sm.sw_{level}_{horizon}d", "text": f"{name}近 {horizon} 日 {trend}"})
+        else:
+            trend = _pct(row.get("ret_20d"))
+            if trend:
+                facts.append({"id": f"sm.sw_{level}_20d", "text": f"{name}近 20 日 {trend}"})
     if not facts:
         return _body([], "没有取到申万行业日线")
     return _body(facts, " ".join(item["text"] for item in facts))
@@ -326,35 +381,37 @@ def _membership(stock: Stock) -> dict:
     return _doc(stock, "membership", * _pair(format_membership(row, names)))
 
 
-def _tape(stock: Stock) -> dict:
+def _tape(stock: Stock, days: int | None = None) -> dict:
     detail = _detail(stock)
     block = _primary(detail)
-    money = _sector_money(stock)
-    body = format_tape(_tape_block(block), money)
+    money = _sector_money(stock, days)
+    body = format_tape(_tape_block(block, stock, days), money)
     return _doc(stock, "tape", body["facts"], body["text"], body.get("unavailable") or [])
 
 
-def _position(stock: Stock) -> dict:
+def _position(stock: Stock, days: int | None = None) -> dict:
     detail = _detail(stock)
     block = _primary(detail)
     snap = _snapshot(stock)
     members, truncated = _members(snap, block)
-    flow = _stock_flow(stock)
-    body = format_position(_position_block(block, members, truncated, stock.ts_code), flow)
+    flow = _stock_flow(stock, days)
+    horizon = days or 60
+    body = format_position(_position_block(block, members, truncated, stock.ts_code, horizon), flow)
     return _doc(stock, "position", body["facts"], body["text"], body.get("unavailable") or [])
 
 
-def _rank(stock: Stock) -> dict:
+def _rank(stock: Stock, days: int | None = None) -> dict:
     from app.services.sector_detail.discover import industry_row
     from app.services.sector_detail.rules import compound
     from app.services.sector_detail.tsutil import call, iso, records, ret, si
     from app.tools.tushare_client import get_pro
 
+    horizon = days or 60
     pro = get_pro()
     row = industry_row(pro, stock.ts_code)
     subject = si(row.get("l1_code"))
     end = datetime.now(_ZONE).date()
-    key = f"sector_l1_rank:{end.isoformat()}"
+    key = f"sector_l1_rank:{horizon}:{end.isoformat()}"
     rows = cache.get(key)
     if rows is None:
         names = {}
@@ -362,7 +419,7 @@ def _rank(stock: Stock) -> dict:
             code = si(item.get("index_code"))
             if code:
                 names[code] = str(item.get("industry_name") or item.get("name") or code)
-        start = end.fromordinal(end.toordinal() - 45).strftime("%Y%m%d")
+        start = end.fromordinal(end.toordinal() - max(45, int(horizon * 1.8) + 10)).strftime("%Y%m%d")
         stop = end.strftime("%Y%m%d")
 
         def one(code: str):
@@ -371,8 +428,8 @@ def _rank(stock: Stock) -> dict:
                 day, value = iso(item.get("trade_date")), ret(item.get("pct_change"))
                 if day and value is not None:
                     points.append((day, value))
-            window = [value for _day, value in sorted(points)[-20:]]
-            if len(window) < 20:
+            window = [value for _day, value in sorted(points)[-horizon:]]
+            if len(window) < min(horizon, 20):
                 return None
             return {"code": code, "name": names.get(code) or code, "ret": compound(window)}
 
@@ -380,7 +437,7 @@ def _rank(stock: Stock) -> dict:
             rows = [item for item in pool.map(one, list(names)) if item]
         if len(rows) >= 5:
             cache.set(key, rows, 6 * 3600)
-    body = format_rank(rows or [], subject)
+    body = format_rank(rows or [], subject, horizon)
     return _doc(stock, "rank", body["facts"], body["text"])
 
 
@@ -406,10 +463,17 @@ def _money_facts(block: dict, money: dict) -> list[dict]:
     name = block.get("name") or ""
     if board and name and board != name:
         facts.append({"id": "sm.flow_board", "text": f"资金口径是东财行业「{board}」，申万主板块是「{name}」"})
-    for key, label in (("net_5d", "近 5 日板块资金"), ("net_20d", "近 20 日板块资金")):
-        text = _yi(money.get(key))
-        if text:
-            facts.append({"id": f"sm.{key}", "text": f"{label} {text}"})
+    nets = money.get("net_windows") or {}
+    if nets:
+        for horizon in sorted(int(key) for key in nets):
+            text = _yi(nets.get(horizon) if horizon in nets else nets.get(str(horizon)))
+            if text:
+                facts.append({"id": f"sm.net_{horizon}d", "text": f"近 {horizon} 日板块资金 {text}"})
+    else:
+        for key, label in (("net_5d", "近 5 日板块资金"), ("net_20d", "近 20 日板块资金")):
+            text = _yi(money.get(key))
+            if text:
+                facts.append({"id": f"sm.{key}", "text": f"{label} {text}"})
     daily = []
     for row in money.get("daily") or []:
         text = _yi(row.get("net"))
@@ -424,14 +488,25 @@ def _flow_facts(flow: dict) -> list[dict]:
     if not flow.get("ok"):
         return [{"id": "sm.stock_flow", "text": "个股资金这次没有取到"}]
     facts = []
-    for key, label in (("big_5d", "近 5 日大资金净额"), ("big_20d", "近 20 日大资金净额")):
-        text = _wan_yi(flow.get(key))
-        if text:
-            facts.append({"id": f"sm.{key}", "text": f"{label} {text}"})
-    for key, label in (("rate_5d", "近 5 日大资金净流入率"), ("rate_20d", "近 20 日大资金净流入率")):
-        value = flow.get(key)
-        if value is not None:
-            facts.append({"id": f"sm.{key}", "text": f"{label} {value:+.1f}%"})
+    bigs = flow.get("big_windows") or {}
+    rates = flow.get("rate_windows") or {}
+    if bigs or rates:
+        for horizon in sorted({int(key) for key in list(bigs) + list(rates)}):
+            text = _wan_yi(bigs.get(horizon) if horizon in bigs else bigs.get(str(horizon)))
+            if text:
+                facts.append({"id": f"sm.big_{horizon}d", "text": f"近 {horizon} 日大资金净额 {text}"})
+            rate = rates.get(horizon) if horizon in rates else rates.get(str(horizon))
+            if rate is not None:
+                facts.append({"id": f"sm.rate_{horizon}d", "text": f"近 {horizon} 日大资金净流入率 {rate:+.1f}%"})
+    else:
+        for key, label in (("big_5d", "近 5 日大资金净额"), ("big_20d", "近 20 日大资金净额")):
+            text = _wan_yi(flow.get(key))
+            if text:
+                facts.append({"id": f"sm.{key}", "text": f"{label} {text}"})
+        for key, label in (("rate_5d", "近 5 日大资金净流入率"), ("rate_20d", "近 20 日大资金净流入率")):
+            value = flow.get(key)
+            if value is not None:
+                facts.append({"id": f"sm.{key}", "text": f"{label} {value:+.1f}%"})
     gap = flow.get("vs_sector_5d")
     if gap is not None:
         facts.append({"id": "sm.vs_sector", "text": f"近 5 日大资金净流入率相对板块 {gap:+.1f} 个百分点"})
@@ -477,10 +552,11 @@ def _billboard(groups: list[dict], tops: list[dict]) -> list[dict]:
     return [{"id": "sm.toplist", "text": "成分上榜：" + "；".join(bits) + extra}]
 
 
-def _names(rows: list[dict]) -> list[str]:
+def _names(rows: list[dict], days: int = 20) -> list[str]:
     bits = []
+    key = "ret_20d" if days == 20 else f"ret_{days}d"
     for row in rows:
-        text = _pct(row.get("ret_20d"))
+        text = _pct(row.get(key) if key in row else row.get("ret_20d"))
         name = row.get("name") or row.get("ts_code")
         if name and text:
             mark = "（本股）" if row.get("is_self") else ""
@@ -488,14 +564,14 @@ def _names(rows: list[dict]) -> list[str]:
     return bits
 
 
-def _tape_block(block: dict | None) -> dict | None:
+def _tape_block(block: dict | None, stock: Stock | None = None, days: int | None = None) -> dict | None:
     if not block:
         return None
     strength = block.get("strength") or {}
     lines = strength.get("lines") or {}
     gaps = strength.get("gaps") or {}
     stage = block.get("stage") or {}
-    return {
+    out = {
         "name": block.get("name"),
         "type": block.get("type"),
         "stage": stage.get("current"),
@@ -505,19 +581,80 @@ def _tape_block(block: dict | None) -> dict | None:
         "ret_index": _last(lines.get("index")),
         "stock_vs_sector": gaps.get("stock_vs_sector"),
     }
+    horizons = [horizon for horizon in windows_for(days) if horizon >= 20]
+    if not horizons:
+        horizons = [20]
+    windows = {}
+    for horizon in horizons:
+        if horizon == 20:
+            windows[20] = {
+                "sector": out["ret_sector"],
+                "stock": out["ret_stock"],
+                "index": out["ret_index"],
+                "stock_vs_sector": out["stock_vs_sector"],
+            }
+            continue
+        row = _return_window(block, stock, horizon) if stock is not None else {}
+        if row:
+            windows[horizon] = row
+    if windows:
+        out["ret_windows"] = windows
+    return out
 
 
-def _position_block(block: dict | None, members: list[dict], truncated: bool, ts_code: str) -> dict | None:
+def _return_window(block: dict, stock: Stock, days: int) -> dict:
+    """按指定交易日窗口重算板块 / 个股 / 沪深300 涨跌。"""
+    from app.services.sector_detail.rules import compound
+    from app.services.sector_detail.tsutil import call, iso, records, ret
+    from app.tools.tushare_client import get_pro
+
+    pro = get_pro()
+    end = datetime.now(_ZONE).date()
+    start = end.fromordinal(end.toordinal() - max(45, int(days * 1.8) + 10)).strftime("%Y%m%d")
+    stop = end.strftime("%Y%m%d")
+    board = str(block.get("code") or "")
+    out = {}
+    series = {
+        "sector": board,
+        "stock": stock.ts_code,
+        "index": "000300.SH",
+    }
+    for key, code in series.items():
+        if not code:
+            continue
+        points = []
+        getter = (
+            (lambda current=code: pro.sw_daily(ts_code=current, start_date=start, end_date=stop))
+            if key == "sector" and block.get("type") == "industry"
+            else (lambda current=code: pro.daily(ts_code=current, start_date=start, end_date=stop))
+        )
+        if key == "sector" and block.get("type") != "industry":
+            continue
+        for item in records(call(getter)):
+            day = iso(item.get("trade_date"))
+            value = ret(item.get("pct_change") if key == "sector" else item.get("pct_chg"))
+            if day and value is not None:
+                points.append((day, value))
+        window = [value for _day, value in sorted(points)[-days:]]
+        if len(window) >= min(days, 20):
+            out[key] = compound(window)
+    if out.get("stock") is not None and out.get("sector") is not None:
+        out["stock_vs_sector"] = out["stock"] - out["sector"]
+    return out
+
+
+def _position_block(block: dict | None, members: list[dict], truncated: bool, ts_code: str, days: int = 20) -> dict | None:
     if not block:
         return None
     role = block.get("role") or {}
     pos = (block.get("evidence") or {}).get("position") or {}
+    ret_key = "ret_20d"
     ordered = []
     for item in members:
-        if item.get("ret_20d") is None:
+        if item.get(ret_key) is None:
             continue
         ordered.append({**item, "is_self": item.get("ts_code") == ts_code})
-    ordered.sort(key=lambda item: (-float(item["ret_20d"]), item.get("ts_code") or ""))
+    ordered.sort(key=lambda item: (-float(item[ret_key]), item.get("ts_code") or ""))
     return {
         "name": block.get("name"),
         "role_text": role.get("role_text"),
@@ -525,30 +662,42 @@ def _position_block(block: dict | None, members: list[dict], truncated: bool, ts
         "mv_total": pos.get("total"),
         "ret_rank": role.get("self_rank"),
         "ret_total": role.get("member_count"),
+        "ret_days": 20,  # 成分涨幅仍来自详情近 20 日口径；板块/资金窗口已支持更长
         "leaders": ordered[:3],
         "laggards": list(reversed(ordered[-3:])) if len(ordered) > 3 else [],
         "truncated": truncated,
     }
 
 
-def _sector_money(stock: Stock) -> dict:
+def _sector_money(stock: Stock, days: int | None = None) -> dict:
     try:
         from app.services.series import get_sector
 
-        payload = get_sector(stock, 40)
+        payload = get_sector(stock, DAY_MAX)
     except Exception:
         return {"ok": False}
     items = payload.get("items") or []
-    net5, _rate5 = window_sector(items, 5)
-    net20, _rate20 = window_sector(items, 20)
+    nets = {}
+    for horizon in windows_for(days):
+        net, _rate = window_sector(items, horizon)
+        if net is not None:
+            nets[horizon] = net
     daily = []
     for row in items[-5:]:
         daily.append({"date": str(row.get("trade_date") or ""), "net": _num(row.get("net_amount"))})
     board = (payload.get("board") or {}).get("name") or ""
-    return {"ok": net5 is not None or net20 is not None, "board": board, "net_5d": net5, "net_20d": net20, "daily": daily, "items": items}
+    return {
+        "ok": bool(nets),
+        "board": board,
+        "net_5d": nets.get(5),
+        "net_20d": nets.get(20),
+        "net_windows": nets,
+        "daily": daily,
+        "items": items,
+    }
 
 
-def _stock_flow(stock: Stock) -> dict:
+def _stock_flow(stock: Stock, days: int | None = None) -> dict:
     try:
         from app.services.series import get_flow_daily
 
@@ -556,14 +705,26 @@ def _stock_flow(stock: Stock) -> dict:
     except Exception:
         return {"ok": False}
     items = payload.get("items") or []
-    big5, rate5 = window_big(items, 5)
-    big20, rate20 = window_big(items, 20)
-    sector = _sector_money(stock)
+    bigs, rates = {}, {}
+    for horizon in windows_for(days):
+        big, rate = window_big(items, horizon)
+        if big is not None:
+            bigs[horizon] = big
+        if rate is not None:
+            rates[horizon] = rate
+    sector = _sector_money(stock, days)
     _net, sector_rate = window_sector(sector.get("items") or [], 5)
+    rate5 = rates.get(5)
     gap = None if rate5 is None or sector_rate is None else rate5 - sector_rate
     return {
-        "ok": big5 is not None or big20 is not None,
-        "big_5d": big5, "big_20d": big20, "rate_5d": rate5, "rate_20d": rate20, "vs_sector_5d": gap,
+        "ok": bool(bigs) or bool(rates),
+        "big_5d": bigs.get(5),
+        "big_20d": bigs.get(20),
+        "rate_5d": rates.get(5),
+        "rate_20d": rates.get(20),
+        "big_windows": bigs,
+        "rate_windows": rates,
+        "vs_sector_5d": gap,
     }
 
 
@@ -614,17 +775,19 @@ def _heat_lists(day: str) -> dict:
     return payload
 
 
-def _dc(stock: Stock) -> dict:
+def _dc(stock: Stock, days: int | None = None) -> dict:
     from app import config
     from app.services.sector_detail.rules import compound
     from app.services.sector_detail.tsutil import call, iso, records, ret
     from app.tools.tushare_client import get_pro
 
+    horizons = [horizon for horizon in windows_for(days) if horizon >= 20] or [20]
+    trend_days = max(horizons)
     pro = get_pro()
     day = _trade_day(pro)
     if not day:
         return _doc(stock, "dc", [], "没有取到最近交易日，东财板块无法对照")
-    key = f"sector_dc:{stock.ts_code}:{day}"
+    key = f"sector_dc:{stock.ts_code}:{day}:{trend_days}"
     cached = cache.get(key)
     if isinstance(cached, dict):
         return _doc(stock, "dc", cached["facts"], cached["text"], cached.get("unavailable") or [])
@@ -669,7 +832,7 @@ def _dc(stock: Stock) -> dict:
         if row["code"] not in {item["code"] for item in chosen}:
             chosen.append(row)
     end = datetime.now(_ZONE).date()
-    start = end.fromordinal(end.toordinal() - 45).strftime("%Y%m%d")
+    start = end.fromordinal(end.toordinal() - max(45, int(trend_days * 1.8) + 10)).strftime("%Y%m%d")
     trends = {}
     for row in chosen:
         points = []
@@ -682,8 +845,8 @@ def _dc(stock: Stock) -> dict:
             stamp, value = iso(item.get("trade_date")), ret(item.get("pct_change"))
             if stamp and value is not None:
                 points.append((stamp, value))
-        window = [value for _stamp, value in sorted(points)[-20:]]
-        if len(window) >= 20:
+        window = [value for _stamp, value in sorted(points)[-trend_days:]]
+        if len(window) >= min(trend_days, 20):
             trends[row["code"]] = compound(window)
     hot_rows = []
     frame = call(lambda: pro.dc_hot(trade_date=day, market="A股市场", hot_type="人气榜", is_new="Y"))
@@ -707,28 +870,29 @@ def _dc(stock: Stock) -> dict:
             for row in sorted(hot_rows, key=lambda item: item.get("rank") or 9999)
             if row.get("ts_code") in names and row.get("ts_code") != stock.ts_code and row.get("rank") is not None
         ][:5]
-    body = format_dc(boards, trends, hot_rows, peers, stock.ts_code, unavailable)
+    body = format_dc(boards, trends, hot_rows, peers, stock.ts_code, unavailable, trend_days)
     if boards or hot_rows:
         cache.set(key, body, config.CACHE_TTL["sector"])
     return _doc(stock, "dc", body["facts"], body["text"], body.get("unavailable") or [])
 
 
-def _sw(stock: Stock) -> dict:
+def _sw(stock: Stock, days: int | None = None) -> dict:
     from app import config
     from app.services.sector_detail.discover import industry_row
     from app.services.sector_detail.rules import compound
     from app.services.sector_detail.tsutil import call, iso, records, ret, si
     from app.tools.tushare_client import get_pro
 
+    horizons = [horizon for horizon in windows_for(days) if horizon >= 20] or [20]
     pro = get_pro()
     row = industry_row(pro, stock.ts_code)
     day = _trade_day(pro)
-    key = f"sector_sw:{stock.ts_code}:{day or 'none'}"
+    key = f"sector_sw:{stock.ts_code}:{day or 'none'}:{'-'.join(str(item) for item in horizons)}"
     cached = cache.get(key)
     if isinstance(cached, dict):
         return _doc(stock, "sw", cached["facts"], cached["text"], cached.get("unavailable") or [])
     end = datetime.now(_ZONE).date()
-    start = end.fromordinal(end.toordinal() - 45).strftime("%Y%m%d")
+    start = end.fromordinal(end.toordinal() - max(45, int(max(horizons) * 1.8) + 10)).strftime("%Y%m%d")
     stop = day or end.strftime("%Y%m%d")
     levels = []
     for level, code_key, name_key in (("一级", "l1_code", "l1_name"), ("二级", "l2_code", "l2_name"), ("三级", "l3_code", "l3_name")):
@@ -745,7 +909,11 @@ def _sw(stock: Stock) -> dict:
         if not points:
             continue
         latest = points[-1][1]
-        window = [ret(pct) for _stamp, _item, pct in points[-20:]]
+        rets = {}
+        for horizon in horizons:
+            window = [ret(pct) for _stamp, _item, pct in points[-horizon:]]
+            if len(window) >= min(horizon, 20):
+                rets[horizon] = compound(window)
         levels.append({
             "level": level,
             "name": str(row.get(name_key) or latest.get("name") or code),
@@ -755,7 +923,8 @@ def _sw(stock: Stock) -> dict:
             "pb": _num(latest.get("pb")),
             "amount": _num(latest.get("amount")),
             "daily": [{"date": stamp, "pct": pct} for stamp, _item, pct in points[-5:]],
-            "ret_20d": compound(window) if len(window) >= 20 else None,
+            "ret_20d": rets.get(20),
+            "ret_windows": rets,
         })
     body = format_sw(levels)
     if levels:

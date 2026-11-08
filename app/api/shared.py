@@ -84,6 +84,81 @@ def baidu_board():
         return jsonify({"status": "error", "error": "百度热搜暂时取不到"}), 502
 
 
+@bp.route("/quality/<ts_code>", methods=["GET"])
+def quality(ts_code: str):
+    """质地筛查：有没有红线（ST、连续亏损、立案处罚、负债过高）和注意项。规则，不预测涨跌。"""
+    from app.services import quality_screen
+    from app.tools.stock import resolve_stock
+
+    stock = resolve_stock(ts_code)
+    if stock is None:
+        return jsonify({"status": "error", "error": f"未找到股票: {ts_code}"}), 404
+    try:
+        return jsonify({"status": "ok", **quality_screen.check(stock)})
+    except Exception as exc:  # noqa: BLE001 - 财务数据取不到不能把接口拖垮
+        log.warning("quality %s failed: %s", ts_code, exc)
+        return jsonify({"status": "error", "error": "财务数据暂时取不到"}), 502
+
+
+@bp.route("/quality-peers/<ts_code>", methods=["GET"])
+def quality_peers(ts_code: str):
+    """同一申万行业里质地靠前的公司：?limit=3。第一次在后台算，先回 status=computing，隔几秒再问。"""
+    from app.services import quality_screen
+    from app.tools.stock import resolve_stock
+
+    stock = resolve_stock(ts_code)
+    if stock is None:
+        return jsonify({"status": "error", "error": f"未找到股票: {ts_code}"}), 404
+    try:
+        limit = max(1, min(int(request.args.get("limit") or 3), 10))
+    except ValueError:
+        return jsonify({"status": "error", "error": "limit 要是数字"}), 400
+    return jsonify(quality_screen.candidates(stock, limit))
+
+
+@bp.route("/kline/<ts_code>", methods=["GET"])
+def kline(ts_code: str):
+    """K 线：?period=day|week|month&limit=250。指数、ETF、个股都行，带 5/20/60 均线。"""
+    from app.services import kline as kl
+
+    try:
+        limit = int(request.args["limit"]) if request.args.get("limit") else None
+    except ValueError:
+        return jsonify({"status": "error", "error": "limit 要是数字"}), 400
+    try:
+        return jsonify({"status": "ok", **kl.kline(ts_code.upper(), request.args.get("period") or "day", limit)})
+    except ValueError as exc:
+        return jsonify({"status": "error", "error": str(exc)}), 400
+    except LookupError as exc:
+        return jsonify({"status": "error", "error": str(exc)}), 404
+    except Exception as exc:  # noqa: BLE001 - 行情源出错不能把接口拖垮
+        log.warning("kline %s failed: %s", ts_code, exc)
+        return jsonify({"status": "error", "error": "行情暂时取不到"}), 502
+
+
+@bp.route("/kline-search", methods=["GET"])
+def kline_search():
+    """行情弹窗的搜索框：?q=关键字&kind=index|stock。index 搜指数和 ETF，stock 搜 A 股。"""
+    from app.services import kline as kl
+
+    kind = request.args.get("kind") or "index"
+    if kind not in ("index", "stock"):
+        return jsonify({"status": "error", "error": "kind 要是 index 或 stock"}), 400
+    try:
+        return jsonify({"status": "ok", "items": kl.search(request.args.get("q") or "", kind)})
+    except Exception as exc:  # noqa: BLE001
+        log.warning("kline search failed: %s", exc)
+        return jsonify({"status": "error", "error": "搜索暂时不可用"}), 502
+
+
+@bp.route("/index-list", methods=["GET"])
+def index_list():
+    """行情页下拉框里的宽基指数。"""
+    from app.services import kline as kl
+
+    return jsonify({"status": "ok", "items": [{"ts_code": c, "name": n, "etf": e} for c, n, e in kl.INDEXES]})
+
+
 @bp.route("/closes/<ts_code>", methods=["GET"])
 def closes(ts_code: str):
     return jsonify({"status": "ok", "items": [[day, close] for day, close in _data().closes(ts_code)]})

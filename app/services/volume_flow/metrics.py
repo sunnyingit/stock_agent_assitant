@@ -60,11 +60,37 @@ def compute(aligned: dict, window: int) -> dict:
 REF_POINTS = 200        # 拿自己过去最多这么多个窗口（逐日滑动）做参照
 MIN_REF = 30            # 参照窗口少于这个数就不给强弱（新股、资金流缺数据）
 MIN_INDEPENDENT = 6     # 逐日滑动的窗口互相重叠；至少要有这么多段互不重叠的历史，标准差才靠得住
+MAD_SCALE = 1.4826      # 正态近似：σ ≈ 1.4826 × MAD
+
+
+def _median(values: list[float]) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    mid = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[mid]
+    return (ordered[mid - 1] + ordered[mid]) / 2
+
+
+def _robust_z(current: float, ref: list[float]) -> float | None:
+    """优先中位数 + MAD；MAD 为 0 时回退均值标准差。"""
+    med = _median(ref)
+    if med is None:
+        return None
+    mad = _median([abs(value - med) for value in ref])
+    if mad is not None and mad > 0:
+        return (current - med) / (MAD_SCALE * mad)
+    mean = sum(ref) / len(ref)
+    std = (sum((value - mean) ** 2 for value in ref) / len(ref)) ** 0.5
+    if std == 0:
+        return None
+    return (current - mean) / std
 
 
 def _rate_context(bars: list[dict], flow: dict, window: int) -> dict:
     """窗口净流入率，放到这只股票自己过去的同长度窗口里比：高于平时多少个标准差。
-    参照窗口全都在当前窗口之前、不和它重叠。大单净额的绝对值和正负都不能直接比（大单净卖本来就是常态），要和自己比。"""
+    参照窗口全都在当前窗口之前、不和它重叠。优先稳健 z（中位数+MAD）。"""
     current = _stock_rate(bars[-window:], flow)
     ref: list[float] = []
     for stop in range(len(bars) - window, window - 1, -1):
@@ -73,15 +99,17 @@ def _rate_context(bars: list[dict], flow: dict, window: int) -> dict:
             ref.append(rate)
         if len(ref) >= REF_POINTS:
             break
-    out = {"rate": _round(current, 2), "rate_z": None, "rate_pctile": None, "rate_n": len(ref)}
+    out = {"rate": _round(current, 2), "rate_z": None, "rate_pctile": None, "rate_n": len(ref), "rate_z_method": ""}
     if current is None or len(ref) < max(MIN_REF, MIN_INDEPENDENT * window):
         return out
-    mean = sum(ref) / len(ref)
-    std = (sum((value - mean) ** 2 for value in ref) / len(ref)) ** 0.5
-    if std == 0:
+    z = _robust_z(current, ref)
+    if z is None:
         return out
-    out["rate_z"] = round((current - mean) / std, 2)
+    med = _median(ref)
+    mad = _median([abs(value - med) for value in ref]) if med is not None else None
+    out["rate_z"] = round(z, 2)
     out["rate_pctile"] = round(sum(1 for value in ref if value <= current) / len(ref), 4)
+    out["rate_z_method"] = "mad" if mad is not None and mad > 0 else "mean_std"
     return out
 
 
@@ -122,6 +150,7 @@ def _sum_size(bars: list[dict], flow: dict, size: str) -> dict:
 
 def _daily(bars: list[dict], flow: dict) -> dict:
     nets = []
+    rates = []
     for bar in bars:
         row = flow.get(bar["date"]) or {}
         elg = row.get("super_large")
@@ -131,12 +160,18 @@ def _daily(bars: list[dict], flow: dict) -> dict:
         else:
             net = round((elg or 0) + (large or 0), 2)
         nets.append(net)
+        amount = bar.get("amount")
+        if net is None or not amount:
+            rates.append(None)
+        else:
+            rates.append(round(net / amount * 100, 4))
     levels = _intensity([value or 0 for value in nets])
     days = []
-    for bar, net, level in zip(bars, nets, levels):
+    for bar, net, rate, level in zip(bars, nets, rates, levels):
         days.append({
             "date": bar["date"],
             "net": net,
+            "net_rate": rate,
             "intensity": level,
             "close": bar.get("close"),
             "chg": bar.get("chg"),

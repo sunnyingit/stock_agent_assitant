@@ -432,6 +432,51 @@ def finance_stream(ts_code: str):
     return _event_stream("finance", "财报分析师", lambda: _finance_page(stock, wait=True))
 
 
+@bp.route("/stocks/<ts_code>/dimensions/market/detail", methods=["GET"])
+def market_detail(ts_code: str):
+    """个股诊断里的大盘维度：市场级事实，与 ts_code 无关，但路径与其它维度对齐。"""
+    stock = resolve_stock(ts_code)
+    if stock is None:
+        return jsonify({"error": f"未找到股票: {ts_code}"}), 404
+    from app.services.market_detail import build_detail, failed_payload
+
+    try:
+        return jsonify(build_detail(stock))
+    except Exception as exc:
+        log.exception("market detail failed")
+        return jsonify(failed_payload(stock, str(exc))), 500
+
+
+@bp.route("/stocks/<ts_code>/dimensions/market/reply", methods=["GET"])
+def market_reply(ts_code: str):
+    from app.services.market_detail import PARTS, build_reply
+
+    part = (request.args.get("part") or "").strip()
+    if part not in PARTS:
+        return jsonify({"error": "part 必须是 " + "、".join(PARTS)}), 400
+    stock = resolve_stock(ts_code)
+    if stock is None:
+        return jsonify({"error": f"未找到股票: {ts_code}"}), 404
+    try:
+        body = build_reply(part)
+        body["ts_code"] = stock.ts_code
+        body["stock_name"] = stock.name
+        return jsonify(body)
+    except Exception as exc:
+        log.exception("market reply failed: %s", part)
+        return jsonify({"error": str(exc)}), 500
+
+
+@bp.route("/stocks/<ts_code>/dimensions/market/stream", methods=["GET"])
+def market_stream(ts_code: str):
+    stock = resolve_stock(ts_code)
+    if stock is None:
+        return jsonify({"error": f"未找到股票: {ts_code}"}), 404
+    from app.services.market_detail import build_detail
+
+    return _event_stream("market", "大盘分析师", lambda: build_detail(stock))
+
+
 @bp.route("/market/summary", methods=["GET"])
 def market_summary():
     from app.services.market_page import build_summary
@@ -545,6 +590,19 @@ def market_etf(code: str):
         return jsonify({"error": str(exc)}), 500
 
 
+@bp.route("/market/sector/<path:name>", methods=["GET"])
+def market_sector_popup(name: str):
+    from app.services.market_page import sector_popup
+
+    try:
+        return jsonify(sector_popup(name))
+    except KeyError:
+        return jsonify({"error": f"市场页没有跟踪「{name}」"}), 404
+    except Exception as exc:
+        log.exception("market sector popup failed: %s", name)
+        return jsonify({"error": str(exc)}), 500
+
+
 @bp.route("/market", methods=["GET"])
 def market_tape():
     from app.services.market_tape import PARTS, build
@@ -565,12 +623,13 @@ def sector_reply(ts_code: str):
 
     part = (request.args.get("part") or "").strip()
     if part not in PARTS:
-        return jsonify({"error": "part 必须是 membership、tape、position、rank、heat"}), 400
+        return jsonify({"error": "part 必须是 membership、tape、position、rank、heat、dc、sw"}), 400
     stock = resolve_stock(ts_code)
     if stock is None:
         return jsonify({"error": f"未找到股票: {ts_code}"}), 404
+    days = request.args.get("days")
     try:
-        return jsonify(build(stock, part))
+        return jsonify(build(stock, part, days=days))
     except Exception as exc:
         log.exception("sector reply failed: %s", stock.ts_code)
         return jsonify({"error": str(exc)}), 500

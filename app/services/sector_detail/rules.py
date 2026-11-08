@@ -311,6 +311,76 @@ def combine(primary: dict, secondary: dict | None, weights: dict | None) -> dict
     return {"lean": lean, "level": level, "certainty": certainty, "certainty_reasons": reasons, "divergent": divergent}
 
 
+def pick_tape_lens(primary: dict, secondary: dict | None, weights: dict | None) -> str:
+    """行情镜头：驱动占比更高的那块板；没有次板块时就是主板块。"""
+    if secondary is None or not weights:
+        return "primary"
+    wp = float(weights.get("primary") or 0.0)
+    ws = float(weights.get("secondary") or 0.0)
+    return "secondary" if ws > wp else "primary"
+
+
+def tape_verdict(primary: dict, secondary: dict | None, weights: dict | None) -> dict:
+    """开场方向跟行情镜头走，不跟申万归属标签走。
+
+    - 镜头 = 驱动占比更高的板（见 pick_tape_lens）
+    - 主/次阶段对立 → neutral，vs_belong=对立
+    - 归属主板块与镜头方向相反 → vs_belong=背离，仍用镜头 lean
+    - 镜头偏空但本股抗跌/独立/领涨且相对板块明显更强 → 降为 neutral（板块不构成支撑）
+    """
+    lens_role = pick_tape_lens(primary, secondary, weights)
+    lens = primary if lens_role == "primary" else secondary
+    assert lens is not None
+    belong_sign = _SIGN.get(primary["lean"], 0)
+    lens_sign = _SIGN.get(lens["lean"], 0)
+
+    if secondary is not None:
+        sec_sign = _SIGN.get(secondary["lean"], 0)
+        if belong_sign * sec_sign < 0:
+            return {
+                "lean": "neutral",
+                "level": 1,
+                "certainty": "low",
+                "certainty_reasons": ["两个板块阶段对立"],
+                "divergent": True,
+                "lens_role": lens_role,
+                "vs_belong": "对立",
+            }
+
+    if lens_role != "primary" and belong_sign * lens_sign < 0:
+        vs_belong = "背离"
+    elif lens_role != "primary" and primary["lean"] != lens["lean"]:
+        vs_belong = "背离"
+    else:
+        vs_belong = "同向"
+
+    lean = lens["lean"]
+    level = lens["level"]
+    certainty = lens["certainty"]
+    reasons = list(lens.get("certainty_reasons") or [])
+
+    stock_vs = (lens.get("gaps") or {}).get("stock_vs_sector")
+    role = lens.get("role")
+    # 弱势/偏空板里个股明显更强：不要把「板弱」直接打成开场偏空
+    if lean == "bearish" and role in {"resilient", "independent", "leader"} and stock_vs is not None and stock_vs >= 0.05:
+        lean, level, certainty = "neutral", 1, "low"
+        reasons = ["板块偏弱但本股相对更强，板块不构成支撑"] + reasons[:2]
+        vs_belong = "背离"
+
+    if lens_role != "primary":
+        reasons = [f"行情镜头取次板块（驱动占比更高）"] + reasons
+
+    return {
+        "lean": lean,
+        "level": level,
+        "certainty": certainty,
+        "certainty_reasons": reasons,
+        "divergent": False,
+        "lens_role": lens_role,
+        "vs_belong": vs_belong,
+    }
+
+
 def relative_verdict(stock_vs_index: float | None, warn_texts: list[str]) -> dict:
     """没有归属的板块、或板块解释不了本股走势时，只保留个股相对大盘的强弱，力度固定 1。"""
     if stock_vs_index is None:

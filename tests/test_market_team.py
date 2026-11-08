@@ -53,14 +53,15 @@ class RuleTest(unittest.TestCase):
         self.assertAlmostEqual(team.creation_yi(10, 2.0), 10 * 2.0 / 1e4)
 
     def test_pressure_kinds(self):
-        self.assertEqual(team.pressure_of(-1.2, 0, (False, False), None, False)["kind"], "大跌")
-        self.assertEqual(team.pressure_of(-0.6, -2.5, (False, False), None, False)["kind"], "连跌")
-        self.assertEqual(team.pressure_of(0.4, 0.4, (True, True), None, False)["kind"], "承接")
-        self.assertEqual(team.pressure_of(0.2, 0.2, (False, False), 0.12, True)["kind"], "位置")
-        near = team.pressure_of(0.2, 0.2, (False, False), 0.09, True)
+        self.assertEqual(team.pressure_of(-1.2, 0, -1.2, None, False)["kind"], "大跌")
+        self.assertEqual(team.pressure_of(-0.6, -2.5, -1.0, None, False)["kind"], "连跌")
+        self.assertEqual(team.pressure_of(0.4, -2.5, -1.4, None, False)["kind"], "承接")
+        self.assertEqual(team.pressure_of(0.4, -0.4, -1.2, None, False)["kind"], "承接")
+        self.assertEqual(team.pressure_of(0.2, 0.2, 0.2, 0.12, True)["kind"], "位置")
+        near = team.pressure_of(0.2, 0.2, 0.2, 0.09, True)
         self.assertIsNone(near["kind"])
         self.assertTrue(near["near"])
-        self.assertIsNone(team.pressure_of(0.4, 0.1, (False, True), 0.02, False)["kind"])
+        self.assertIsNone(team.pressure_of(0.4, -0.4, -0.4, None, False)["kind"])
 
     def test_money_has_to_land_in_broad_groups(self):
         broad = {"沪深300", "上证50"}
@@ -111,24 +112,26 @@ class RuleTest(unittest.TestCase):
         self.assertEqual(higher["gone"], 0.0)
 
     def test_label_stays_on_the_action_for_five_days_then_follows_the_shares(self):
-        self.assertEqual(team.label_of(1, 0.4, True, False), "在出手")
-        self.assertEqual(team.label_of(8, 0.02, False, False), "钱还在")
-        self.assertEqual(team.label_of(8, 0.18, False, False), "部分回落")
-        self.assertEqual(team.label_of(8, 0.4, True, False), "可能在撤")
-        self.assertEqual(team.label_of(None, None, False, True), "已表态")
-        self.assertEqual(team.label_of(None, None, False, False), "没出手")
+        self.assertEqual(team.label_of("托市", 1, 0.4, True, False), "托市中")
+        self.assertEqual(team.label_of("托市", 8, 0.02, False, False), "钱还在")
+        self.assertEqual(team.label_of("托市", 8, 0.18, False, False), "部分回落")
+        self.assertEqual(team.label_of("托市", 8, 0.4, True, False), "可能在撤")
+        self.assertEqual(team.label_of("异动", 1, None, False, False, "sell"), "异动中")
+        self.assertEqual(team.label_of("异动", 8, 0.04, False, False, "sell"), "还没回补")
+        self.assertEqual(team.label_of(None, None, None, False, True), "已表态")
+        self.assertEqual(team.label_of(None, None, None, False, False), "没托市")
 
     def test_strength_fades_to_zero_on_the_fifth_day(self):
         self.assertEqual(team.strength_of(4.0, 0), 4.0)
         self.assertAlmostEqual(team.strength_of(4.0, 2), 2.4)
         self.assertEqual(team.strength_of(4.0, 5), 0.0)
 
-    def test_size_floor_blocks_when_it_is_set(self):
-        shares, closes, pct, days = _market(spike=0.04)
+    def test_size_floor_is_not_a_trigger(self):
+        shares, closes, pct, _days = _market(spike=0.04)
         with mock.patch.object(team, "BROAD_MIN_YI", 10_000):
             out = team.summarize(shares, closes, pct)
-        self.assertTrue(out["ok"])
-        self.assertIsNone(out["last"])
+        self.assertEqual(out["label"], "托市中")
+        self.assertGreater(out["last"]["delta"], 0)
 
 
 class SummarizeTest(unittest.TestCase):
@@ -136,24 +139,28 @@ class SummarizeTest(unittest.TestCase):
         shares, closes, pct, days = _market()
         out = team.summarize(shares, closes, pct)
         self.assertTrue(out["ok"])
-        self.assertEqual(out["label"], "在出手")
-        self.assertEqual(out["confirm"], "L4")
+        self.assertEqual(out["label"], "托市中")
+        self.assertEqual(out["signal"], "疑似托市")
+        self.assertIsNone(out["confirm"])
         self.assertEqual(out["last"]["day"], f"{days[130][:4]}-{days[130][4:6]}-{days[130][6:]}")
         self.assertEqual(sorted(out["last"]["groups"]), ["上证50", "沪深300"])
         self.assertGreater(out["last"]["delta"], 0)
 
-    def test_the_same_inflow_on_a_rising_day_is_not_an_action(self):
+    def test_the_same_inflow_without_pressure_is_an_anomaly_not_support(self):
         shares, closes, pct, _days = _market(move=1.5)
         out = team.summarize(shares, closes, pct)
-        self.assertEqual(out["label"], "没出手")
-        self.assertIsNone(out["last"])
+        self.assertEqual(out["label"], "异动中")
+        self.assertEqual(out["last"]["state"], "异动")
+        self.assertEqual(out["signal"], "疑似异动")
+        self.assertIn("市场未承压，可能是调仓或过热降温，非托市", out["marks"])
+        self.assertIn("广度确认", out["marks"])
 
     def test_a_rising_day_still_counts_after_two_pressure_days(self):
         shares, closes, pct, days = _market(move=0.4)
         pct[days[128]] = pct[days[129]] = -1.2
         out = team.summarize(shares, closes, pct)
         self.assertEqual(out["last"]["kind"], "承接")
-        self.assertEqual(out["label"], "在出手")
+        self.assertEqual(out["label"], "托市中")
 
     def test_deep_drawdown_below_the_20_day_average_is_pressure(self):
         shares, closes, pct, days = _market(move=0.2)
@@ -177,11 +184,12 @@ class SummarizeTest(unittest.TestCase):
         pct = {day: (-2.0 if i in (130, 132) else 0.2) for i, day in enumerate(days)}
         out = team.summarize(shares, closes, pct)
         self.assertEqual(len(out["actions"]), 1)
-        self.assertEqual(out["label"], "在出手")
+        self.assertEqual(out["label"], "托市中")
         self.assertEqual(out["last"]["since"], 2)
 
     def test_shares_given_back_after_the_fifth_day_are_a_possible_exit(self):
-        shares, closes, pct, _days = _market(n=129, spike_at=120, give=0.4)
+        shares, closes, pct, days = _market(n=129, spike_at=120, give=0.4)
+        pct[days[-1]] = -2.0
         out = team.summarize(shares, closes, pct)
         self.assertEqual(out["label"], "可能在撤")
         self.assertGreater(out["hold"]["gone"], 0.3)
@@ -202,14 +210,15 @@ class SummarizeTest(unittest.TestCase):
             shares[code], closes[code] = rows, bars
         pct = {day: 0.2 for day in days}
         out = team.summarize(shares, closes, pct)
-        self.assertEqual(out["label"], "可能在撤")
+        self.assertEqual(out["label"], "异动中")
+        self.assertEqual(out["last"]["side"], "sell")
         self.assertTrue(out["sell"]["sign2"])
         self.assertGreaterEqual(out["sell"]["days"], 2)
 
     def test_short_baseline_uses_the_fixed_threshold_and_says_so(self):
         shares, closes, pct, _days = _market(n=91, spike_at=90, spike=0.02)
         out = team.summarize(shares, closes, pct)
-        self.assertEqual(out["label"], "在出手")
+        self.assertEqual(out["label"], "托市中")
         self.assertIn("基线不足", out["marks"])
 
     def test_a_missing_day_is_skipped_not_merged(self):
@@ -238,54 +247,73 @@ class StanceTest(unittest.TestCase):
     NOW = datetime(2026, 11, 4, 12, 0)
 
     def test_huijin_without_a_matching_action_is_only_a_statement(self):
-        base = {"ok": True, "label": "没出手", "marks": [], "actions": [], "confirm": None, "confirm_word": ""}
+        base = {"ok": True, "label": "没托市", "marks": [], "actions": [], "confirm": None, "confirm_word": ""}
         out = team.apply_stance(base, [{"title": "中央汇金增持宽基ETF", "time": "2026-11-01 09:00:00"}], self.NOW)
         self.assertEqual(out["label"], "已表态")
-        self.assertIn("已表态未见资金", out["marks"])
+        self.assertIn("已表态，还没看到钱进来", out["marks"])
         self.assertNotEqual(out.get("confirm"), "L1")
 
     def test_a_rate_cut_does_not_change_the_team_state(self):
-        base = {"ok": True, "label": "没出手", "marks": [], "actions": [], "confirm": None}
+        base = {"ok": True, "label": "没托市", "marks": [], "actions": [], "confirm": None}
         out = team.apply_stance(base, [{"title": "央行宣布降准", "time": "2026-11-03 09:00:00"}], self.NOW)
-        self.assertEqual(out["label"], "没出手")
+        self.assertEqual(out["label"], "没托市")
 
     def test_chengtong_is_not_called_huijin(self):
-        base = {"ok": True, "label": "没出手", "marks": [], "actions": [], "confirm": None}
+        base = {"ok": True, "label": "没托市", "marks": [], "actions": [], "confirm": None}
         out = team.apply_stance(base, [{"title": "中国诚通增持ETF", "time": "2026-11-02 09:00:00"}], self.NOW)
-        self.assertEqual(out["label"], "没出手")
+        self.assertEqual(out["label"], "没托市")
         self.assertEqual(out["others"][0]["who"], "诚通")
         self.assertEqual(out["stance"], [])
 
     def test_a_matching_announcement_upgrades_without_moving_the_day(self):
-        base = {"ok": True, "label": "在出手", "marks": [], "confirm": "L4", "confirm_word": "疑似出手",
-                "actions": [{"day": "2026-11-03"}], "last": {"day": "2026-11-03"}}
+        base = {"ok": True, "label": "托市中", "marks": [], "confirm": None, "confirm_word": "疑似托市",
+                "actions": [{"day": "2026-11-03", "side": "buy"}], "last": {"day": "2026-11-03"}}
         out = team.apply_stance(base, [{"title": "汇金增持宽基ETF", "time": "2026-11-04 08:00:00"}], self.NOW)
         self.assertEqual(out["confirm"], "L1")
-        self.assertEqual(out["confirm_word"], "确认是汇金")
-        self.assertEqual(out["label"], "在出手")
+        self.assertEqual(out["confirm_word"], "确认汇金托市")
+        self.assertEqual(out["label"], "托市中")
 
     def test_a_later_match_still_confirms_without_changing_the_state(self):
         base = {"ok": True, "label": "钱还在", "marks": [], "confirm": None, "confirm_word": "",
                 "actions": [{"day": "2026-11-03"}], "last": {"day": "2026-11-03"}}
         out = team.apply_stance(base, [{"title": "汇金增持宽基ETF", "time": "2026-11-04 08:00:00"}], self.NOW)
         self.assertEqual(out["label"], "钱还在")
-        self.assertEqual(out["confirm_word"], "确认是汇金")
+        self.assertEqual(out["confirm_word"], "确认汇金托市")
 
 
 class PlainWordsTest(unittest.TestCase):
     LAST = {"day": "2026-10-09", "found": "2026-10-10", "index_pct": -1.2, "delta": 180.0, "since": 0,
-            "groups": ["沪深300", "上证50", "中证500"], "kind": "大跌"}
+            "groups": ["沪深300", "上证50", "中证500"], "kind": "大跌", "state": "托市", "side": "buy"}
 
     def test_headline_when_acting(self):
-        from app.services.market_page import _team_headline
+        from app.services.market_page import _team_headline, _team_event, _last_facts
 
-        text = _team_headline({"label": "在出手", "confirm_word": "疑似出手", "last": self.LAST, "hold": None, "sell": None})
-        self.assertIn("10-09 疑似出手", text)
+        text = _team_headline({"label": "托市中", "confirm_word": "疑似托市", "last": self.LAST, "hold": None, "sell": None})
+        self.assertIn("10-09 疑似托市", text)
         self.assertIn("3 组宽基", text)
         self.assertIn("180 亿元", text)
         self.assertIn("今天是第 1 天", text)
         for jargon in ("标准化", "MAD", "z 值", "蓝筹"):
             self.assertNotIn(jargon, text)
+
+    def test_wave_is_shown_as_a_range_with_peak_day(self):
+        from app.services.market_page import _team_event, _last_facts, _wave_when
+
+        wave = {
+            "day": "2026-10-15", "until": "2026-11-06", "span": 16, "found": "2026-10-16",
+            "peak_day": "2026-11-03", "peak_delta": 779.0, "delta": 380.0,
+            "index_pct": -1.6, "groups": ["沪深300", "上证50", "创业板"], "kind": "大跌",
+            "state": "托市", "side": "buy", "since": 16,
+        }
+        self.assertEqual(_wave_when(wave, "托市"), "10-15 到 11-06 这一波托市")
+        text = _team_event(wave)
+        self.assertIn("10-15 到 11-06 这一波托市", text)
+        self.assertIn("11-03", text)
+        self.assertIn("779", text)
+        keys = {row["k"]: row["v"] for row in _last_facts(wave)}
+        self.assertEqual(keys["这一波"], "10-15～11-06")
+        self.assertEqual(keys["最大一天"], "11-03")
+        self.assertIn("779", keys["净申购"])
 
     def test_hold_and_exit_wording(self):
         from app.services.market_page import _team_headline
@@ -301,7 +329,7 @@ class PlainWordsTest(unittest.TestCase):
     def test_no_action_and_statement(self):
         from app.services.market_page import _team_headline
 
-        self.assertIn("出手迹象", _team_headline({"label": "没出手", "last": None, "hold": None, "sell": None}))
+        self.assertIn("托市", _team_headline({"label": "没托市", "last": None, "hold": None, "sell": None}))
         self.assertIn("尚未看到资金进场", _team_headline({"label": "已表态", "last": None, "hold": None, "sell": None}))
 
     def test_possible_exit_does_not_score(self):

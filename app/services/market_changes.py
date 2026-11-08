@@ -112,7 +112,7 @@ def diff(prev: dict, cur: dict, snaps: list[dict] | None = None) -> list[dict]:
     if prev["margin"].get("label") in DOWN_MARGIN and cur["margin"].get("label") not in DOWN_MARGIN and cur["margin"].get("label"):
         out.append(_item("margin_turn", "两融止跌回升", "今天", f"30 日变化回到 {cur['margin'].get('label')}，借钱炒股的人不再减少", "good", "fund"))
     if prev.get("team") != cur.get("team") and cur.get("team") and prev.get("team"):
-        out.append(_item("team", f"国家队：{prev['team']} → {cur['team']}", "今天", "只看合并后的宽基份额，不确认是谁", {"在出手": "good", "可能在撤": "bad", "已表态": "warn"}.get(cur["team"], "flat"), "team"))
+        out.append(_item("team", f"国家队：{prev['team']} → {cur['team']}", "今天", "只看合并后的宽基份额，不确认是谁", {"在出手": "good", "托市中": "good", "异动中": "warn", "可能在撤": "bad", "已表态": "warn"}.get(cur["team"], "flat"), "team"))
     if prev["macro"].get("policy") != cur["macro"].get("policy"):
         out.append(_item("macro", f"政策分 {prev['macro'].get('policy')} → {cur['macro'].get('policy')}", "今天", "新闻里出现或不再出现降准降息、汇金增持的官方标题", "warn", "macro"))
     for code, row in cur["watch"].items():

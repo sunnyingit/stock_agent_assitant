@@ -1,7 +1,7 @@
 """市场页的判定规则。只做计算，不取数，阈值都写在这里。
 
 三档：顺 / 平 / 逆。钱看成交、宽基 ETF 份额、两融；好不好做看指数趋势、涨跌家数、涨停。
-国家队还没有接，所以总档位只用已经接上的信号，不拿没有的信号凑数。
+国家队有数据也只标「平」，不抬不压总档；板块只进「怎么做」文案，不参与 overall。
 """
 
 from __future__ import annotations
@@ -124,93 +124,248 @@ def sector_layers(flow: float | None, heat: float | None, lever: float | None) -
     return {"verdict": verdict, "tone": tone, "lever_word": word}
 
 
-# ---- 板块状态：钱 × 价 × 热度 × 位置 ----
-MONEY_Z = 0.8                    # 近 5 日净流入比自己平时多（少）这么多倍波动，才算钱进（出）
-PRICE_EX = 0.02                  # 近 5 日跑赢（跑输）沪深 300 超过 2%，才算价涨（跌）
-SECTOR_HOT, SECTOR_COLD = 1.3, 0.85   # 近 5 日日均成交额是近 60 日均值的这个倍数以上算热，以下算冷
-POS_HIGH, POS_LOW = 0.8, 0.25    # 收盘在近 60 日区间的位置：高于 0.8 偏高，低于 0.25 偏低
+# ---- 板块状态：先价×热定行情，再钱定性 ----
+MONEY_ENTER, MONEY_HOLD = 1.0, 0.5       # 钱：进入 / 维持（滞后）
+MONEY_ENTER_BASE = 1.3                   # BASE（行业资金估算）进入门槛更严
+PRICE_ENTER, PRICE_HOLD = 1.0, 0.5       # 价：标准化超额收益的进入 / 维持
+SECTOR_HOT, SECTOR_COLD = 1.25, 0.85     # 相对沪深 300 的成交放大倍数
+POS_HIGH, POS_LOW = 0.8, 0.25            # 收盘在近 60 日区间的位置
+PHASE_CONFIRM = 2                        # 连续这么多天满足新条件才切换状态
+PULSE_LOOKBACK = 3                       # 刚启动 / 可能在退：看近几日桶迁移
+# 兼容旧字段名（页面阈值展示）
+MONEY_Z = MONEY_ENTER
+PRICE_EX = PRICE_ENTER
 # 展示分组：键、标题、色调
 BUCKETS = (
-    ("main", "有钱又热 · 主升", "good"),
-    ("next", "钱先到、价还没热 · 可能是下一个", "blue"),
-    ("dip", "价在跌、钱却在进 · 是抄底，不是确认", "warn"),
-    ("hot_only", "涨着、热着，但没新钱 · 别当热点追", "warn"),
-    ("out", "钱在撤", "bad"),
-    ("flat", "钱进出不明显 · 跟着大盘走", "flat"),
+    ("main", "强势主升 · 含待资金/换手", "good"),
+    ("next", "钱先到或潜伏", "blue"),
+    ("dip", "价在跌、钱却在进 · 左侧", "warn"),
+    ("hot_only", "派发 / 高位分歧 / 涨势没钱", "warn"),
+    ("out", "退潮或钱在撤", "bad"),
+    ("flat", "跟涨、观望、弱势", "flat"),
 )
 MEANING = {
-    "主升": "钱、价、热度同向，是现在最强的一类。",
-    "温和上行": "钱在进、价在涨，但还没放量，更像慢牛，不是情绪行情。",
-    "潜伏": "钱先进来了，价格和热度还没跟上。可能是下一个，也可能只是慢热，要看后面价格能不能动起来。",
-    "高位分歧": "钱在进，但价格没涨、位置已经偏高、成交还放大，多空分歧大，要小心见顶。",
-    "抄底拉锯": "价格在跌、成交放大，钱却在进：有人抄底，也有人在卖，分歧很大。趋势没转之前不是确认。",
-    "逆势申购": "价格在跌，钱却在进：是抄底资金，不是趋势确认。A 股常说「下跌趋势里，抄底是接飞刀」。",
-    "只热不增": "涨靠情绪，钱没跟上（申购没增甚至在减）。A 股常说「涨而无钱不长久」，别当热点追。",
-    "涨势没钱": "价格在涨，钱却在撤，成交也不热：更像获利了结、反弹。",
-    "退潮": "钱在撤、价格在跌。位置低又缩量时，抛压在衰竭，但没转正之前只能算还在退。",
-    "钱在撤": "钱在撤，价格没怎么动。",
-    "观望": "钱进出不明显，价格也没方向。",
-    "跟涨": "钱没有明显进出，价格在涨，成交也不热：是跟着大盘涨，不是资金推动的。",
-    "弱势": "钱没有明显撤，但价格在跑输大盘：弱势整理，没有新钱接手。",
+    "主升": "价涨又热，钱也在进：现在最强的一类。",
+    "主升·待资金": "价涨又热，但钱还没明显进来。行情在，资金待确认。",
+    "换手上行": "价涨又热，钱在出，但位置还不高：更像换手，不是高位派发。",
+    "钱先到": "价在涨、还没放量，钱已经进：钱先到，等热度跟上。",
+    "跟涨": "价在涨、不热，钱也平：跟着大盘涨，不是资金推动。",
+    "涨势没钱": "缓涨里钱在出：涨靠惯性，资金没跟上。",
+    "潜伏": "钱进了，价格和热度还没起来。可能是下一个，也可能只是慢热。",
+    "高位分歧": "高位放量、价格没方向，钱进或走平：多空分歧大，小心见顶。",
+    "派发": "高位上钱在出：更像主力派发，不要当热点追。",
+    "观望": "价平、不热、钱也平：没有方向。",
+    "钱在撤": "钱在出，价格没有明显方向或阴跌：资金在撤。",
+    "抄底拉锯": "放量跌、钱却在进：有人抄底也有人在卖，趋势没转之前不是确认。",
+    "逆势申购": "阴跌里钱在进：左侧抄底资金。A 股常说「下跌趋势里，抄底是接飞刀」。",
+    "退潮": "放量跌且钱在出：退潮。低位缩量时抛压可能在衰竭，但没转正之前只能算还在退。",
+    "弱势": "价在跌，钱没有明显进：弱势整理。",
 }
 
 
-def sector_phase(mz: float | None, ex5: float | None, heat: float | None, pos: float | None, lever_word_: str = "—",
-                 rate: float | None = None) -> dict:
-    """板块现在处在哪一段。钱：近 5 日净流入比自己平时多几倍波动（mz）；价：近 5 日相对沪深 300（ex5）；
-    热度：近 5 日日均成交额 ÷ 近 60 日均值；位置：在近 60 日区间的分位。
-    verdict 沿用旧的四个词（三层同向、有钱没热度、只热不增、在流出），多一个「没方向」；phase 是更细的状态。"""
-    if mz is None:
-        return {"verdict": None, "phase": "没数据", "tone": "flat", "bucket": "flat", "why": "历史数据不够，判不了。", "meaning": ""}
-    money = "进" if mz >= MONEY_Z else "出" if mz <= -MONEY_Z else "平"
-    price = "平" if ex5 is None else "涨" if ex5 >= PRICE_EX else "跌" if ex5 <= -PRICE_EX else "平"
-    hot = heat is not None and heat >= SECTOR_HOT
-    cold = heat is not None and heat <= SECTOR_COLD
+def money_side(score: float | None, prev: str = "平", enter: float = MONEY_ENTER, hold: float = MONEY_HOLD) -> str:
+    """钱进 / 出 / 平。进入用 enter，维持用 hold（滞后）。"""
+    if score is None:
+        return "平"
+    if prev == "进":
+        if score <= -enter:
+            return "出"
+        return "进" if score >= hold else "平"
+    if prev == "出":
+        if score >= enter:
+            return "进"
+        return "出" if score <= -hold else "平"
+    if score >= enter:
+        return "进"
+    if score <= -enter:
+        return "出"
+    return "平"
+
+
+def price_side(score: float | None, prev: str = "平", enter: float = PRICE_ENTER, hold: float = PRICE_HOLD) -> str:
+    """价涨 / 跌 / 平。口径与钱相同的进入/维持滞后。"""
+    word = money_side(score, {"涨": "进", "跌": "出"}.get(prev, "平"), enter, hold)
+    return {"进": "涨", "出": "跌"}.get(word, "平")
+
+
+def heat_flag(heat: float | None) -> str:
+    if heat is None:
+        return "不热"
+    if heat >= SECTOR_HOT:
+        return "热"
+    return "不热"
+
+
+def weather_of(price: str, heat: str) -> str:
+    """第一层行情：由价 × 热决定。"""
+    table = {
+        ("涨", "热"): "强势", ("涨", "不热"): "缓涨",
+        ("平", "热"): "分歧", ("平", "不热"): "无方向",
+        ("跌", "热"): "放量跌", ("跌", "不热"): "阴跌",
+    }
+    return table.get((price, heat), "无方向")
+
+
+def sector_phase(money: str, price: str, heat: str, pos: float | None, lever_word_: str = "—",
+                 mz: float | None = None, price_z: float | None = None, heat_ratio: float | None = None,
+                 rate: float | None = None, cold: bool = False) -> dict:
+    """第二层：行情 × 钱决定性质；位置只在钱出（及分歧/阴跌的部分分支）里区分。"""
+    if money is None and mz is None and price_z is None and heat_ratio is None:
+        return {"verdict": None, "phase": "没数据", "tone": "flat", "bucket": "flat", "why": "历史数据不够，判不了。", "meaning": "", "weather": ""}
     high = pos is not None and pos >= POS_HIGH
     low = pos is not None and pos <= POS_LOW
-    if money == "进":
-        if price == "涨" and hot:
-            phase, bucket, verdict = "主升", "main", ("三层同向" if lever_word_ != "下降" else "有钱没热度")
-        elif price == "涨":
-            phase, bucket, verdict = "温和上行", "next", "有钱没热度"
-        elif price == "跌":
-            phase, bucket, verdict = ("抄底拉锯" if hot else "逆势申购"), "dip", "有钱没热度"
-        elif high and hot:
-            phase, bucket, verdict = "高位分歧", "hot_only", "只热不增"
+    weather = weather_of(price, heat)
+    cold = cold or (heat_ratio is not None and heat_ratio <= SECTOR_COLD)
+
+    if weather == "强势":
+        if money == "进":
+            phase, bucket = "主升", "main"
+            verdict = "三层同向" if lever_word_ != "下降" else "主升"
+        elif money == "平":
+            phase, bucket, verdict = "主升·待资金", "main", "待资金"
         else:
-            phase, bucket, verdict = "潜伏", "next", "有钱没热度"
-    elif money == "出":
-        if price == "涨" and hot:
-            phase, bucket, verdict = "只热不增", "hot_only", "只热不增"
-        elif price == "涨":
-            phase, bucket, verdict = "涨势没钱", "hot_only", "在流出"
-        elif price == "跌":
-            phase, bucket, verdict = "退潮", "out", "在流出"
-        elif hot:
-            phase, bucket, verdict = "只热不增", "hot_only", "只热不增"
+            phase, bucket, verdict = (("派发", "hot_only", "派发") if high else ("换手上行", "main", "换手上行"))
+    elif weather == "缓涨":
+        if money == "进":
+            phase, bucket, verdict = "钱先到", "next", "钱先到"
+        elif money == "平":
+            phase, bucket, verdict = "跟涨", "flat", "没方向"
         else:
-            phase, bucket, verdict = "钱在撤", "out", "在流出"
-    elif price == "涨" and hot:
-        phase, bucket, verdict = "只热不增", "hot_only", "只热不增"
-    elif price == "涨":
-        phase, bucket, verdict = "跟涨", "flat", "没方向"
-    elif price == "跌":
-        phase, bucket, verdict = "弱势", "flat", "没方向"
-    else:
-        phase, bucket, verdict = "观望", "flat", "没方向"
+            phase, bucket, verdict = "涨势没钱", "hot_only", "涨势没钱"
+    elif weather == "分歧":
+        if money == "进":
+            phase, bucket, verdict = (("高位分歧", "hot_only", "高位分歧") if high else ("潜伏", "next", "潜伏"))
+        elif money == "平":
+            phase, bucket, verdict = (("高位分歧", "hot_only", "高位分歧") if high else ("观望", "flat", "没方向"))
+        else:
+            phase, bucket, verdict = (("派发", "hot_only", "派发") if high else ("钱在撤", "out", "钱在撤"))
+    elif weather == "无方向":
+        if money == "进":
+            phase, bucket, verdict = "潜伏", "next", "潜伏"
+        elif money == "平":
+            phase, bucket, verdict = "观望", "flat", "没方向"
+        else:
+            phase, bucket, verdict = "钱在撤", "out", "钱在撤"
+    elif weather == "放量跌":
+        if money == "进":
+            phase, bucket, verdict = "抄底拉锯", "dip", "抄底拉锯"
+        elif money == "平":
+            phase, bucket, verdict = "弱势", "flat", "没方向"
+        else:
+            phase, bucket, verdict = "退潮", "out", "退潮"
+    else:  # 阴跌
+        if money == "进":
+            phase, bucket, verdict = "逆势申购", "dip", "逆势申购"
+        elif money == "平":
+            phase, bucket, verdict = "弱势", "flat", "没方向"
+        else:
+            phase, bucket, verdict = "钱在撤", "out", "钱在撤"
+
+    if phase == "主升" and high:
+        phase = "主升·高位"
     tone = next(item[2] for item in BUCKETS if item[0] == bucket)
-    bits = [f"近 5 日净流入比平时{'多' if mz > 0 else '少'} {abs(mz):.1f} 倍波动" + ("" if rate is None else f"（占规模 {rate * 100:+.1f}%）")]
-    if ex5 is not None:
-        bits.append(f"近 5 日{'跑赢' if ex5 >= 0 else '跑输'}沪深 300 {abs(ex5) * 100:.1f}%")
-    if heat is not None:
-        bits.append(f"成交是近 60 日均值的 {heat:.1f} 倍")
+    base_phase = phase.split("·")[0]
+    if phase == "主升·待资金":
+        base_phase = "主升·待资金"
+    return {"verdict": verdict, "phase": phase, "tone": tone, "bucket": bucket, "weather": weather, "money": money,
+            "why": _why_bits(mz, price_z, heat_ratio, pos, weather, money, rate, phase, lever_word_),
+            "meaning": MEANING.get(base_phase, MEANING.get(phase, ""))}
+
+
+def sticky_phases(raw: list[dict], need: int = PHASE_CONFIRM) -> list[dict]:
+    """按时间顺序确认状态：新 phase 需连续 need 日才采纳。"""
+    if not raw:
+        return []
+    confirmed = [raw[0]]
+    for i in range(1, len(raw)):
+        row = raw[i]
+        if row["phase"] == confirmed[-1]["phase"]:
+            confirmed.append({**row})
+            continue
+        streak = 0
+        j = i
+        while j >= 0 and raw[j]["phase"] == row["phase"]:
+            streak += 1
+            j -= 1
+        if streak >= need:
+            confirmed.append({**row})
+        else:
+            kept = confirmed[-1]
+            # 状态仍用上一确认态；最新 Mz / 热度等数字跟上，避免详情和格子对不上
+            confirmed.append({
+                **kept,
+                "mz": row.get("mz", kept.get("mz")),
+                "price_z": row.get("price_z", kept.get("price_z")),
+                "heat": row.get("heat", kept.get("heat")),
+                "ex5": row.get("ex5", kept.get("ex5")),
+                "rate": row.get("rate", kept.get("rate")),
+                "pos": row.get("pos", kept.get("pos")),
+                "why": _why_bits(row.get("mz"), row.get("price_z"), row.get("heat"), row.get("pos"),
+                                 kept.get("weather", ""), kept.get("money", "平"), row.get("rate"),
+                                 kept.get("phase", ""), row.get("lever_word") or "—"),
+            })
+    return confirmed
+
+
+def _why_bits(mz, price_z, heat_ratio, pos, weather: str, money: str, rate, phase: str, lever_word_: str) -> str:
+    high = pos is not None and pos >= POS_HIGH
+    low = pos is not None and pos <= POS_LOW
+    cold = heat_ratio is not None and heat_ratio <= SECTOR_COLD
+    bits = []
+    if mz is not None:
+        bits.append(f"钱 Mz {mz:+.1f}" + ("" if rate is None else f"（近几日份额占规模 {rate * 100:+.1f}%）"))
+    if price_z is not None:
+        bits.append(f"超额 Mz {price_z:+.1f}")
+    if heat_ratio is not None:
+        bits.append(f"相对沪深300 热度 {heat_ratio:.2f}×")
     if pos is not None:
         bits.append("位置偏高" if high else "位置偏低" if low else "位置适中")
     if lever_word_ in ("回升", "下降"):
         bits.append(f"行业两融{lever_word_}")
-    suffix = "。低位缩量，抛压在衰竭" if phase == "退潮" and low and cold else ""
-    return {"verdict": verdict, "phase": phase + ("·高位" if phase == "主升" and high else ""), "tone": tone, "bucket": bucket,
-            "why": "；".join(bits) + suffix, "meaning": MEANING.get(phase, "")}
+    if weather and money:
+        bits.append(f"行情 {weather} · 钱{money}")
+    suffix = ""
+    base = phase.split("·")[0] if phase else ""
+    if phase == "主升·待资金":
+        base = "主升·待资金"
+    if base == "退潮" and low and cold:
+        suffix = "。低位缩量，抛压在衰竭"
+    elif base == "钱在撤" and weather == "阴跌" and low and cold:
+        suffix = "。低位缩量，抛压在衰竭"
+    return "；".join(bits) + suffix
+
+
+def pulse_flags(buckets: list[str], lookback: int = PULSE_LOOKBACK,
+                mz: float | None = None, heat: float | None = None,
+                phase: str | None = None, flow: float | None = None) -> tuple[bool, bool]:
+    """刚启动：近 lookback 日从 flat/next → main，且是「走强苗头」（主升/待资金），
+    钱不能在出、净流入不能为负，也还没站上「钱进·热」。
+    可能在退：main → hot_only/out，且此刻还没落到「钱出」四格。"""
+    started = fading = False
+    if len(buckets) < 2:
+        return False, False
+    window = buckets[-(lookback + 1):]
+    for prev, cur in zip(window, window[1:]):
+        if prev in ("flat", "next") and cur == "main":
+            started = True
+        if prev == "main" and cur in ("hot_only", "out"):
+            fading = True
+    name = phase or ""
+    # 换手上行 = 强势但钱在出，不是「刚启动」
+    if started and ("换手" in name or "派发" in name):
+        started = False
+    # 钱已明显在出，或这几天净流入为负：不能叫刚启动
+    if started and mz is not None and mz <= -MONEY_ENTER:
+        started = False
+    if started and flow is not None and flow < 0:
+        started = False
+    # 已经能进「钱进·热」的，归四格，不进刚启动
+    if started and mz is not None and mz >= MONEY_ENTER and heat is not None and heat >= SECTOR_HOT:
+        started = False
+    # 已经能进「钱出」任一格的，归四格，不进可能在退
+    if fading and mz is not None and mz <= -MONEY_ENTER:
+        fading = False
+    return started, fading
 
 
 def lever_word(lever: float | None) -> str:
@@ -223,20 +378,51 @@ def lever_word(lever: float | None) -> str:
     return "走平"
 
 
-def watch_action(verdict: str | None, lean: str | None) -> tuple[str, str]:
-    """自选的动作词，由板块结论和个股方向按规则拼，不是买卖指令。返回（动作，原因）。"""
+def watch_action(phase: str | None, lean: str | None, bucket: str | None = None, verdict: str | None = None) -> tuple[str, str]:
+    """自选动作词：按桶 / 阶段，不是买卖指令。兼容旧调用 watch_action(verdict, lean)。"""
+    # 旧签名：第一个参数是 verdict 四词
+    legacy = {"三层同向", "有钱没热度", "只热不增", "在流出", "没方向", "待资金", "派发", "换手上行"}
+    if bucket is None and phase in legacy:
+        verdict, phase = phase, None
     bullish = lean == "bullish"
-    if verdict is None:
+    name = (phase or "").split("·")[0]
+    if phase == "主升·待资金":
+        name = "主升·待资金"
+    if phase is None and verdict is None and bucket is None:
         return "看个股判断", "所属行业不在这里跟踪的板块里，按个股自己的判断"
-    if verdict == "没方向":
-        return "看个股判断", "板块钱进出不明显，按个股自己的判断"
-    if verdict == "三层同向":
-        return ("顺势持有", "板块钱、热度、杠杆同向，个股也偏多") if bullish else ("板块有利，等个股", "板块有钱有热度，但个股自己还没转强")
-    if verdict == "有钱没热度":
-        return "等资金确认", "板块里钱在进，但热度还没起来"
-    if verdict == "只热不增":
-        return "不追高", "板块热度靠情绪，ETF 没有新钱"
-    return "等回流", "板块 ETF 在被赎回"
+    if bucket is None and verdict:
+        # 旧四词兜底
+        if verdict == "没方向":
+            return "看个股判断", "板块钱进出不明显，按个股自己的判断"
+        if verdict == "三层同向":
+            return ("顺势持有", "板块钱、热度、杠杆同向，个股也偏多") if bullish else ("板块有利，等个股", "板块有钱有热度，但个股自己还没转强")
+        if verdict == "有钱没热度":
+            return "等价格确认", "板块里钱在进，等价格和热度跟上"
+        if verdict == "只热不增":
+            return "不追高", "板块热度靠情绪，没有新钱"
+        if verdict == "待资金":
+            return "可持有不加仓", "行情强，资金还没到位"
+        if verdict == "派发":
+            return "考虑减仓", "高位上钱在出"
+        if verdict == "换手上行":
+            return ("顺势持有", "换手上行，个股也偏多") if bullish else ("板块有利，等个股", "换手上行，等个股转强")
+        return "等回流", "板块资金在撤"
+
+    if bucket == "main" or name in ("主升", "换手上行"):
+        if name == "主升·待资金" or verdict == "待资金":
+            return "可持有不加仓", "行情强势，但钱还没明显进来"
+        return ("顺势持有", "板块处于主升一侧，个股也偏多") if bullish else ("板块有利，等个股", "板块在主升一侧，个股还没转强")
+    if bucket == "next" or name in ("钱先到", "潜伏"):
+        return "等价格确认", "钱先到或在潜伏，等价格和热度确认"
+    if bucket == "dip" or name in ("抄底拉锯", "逆势申购"):
+        return "左侧观察，等放量止跌", "价在跌、钱在进，先当左侧信号"
+    if name == "派发" or verdict == "派发":
+        return "考虑减仓", "高位派发迹象"
+    if bucket == "hot_only":
+        return "不追高", "派发、高位分歧或涨势没钱，不适合追"
+    if bucket == "out" or name in ("退潮", "钱在撤"):
+        return "等回流", "钱在撤或退潮"
+    return "看个股判断", "板块没有明确方向，按个股自己的判断"
 
 
 def liquidity_score(history: list[dict]) -> tuple[int, str]:
