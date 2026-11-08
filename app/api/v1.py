@@ -377,7 +377,7 @@ def fundamental_reply(ts_code: str):
 
     part = (request.args.get("part") or "").strip()
     if part not in PARTS:
-        return jsonify({"error": "part 必须是 forecast、express、share_float、survey、mainbz、dividend"}), 400
+        return jsonify({"error": "part 必须是 " + "、".join(PARTS)}), 400
     stock = resolve_stock(ts_code)
     if stock is None:
         return jsonify({"error": f"未找到股票: {ts_code}"}), 404

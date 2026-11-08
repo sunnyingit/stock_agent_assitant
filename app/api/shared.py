@@ -66,6 +66,24 @@ def quotes():
     return jsonify({"status": "ok", "items": items})
 
 
+@bp.route("/baidu-board", methods=["GET"])
+def baidu_board():
+    """百度热搜榜，默认财经榜：?board=finance&limit=30。榜单只是热度，不是投资建议；取不到时 502。"""
+    from app.services import baidu_board as board
+
+    try:
+        limit = int(request.args.get("limit") or 30)
+    except ValueError:
+        return jsonify({"status": "error", "error": "limit 要是数字"}), 400
+    try:
+        return jsonify({"status": "ok", **board.fetch_board(request.args.get("board") or "finance", limit)})
+    except ValueError as exc:
+        return jsonify({"status": "error", "error": str(exc)}), 400
+    except Exception as exc:  # noqa: BLE001 - 百度取不到不能把接口拖垮
+        log.warning("baidu board failed: %s", exc)
+        return jsonify({"status": "error", "error": "百度热搜暂时取不到"}), 502
+
+
 @bp.route("/closes/<ts_code>", methods=["GET"])
 def closes(ts_code: str):
     return jsonify({"status": "ok", "items": [[day, close] for day, close in _data().closes(ts_code)]})

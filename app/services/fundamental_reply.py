@@ -13,7 +13,7 @@ from app import config
 from app.tools import cache
 from app.tools.stock import Stock, is_hk
 
-PARTS = ("forecast", "express", "share_float", "survey", "mainbz", "dividend")
+PARTS = ("forecast", "express", "share_float", "survey", "mainbz", "dividend", "chain")
 _ZONE = ZoneInfo("Asia/Shanghai")
 _SKIP_BIZ = ("合计", "总计", "调整", "主营业务", "营业收入")
 _LARGE_RATIO = 1.0
@@ -32,6 +32,7 @@ def build(stock: Stock, part: str, today: date | None = None) -> dict:
         "survey": _survey,
         "mainbz": _mainbz,
         "dividend": _dividend,
+        "chain": _chain,
     }[part](stock, day)
 
 
@@ -274,6 +275,12 @@ def _dividend(stock: Stock, today: date) -> dict:
     ))
     body = format_dividend(rows)
     return _doc(stock, "dividend", body["facts"], body["text"])
+
+
+def _chain(stock: Stock, today: date) -> dict:
+    from app.services import industry_chain
+
+    return industry_chain.build(stock)
 
 
 def _cached(stock: Stock, name: str, fetch) -> list[dict]:
