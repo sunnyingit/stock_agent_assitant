@@ -44,3 +44,25 @@ class SectorSeriesTest(unittest.TestCase):
         with patch.object(shared.Data, "sector_series", return_value=fake):
             body = app.test_client().get("/api/v1/shared/sector-series/600036.SH").get_json()
         self.assertEqual((body["status"], body["name"], body["items"][-1]), ("ok", "股份制银行", ["2026-11-06", 4478.3]))
+
+
+class QuotesEndpointTest(unittest.TestCase):
+    def setUp(self):
+        app = Flask(__name__)
+        app.register_blueprint(bp)
+        self.client = app.test_client()
+
+    def test_returns_what_the_source_has_and_leaves_out_the_rest(self):
+        fake = {"600036.SH": {"price": 39.5, "prev": 39.2, "change": 0.3, "change_pct": 0.77}}
+        with patch("app.api.shared.Data.quotes", return_value=fake) as quotes:
+            body = self.client.get("/api/v1/shared/quotes?codes=600036.sh,000001.SZ,600036.SH").get_json()
+        self.assertEqual(body["items"]["600036.SH"]["change_pct"], 0.77)
+        self.assertNotIn("000001.SZ", body["items"])
+        self.assertEqual(list(quotes.call_args[0][0]), ["600036.SH", "000001.SZ"])
+
+    def test_refuses_nothing_and_too_many_and_survives_a_broken_source(self):
+        self.assertEqual(self.client.get("/api/v1/shared/quotes").status_code, 400)
+        many = ",".join("60%04d.SH" % i for i in range(61))
+        self.assertEqual(self.client.get("/api/v1/shared/quotes?codes=" + many).status_code, 400)
+        with patch("app.api.shared.Data.quotes", side_effect=RuntimeError("boom")):
+            self.assertEqual(self.client.get("/api/v1/shared/quotes?codes=600036.SH").status_code, 502)

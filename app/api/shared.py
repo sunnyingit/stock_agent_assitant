@@ -46,6 +46,26 @@ def flow(ts_code: str):
     return jsonify({"status": "ok", **_data().flow(ts_code)})
 
 
+@bp.route("/quotes", methods=["GET"])
+def quotes():
+    """最新价和今天的涨跌幅，一次最多 60 只。客户端的行情都从这里取，取不到的股票不在结果里。"""
+    codes = []
+    for part in (request.args.get("codes") or "").split(","):
+        code = part.strip().upper()
+        if code and code not in codes:
+            codes.append(code)
+    if not codes:
+        return jsonify({"status": "error", "error": "codes 不能为空"}), 400
+    if len(codes) > 60:
+        return jsonify({"status": "error", "error": "一次最多 60 只"}), 400
+    try:
+        items = _data().quotes({code: code for code in codes})
+    except Exception as exc:  # noqa: BLE001 - 行情源出错不能把接口拖垮，客户端会自己再试
+        log.warning("shared quotes failed: %s", exc)
+        return jsonify({"status": "error", "error": "行情暂时取不到"}), 502
+    return jsonify({"status": "ok", "items": items})
+
+
 @bp.route("/closes/<ts_code>", methods=["GET"])
 def closes(ts_code: str):
     return jsonify({"status": "ok", "items": [[day, close] for day, close in _data().closes(ts_code)]})
