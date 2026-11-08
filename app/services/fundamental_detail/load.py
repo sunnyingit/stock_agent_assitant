@@ -80,6 +80,7 @@ def load_snapshot(stock: Stock, now: datetime | None = None) -> dict:
     )
     field = {"pb": "pb", "ps_ttm": "ps_ttm"}.get(metric, "pe_ttm")
     history = _weekly(history_rows, field, price_ymd)
+    price_history = _weekly(history_rows, "close", price_ymd)
     if value is not None and history:
         history[-1]["value"] = value
     elif value is not None:
@@ -132,6 +133,7 @@ def load_snapshot(stock: Stock, now: datetime | None = None) -> dict:
         "pe_reference": deducted if deducted is not None else pe,
         "cash_beats_profit": _cash_counts(roe, extras) and extras.get("ocf_to_np") is not None and extras["ocf_to_np"] > 1,
         "history": history,
+        "price_history": price_history,
         "peers": peers,
         "quality": quality,
         "quality_notes": _quality_notes(extras, roe),
@@ -230,9 +232,9 @@ def _valuation_history(pro, ts_code: str, price_ymd: str) -> list[dict]:
             ts_code=ts_code,
             start_date=left.strftime("%Y%m%d"),
             end_date=right.strftime("%Y%m%d"),
-            fields="trade_date,pe_ttm,pb,ps_ttm,total_mv,circ_mv",
+            fields="trade_date,close,pe_ttm,pb,ps_ttm,total_mv,circ_mv",
         ))
-        for item in _records(frame, ["trade_date", "pe_ttm", "pb", "ps_ttm", "total_mv", "circ_mv"]):
+        for item in _records(frame, ["trade_date", "close", "pe_ttm", "pb", "ps_ttm", "total_mv", "circ_mv"]):
             ymd = _ymd(item.get("trade_date"))
             if not ymd or ymd in seen or ymd > price_ymd:
                 continue

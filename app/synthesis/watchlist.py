@@ -78,7 +78,6 @@ def build(
     quote_fn: Callable[[list[Stock]], dict],
     mode: str,
     now: datetime,
-    request_refresh: Callable[[str], None] | None = None,
     only: list[str] | None = None,
 ) -> list[dict]:
     rows = [row for row in store.watch_list() if only is None or row["ts_code"] in only]
@@ -98,8 +97,6 @@ def build(
         direction = policy.DIRECTION_TEXT.get((page or {}).get("direction", {}).get("lean"), "不明")
         position = (page or {}).get("position", {}).get("label", "适中")
         subtitle = _subtitle(alert, near, change, stale, record is None, direction, position)
-        if request_refresh and (record is None or stale or record["policy_version"] != policy.POLICY_VERSION):
-            request_refresh(code)
         items.append({
             "ts_code": code,
             "name": row["name"],

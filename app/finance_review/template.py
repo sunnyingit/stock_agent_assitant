@@ -97,9 +97,23 @@ def answers(d: dict, text: dict[str, str]) -> list[dict]:
         high = ["ff.margin.cycle"] if (m.get("cycle") or {}).get("high") and "ff.margin.cycle" in text else []
         out.append(_item("q1", "support" if side == "positive" else "warn", said + "。" + ("毛利率处在近 5 年高位，利润可能处于周期高位。" if high else ""), [top] + ([other] if other else []) + high))
 
-    # q2 增长
+    # q2 增长。去年同期亏损时百分比没有意义；本期已盈利要写成扭亏，不能再说还在亏损。
     rev, prof = g["q_rev_yoy"], profit_yoy(g)
-    if g["loss_now"] or g["loss_prior"]:
+    if g["loss_prior"] and not g["loss_now"]:
+        change = g["loss_change"] or 0
+        out.append(_item(
+            "q2", "support" if change > 0 else "neutral",
+            f"去年同期亏损，本期已盈利，单季归母{t('ff.growth.loss_change')}，基期为负不算增速百分比。",
+            _cites(text, "ff.growth.loss_change", "ff.growth.q_np"),
+        ))
+    elif g["loss_now"] and not g["loss_prior"]:
+        rate = f"，单季亏损率 {t('ff.growth.loss_rate')}" if "ff.growth.loss_rate" in text else ""
+        out.append(_item(
+            "q2", "warn",
+            f"去年同期盈利，本期转亏，单季归母{t('ff.growth.loss_change')}{rate}。",
+            _cites(text, "ff.growth.loss_change", "ff.growth.loss_rate", "ff.growth.q_np"),
+        ))
+    elif g["loss_now"] and g["loss_prior"]:
         change = g["loss_change"] or 0
         status = "neutral" if change > 0 else "warn"
         rate = f"，单季亏损率 {t('ff.growth.loss_rate')}" if "ff.growth.loss_rate" in text else ""
@@ -290,4 +304,4 @@ def _reaction_answer(d: dict, text: dict, t) -> dict:
         cause = "；超额部分更多来自公司自身"
     peer = f"；单季营收同比在同行里是 {t('ff.peer.rev_pctile')}" if "ff.peer.rev_pctile" in text else ""
     cites = [fact for fact in ("ff.react.tone", f"ff.react.after{k}", "ff.peer.rev_pctile") if fact in text]
-    return {"key": "q10", "status": status, "answer": f"财报方向：{t('ff.react.tone')}。披露后第 {k} 个交易日，{t(f'ff.react.after{k}')}，{verdict}{cause}{peer}。", "cites": cites, "source": "template"}
+    return {"key": "q10", "status": status, "answer": f"财报方向：{t('ff.react.tone')}。披露日起第 {k} 个交易日，{t(f'ff.react.after{k}')}，{verdict}{cause}{peer}。", "cites": cites, "source": "template"}

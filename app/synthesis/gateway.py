@@ -40,24 +40,29 @@ class Gateway:
     def available(self) -> bool:
         return self.model is not None
 
-    def _call(self, role: str, system: str, user: str, temperature: float) -> CallResult:
+    def _call(self, role: str, system: str, user: str, temperature: float, *, plain: bool = False) -> CallResult:
         started = time.monotonic()
         try:
-            from app.agents.llm import complete_json
+            if plain:
+                from app.agents.llm import complete_text
 
-            data = complete_json(self.model, system, user, temperature)
+                data = {"text": complete_text(self.model, system, user, temperature)}
+            else:
+                from app.agents.llm import complete_json
+
+                data = complete_json(self.model, system, user, temperature)
             result = CallResult(role, True, data)
         except Exception as exc:
             result = CallResult(role, False, error=str(exc))
         result.ms = int((time.monotonic() - started) * 1000)
         return result
 
-    def run(self, jobs: list[tuple[str, str, str, float]]) -> list[CallResult]:
-        """并行调用，jobs 是 (角色, system, user, 温度)。超时的那一次记为失败。"""
+    def run(self, jobs: list[tuple[str, str, str, float]], *, plain: bool = False) -> list[CallResult]:
+        """并行调用，jobs 是 (角色, system, user, 温度)。超时的那一次记为失败。plain=True 时返回纯文本。"""
         if not self.available:
             return [CallResult(role, False, error=self.error or "没有可用的模型") for role, *_ in jobs]
         pool = ThreadPoolExecutor(max_workers=max(1, len(jobs)))
-        futures = [pool.submit(self._call, *job) for job in jobs]
+        futures = [pool.submit(self._call, *job, plain=plain) for job in jobs]
         done, _pending = wait(futures, timeout=self.timeout)
         pool.shutdown(wait=False, cancel_futures=True)
         results = []

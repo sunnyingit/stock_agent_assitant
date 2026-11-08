@@ -1,5 +1,1 @@
-"""新闻多 Agent。具体角色由 configs/news.json 描述。"""
-
-from app.agents.news.graph import analyze_news, debate_news
-
-__all__ = ["analyze_news", "debate_news"]
+"""新闻清洗和打分。详情接口使用 clean、score；旧的多 Agent 分析已去掉。"""

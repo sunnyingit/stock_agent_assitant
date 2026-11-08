@@ -70,13 +70,10 @@ class Worker(threading.Thread):
 
 
 def default_runner(ts_code: str, reason: str) -> dict | None:
-    from app.synthesis.service import compute
-    from app.tools.stock import resolve_stock
+    """后台触发：数据服务不调模型，也不就地算结论。
 
-    stock = resolve_stock(ts_code)
-    if stock is None:
-        return None
-    return compute(stock, get_store(), force=(reason == "manual"), timeout=policy.COLLECT_TIMEOUT_BACKGROUND)
+    结论（五位分析师、看多看空、主分析师）由客户端的定时任务在本机生成，这里只是不再替它做。"""
+    return None
 
 
 def start(runner: Callable[[str, str], dict | None] | None = None) -> Worker:

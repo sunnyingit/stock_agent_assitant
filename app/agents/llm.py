@@ -95,3 +95,21 @@ def complete_json(model, system: str, user: str, temperature: float = 0.2) -> di
     if _json_error(last_error):
         raise ModelError(f"模型没有返回合法 JSON: {last_error}") from last_error
     raise ModelError(f"无法连接模型服务: {last_error}") from last_error
+
+
+def complete_text(model, system: str, user: str, temperature: float = 0.3) -> str:
+    """调用模型并返回纯文本（可含 markdown）。测试模型 complete 可返回 str 或 {"text": "..."}。"""
+    if hasattr(model, "complete"):
+        data = model.complete(system, user)
+        if isinstance(data, str):
+            return data
+        if isinstance(data, dict):
+            return str(data.get("text") if data.get("text") is not None else "")
+        return "" if data is None else str(data)
+    kwargs = {"temperature": temperature}
+    llm = model.bind(**kwargs) if hasattr(model, "bind") else model
+    message = llm.invoke([
+        SystemMessage(content=system),
+        HumanMessage(content=user),
+    ])
+    return message_text(message)

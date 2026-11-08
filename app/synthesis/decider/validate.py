@@ -90,8 +90,8 @@ def validate_side(raw: dict, table: FactTable, side: str) -> tuple[list[dict], l
         if not isinstance(row, dict):
             errors.append(f"格式:第 {index} 条不是对象")
             continue
-        claim = str(row.get("claim") or "").strip()
-        cites = _cite_list(row.get("cites"))
+        claim = str(row.get("claim") or row.get("text") or "").strip()
+        cites = _cite_list(row.get("cites") or row.get("cited_fact_ids"))
         try:
             weight = int(row.get("weight"))
         except (TypeError, ValueError):
@@ -104,6 +104,45 @@ def validate_side(raw: dict, table: FactTable, side: str) -> tuple[list[dict], l
             continue
         points.append({"ref": f"{side}.{len(points) + 1}", "claim": claim, "cites": cites, "weight": weight})
     return points, errors
+
+
+def validate_risk(raw, table: FactTable, side: str) -> tuple[dict | None, list[str]]:
+    """一边自己写的失效条件。没有就空。文字和引用不合格则整条丢掉。"""
+    if not isinstance(raw, dict):
+        return None, []
+    text = str(raw.get("text") or "").strip()
+    if not text:
+        return None, []
+    cites = _cite_list(raw.get("cites"))
+    errors = check_text(text, cites, table, f"{side} 风险")
+    if errors:
+        return None, errors
+    return {"text": text, "cites": cites}, []
+
+
+_NOTICE_TAGS = ("利好", "风险", "已反应", "中性")
+
+
+def _notices(raw: dict, table: FactTable) -> list[dict]:
+    """值得注意的事。对不上某位分析师 headline 的行丢掉，不因此否决整次裁决。"""
+    by_dim = {row.get("dimension"): row for row in table.headlines or [] if isinstance(row, dict)}
+    order = [row.get("dimension") for row in table.headlines or []]
+    kept, seen = [], set()
+    for row in raw.get("notices") or []:
+        if not isinstance(row, dict):
+            continue
+        dimension = str(row.get("dimension") or "")
+        tag = str(row.get("tag") or "")
+        entry = by_dim.get(dimension) or {}
+        headline = entry.get("headline") if isinstance(entry.get("headline"), dict) else None
+        if dimension in seen or tag not in _NOTICE_TAGS or not headline or not headline.get("text"):
+            continue
+        allowed = {str(fact.get("id")) for fact in headline.get("facts") or [] if isinstance(fact, dict)}
+        cites = [item for item in _cite_list(row.get("cites")) if item in allowed]
+        kept.append({"dimension": dimension, "tag": tag, "cites": cites})
+        seen.add(dimension)
+    kept.sort(key=lambda item: order.index(item["dimension"]) if item["dimension"] in order else len(order))
+    return kept
 
 
 # ---------------------------------------------------------------- 主 Agent
@@ -256,6 +295,7 @@ def validate_chief(raw: dict, table: FactTable, arguments: list[dict]) -> tuple[
 
     levels, level_errors = _levels(raw.get("levels") or {}, table, direction or "unclear")
     errors += level_errors
+    notices = _notices(raw, table)
 
     watch = _cite_list(raw.get("watch_ids"))
     event_ids = {item["id"] for item in table.events}
@@ -281,6 +321,7 @@ def validate_chief(raw: dict, table: FactTable, arguments: list[dict]) -> tuple[
         "conflict_note": {"text": note_text, "cites": note_cites} if note_text else None,
         "postmortem": {"text": post_text, "cites": post_cites},
         "levels": levels,
+        "notices": notices,
         "watch_ids": watch,
     }, []
 

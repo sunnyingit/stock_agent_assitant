@@ -52,7 +52,8 @@ CREATE TABLE IF NOT EXISTS jobs (
 CREATE TABLE IF NOT EXISTS watchlist (
   ts_code TEXT PRIMARY KEY,
   name TEXT NOT NULL,
-  added_at REAL NOT NULL
+  added_at REAL NOT NULL,
+  sort_order REAL NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS alerts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -77,6 +78,16 @@ CREATE TABLE IF NOT EXISTS finance_signals (
   ret_5 REAL, excess_5 REAL, ret_20 REAL, excess_20 REAL,
   PRIMARY KEY (ts_code, report_end, version)
 );
+CREATE TABLE IF NOT EXISTS sector_affiliations (
+  ts_code TEXT NOT NULL,
+  as_of TEXT NOT NULL,
+  version TEXT NOT NULL,
+  recorded_at REAL NOT NULL,
+  primary_code TEXT, primary_name TEXT, secondary_code TEXT, secondary_name TEXT,
+  driver TEXT NOT NULL DEFAULT '',
+  belongs TEXT NOT NULL DEFAULT '[]',
+  PRIMARY KEY (ts_code, as_of, version)
+);
 CREATE TABLE IF NOT EXISTS outcomes (
   run_id INTEGER NOT NULL,
   horizon INTEGER NOT NULL,
@@ -99,6 +110,10 @@ class Store:
             columns = {row["name"] for row in conn.execute("PRAGMA table_info(finance_signals)")}
             if "tracked" not in columns:   # 早先建的库没有这一列
                 conn.execute("ALTER TABLE finance_signals ADD COLUMN tracked TEXT NOT NULL DEFAULT '{}'")
+            watch_cols = {row["name"] for row in conn.execute("PRAGMA table_info(watchlist)")}
+            if "sort_order" not in watch_cols:
+                conn.execute("ALTER TABLE watchlist ADD COLUMN sort_order REAL NOT NULL DEFAULT 0")
+                conn.execute("UPDATE watchlist SET sort_order = added_at")
 
     @contextmanager
     def _conn(self):
@@ -146,6 +161,10 @@ class Store:
         with self._conn() as conn:
             return self._row(conn.execute(sql, args).fetchone())
 
+    def run(self, run_id: int) -> dict | None:
+        with self._conn() as conn:
+            return self._row(conn.execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone())
+
     def by_hash(self, ts_code: str, facts_hash: str, session: str, trade_date: str) -> dict | None:
         """同一个交易日内，事实没变才复用；换了一天就要重新存一条，否则每日判断会出现空洞。"""
         with self._conn() as conn:
@@ -176,6 +195,16 @@ class Store:
                 "text": (data.get("shown") or {}).get("change_text", ""),
             }
         return [by_date[key] for key in sorted(by_date)]
+
+    def latest_per_stock(self, limit: int = 200) -> list[dict]:
+        """每只股票最新的一次运行，新的在前。想买页「今天判断偏多的」从这里挑。"""
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT r.* FROM runs r JOIN (SELECT ts_code, MAX(id) AS mid FROM runs GROUP BY ts_code) m ON r.id=m.mid"
+                " ORDER BY r.id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            return [self._row(row) for row in rows]
 
     def recent(self, ts_code: str, limit: int = 10) -> list[dict]:
         with self._conn() as conn:
@@ -243,11 +272,14 @@ class Store:
 
     # ------------------------------------------------------------ 自选
     def watch_add(self, ts_code: str, name: str, now: float | None = None) -> bool:
-        """加入自选。已经在里面返回 False。"""
+        """加入自选。已经在里面返回 False。新加的排到用户序末尾。"""
+        now = now if now is not None else time.time()
         with self._conn() as conn:
+            row = conn.execute("SELECT MAX(sort_order) AS m FROM watchlist").fetchone()
+            tail = (row["m"] if row and row["m"] is not None else now) + 1
             cursor = conn.execute(
-                "INSERT OR IGNORE INTO watchlist (ts_code, name, added_at) VALUES (?,?,?)",
-                (ts_code, name, now if now is not None else time.time()),
+                "INSERT OR IGNORE INTO watchlist (ts_code, name, added_at, sort_order) VALUES (?,?,?,?)",
+                (ts_code, name, now, tail),
             )
             return cursor.rowcount > 0
 
@@ -257,7 +289,31 @@ class Store:
 
     def watch_list(self) -> list[dict]:
         with self._conn() as conn:
-            return [dict(row) for row in conn.execute("SELECT * FROM watchlist ORDER BY added_at, ts_code").fetchall()]
+            return [dict(row) for row in conn.execute("SELECT * FROM watchlist ORDER BY sort_order, ts_code").fetchall()]
+
+    def watch_pin(self, ts_code: str) -> bool:
+        """置顶到用户序第一位（「需要留意」区之后仍由列表组装决定）。"""
+        with self._conn() as conn:
+            row = conn.execute("SELECT 1 FROM watchlist WHERE ts_code=?", (ts_code,)).fetchone()
+            if row is None:
+                return False
+            top = conn.execute("SELECT MIN(sort_order) AS m FROM watchlist").fetchone()
+            head = (top["m"] if top and top["m"] is not None else time.time()) - 1
+            conn.execute("UPDATE watchlist SET sort_order=? WHERE ts_code=?", (head, ts_code))
+            return True
+
+    def watch_reorder(self, codes: list[str]) -> bool:
+        """按传入顺序重写 sort_order。codes 须覆盖当前自选且无重复。"""
+        wanted = [str(code).strip() for code in codes if str(code).strip()]
+        if len(wanted) != len(set(wanted)):
+            return False
+        with self._conn() as conn:
+            held = [row["ts_code"] for row in conn.execute("SELECT ts_code FROM watchlist").fetchall()]
+            if set(wanted) != set(held):
+                return False
+            for index, code in enumerate(wanted):
+                conn.execute("UPDATE watchlist SET sort_order=? WHERE ts_code=?", (float(index), code))
+            return True
 
     # ------------------------------------------------------------ 提醒
     def alert_add(self, ts_code: str, side: str, price: float, confirm: str = "close", base_name: str = "", now: float | None = None) -> dict:
@@ -316,6 +372,28 @@ class Store:
                 f"UPDATE finance_signals SET ret_{horizon}=?, excess_{horizon}=? WHERE ts_code=? AND report_end=? AND version=?",
                 (ret, excess, ts_code, report_end, version),
             )
+
+    # ------------------------------------------------------------ 板块归属（回测用）
+    def save_sector_affiliation(self, ts_code: str, as_of: str, version: str, primary: dict | None, secondary: dict | None, driver: str, belongs: list[str]) -> bool:
+        """每只股票、每个数据日、每个判定版本只记第一次。返回是否新记。"""
+        with self._conn() as conn:
+            cursor = conn.execute(
+                """INSERT OR IGNORE INTO sector_affiliations
+                   (ts_code, as_of, version, recorded_at, primary_code, primary_name, secondary_code, secondary_name, driver, belongs)
+                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    ts_code, as_of, version, time.time(),
+                    (primary or {}).get("code"), (primary or {}).get("name"), (secondary or {}).get("code"), (secondary or {}).get("name"),
+                    driver or "", json.dumps(belongs, ensure_ascii=False),
+                ),
+            )
+            return cursor.rowcount > 0
+
+    def sector_affiliations(self, ts_code: str | None = None) -> list[dict]:
+        sql = "SELECT * FROM sector_affiliations" + (" WHERE ts_code=?" if ts_code else "") + " ORDER BY ts_code, as_of"
+        with self._conn() as conn:
+            rows = conn.execute(sql, (ts_code,) if ts_code else ()).fetchall()
+        return [{**dict(row), "belongs": json.loads(row["belongs"] or "[]")} for row in rows]
 
     # ------------------------------------------------------------ 战绩
     def unsettled(self, horizon: int, limit: int = 500) -> list[dict]:

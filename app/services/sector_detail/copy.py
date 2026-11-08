@@ -1,8 +1,6 @@
-"""板块一句话。必须有「不过」，不写买卖和关注建议。"""
+"""板块结论那一句，只用模板，不调用模型。必须有「不过」，不写买卖和关注建议。AI 解读在 app/sector_review。"""
 
 from __future__ import annotations
-
-_FORBIDDEN = ("可以关注", "买入", "卖出", "目标价")
 
 
 def write_text(tag: str, gaps: dict | None, counter: str, independent: bool) -> str:
@@ -13,34 +11,6 @@ def write_text(tag: str, gaps: dict | None, counter: str, independent: bool) -> 
     if len(text) > 90:
         text = f"{head}。不过{tail}。"
     return text
-
-
-def finish_text(tag: str, gaps: dict | None, counter: str, independent: bool, model=None) -> tuple[str, str]:
-    fallback = write_text(tag, gaps, counter, independent)
-    if not callable(model):
-        return fallback, "fallback"
-    try:
-        raw = model({
-            "tag": tag,
-            "gaps": gaps or {},
-            "gap_text": gap_sentence(gaps or {}, independent),
-            "counter": counter,
-            "independent": independent,
-        })
-    except Exception:
-        return fallback, "fallback"
-    if acceptable(raw):
-        return str(raw).strip(), "model"
-    return fallback, "fallback"
-
-
-def acceptable(text: str | None) -> bool:
-    if not text:
-        return False
-    cleaned = str(text).strip()
-    if "不过" not in cleaned or len(cleaned) > 90:
-        return False
-    return not any(word in cleaned for word in _FORBIDDEN)
 
 
 def gap_sentence(gaps: dict, independent: bool) -> str:

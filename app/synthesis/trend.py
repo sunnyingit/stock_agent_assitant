@@ -111,6 +111,25 @@ def _segments(ordered: list[dict], today: str, dates: list[str], series: dict) -
     return rows
 
 
+def _moving_averages(days: list[dict], series: dict) -> dict:
+    """图例上的 MA7、MA20、MA60，以及窗口内每一天的均线。均线用全部收盘价算，不只用窗口里这 60 根。"""
+    close = {day: value for day, value in (series.get("close") or {}).items() if value}
+    for day in days:
+        close.setdefault(day["date"], day["close"])
+    ordered = sorted(close)
+    values = [float(close[day]) for day in ordered]
+    index = {day: i for i, day in enumerate(ordered)}
+    points = []
+    for day in days:
+        i = index.get(day["date"])
+        row = {"date": day["date"]}
+        for window, key in ((7, "ma7"), (20, "ma20"), (60, "ma60")):
+            row[key] = None if i is None or i + 1 < window else round(sum(values[i + 1 - window:i + 1]) / window, 2)
+        points.append(row)
+    last = points[-1] if points else {}
+    return {"ma7": last.get("ma7"), "ma20": last.get("ma20"), "ma60": last.get("ma60"), "points": points}
+
+
 def _since_text(segment: dict, sector_name: str) -> str:
     if segment["ret"] is None:
         return ""
@@ -158,6 +177,7 @@ def build(trend_input: dict | None, levels: dict | None, current: dict, credibil
     records = _records(ordered)
     dates = [day["date"] for day in days]
     series = (trend_input or {}).get("series") or {}
+    ma = _moving_averages(days, series)
     segments = _segments(ordered, today, dates, series)
     now_segment = segments[-1]
     current_run = {
@@ -176,6 +196,7 @@ def build(trend_input: dict | None, levels: dict | None, current: dict, credibil
         "window": len(days),
         "unit": "日线",
         "bars": days,
+        "ma": ma,
         "lines": lines,
         "x_ticks": ticks,
         "y_min": min(values),

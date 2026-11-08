@@ -370,10 +370,10 @@ class ApiTest(unittest.TestCase):
     def test_first_view_computes_the_rule_version_inline(self):
         body = self.client.get("/api/v1/stocks/600001.SH/synthesis").get_json()
         self.assertEqual(body["status"], "ok")
-        self.assertEqual(body["display"]["direction"]["lean"], "bullish")
+        self.assertNotIn("display", body)
+        self.assertEqual(body["headline"]["status"], "support")
         self.assertNotIn("internal", body)
         self.assertFalse(body["computing"])
-        self.assertEqual(body["display"]["trend"]["window"], 60)
 
     def test_old_records_get_the_explanations_filled_in_on_read(self):
         self.client.get("/api/v1/stocks/600001.SH/synthesis")
@@ -384,36 +384,36 @@ class ApiTest(unittest.TestCase):
         with self.store._conn() as conn:
             import json as _json
             conn.execute("UPDATE runs SET data=? WHERE id=?", (_json.dumps(record["data"], ensure_ascii=False), record["id"]))
-        body = self.client.get("/api/v1/stocks/600001.SH/synthesis").get_json()["display"]
-        self.assertEqual(body["price_logic"]["up"]["price"], 25.0)
-        self.assertEqual(len(body["judgment"]["bull"]["points"]), 4)
-        self.assertIn("一年高点下方", body["judgment"]["chief"]["position_basis"])
+        body = self.client.get("/api/v1/stocks/600001.SH/synthesis").get_json()
+        self.assertNotIn("display", body)
+        self.assertEqual(body["headline"]["status"], "support")
+        self.assertIn("watch", body)
 
     def test_debug_flag_adds_internal_and_unknown_stock_is_404(self):
         body = self.client.get("/api/v1/stocks/600001.SH/synthesis?debug=1").get_json()
         self.assertIn("run_id", body["internal"])
         self.assertEqual(self.client.get("/api/v1/stocks/000000.SZ/synthesis").status_code, 404)
 
-    def test_stale_record_is_served_and_queued_for_refresh(self):
+    def test_stale_record_is_served_as_it_is_and_nothing_is_queued(self):
         self.client.get("/api/v1/stocks/600001.SH/synthesis")
         with patch("app.synthesis.api.now_cn", lambda: NOW.replace(day=30)), \
                 patch("app.synthesis.api.last_close_date", lambda now: now.date()):
             body = self.client.get("/api/v1/stocks/600001.SH/synthesis").get_json()
-        self.assertTrue(body["computing"])
-        self.assertEqual(body["display"]["direction"]["lean"], "bullish")
+        self.assertFalse(body["computing"])        # 数据服务不重算，过期的结论照样返回，由客户端的定时任务更新
+        self.assertEqual(body["headline"]["status"], "support")
 
-    def test_records_from_an_older_policy_are_queued_for_recompute(self):
+    def test_records_from_an_older_policy_are_served_and_nothing_is_queued(self):
         self.client.get("/api/v1/stocks/600001.SH/synthesis")
         with self.store._conn() as conn:
             conn.execute("UPDATE runs SET policy_version='policy-0'")
         body = self.client.get("/api/v1/stocks/600001.SH/synthesis").get_json()
-        self.assertTrue(body["computing"])
+        self.assertFalse(body["computing"])
 
-    def test_manual_refresh_is_queued(self):
+    def test_manual_refresh_is_ignored_because_the_client_makes_the_conclusion(self):
         response = self.client.post("/api/v1/stocks/600001.SH/synthesis/refresh")
         self.assertEqual(response.status_code, 202)
-        self.assertTrue(self.store.pending("600001.SH"))
-        self.assertEqual(len(self.store.claim_due(time.time() + 1)), 1)
+        self.assertEqual(response.get_json()["status"], "ignored")
+        self.assertFalse(self.store.pending("600001.SH"))
 
 
 if __name__ == "__main__":

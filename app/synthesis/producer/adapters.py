@@ -121,17 +121,24 @@ def volume_flow(payload: dict | None, error: str = "") -> Snapshot:
     snap = _base("volume_flow", payload, error)
     if payload is None or snap.status != STATUS_OK:
         return snap
-    row20 = next((row for row in _get(payload, "windows", "rows", default=[]) if row.get("days") == policy.FLOW_WINDOW), {})
+    rows = _get(payload, "windows", "rows", default=[]) or []
+    primary = next((row for row in rows if row.get("days") == policy.FLOW_WINDOW), {})
+    row20 = next((row for row in rows if row.get("days") == 20), {})
     pattern = _get(payload, "price_volume", "pattern")
     _put(snap, "flow.view", view_text(snap))
-    _put(snap, "flow.rel_vol", _number(row20.get("rel_vol")))
+    _put(snap, "flow.rel_vol", _number(primary.get("rel_vol")))
     _put(snap, "flow.pattern", pattern if pattern else None)
     _put(snap, "flow.up_down_vol", _number(_get(payload, "price_volume", "up_down_vol_ratio")))
     _put(snap, "flow.big_trend", _get(payload, "flow_daily", "trend") or None)
-    _put(snap, "flow.net_rate", _number(row20.get("net_rate")))
+    _put(snap, "flow.net_rate", _number(primary.get("net_rate")))
+    _put(snap, "flow.vs_self", _get(payload, "flow_by_size", "state") or None)
     hits = [item.get("text") for item in _get(payload, "position_hints", "items", default=[]) if item.get("hit")]
     _put(snap, "flow.stall", "、".join(hits) if hits else "无")
-    index_bar = next((row for row in _get(payload, "relative_strength", "bars", default=[]) if row.get("kind") == "index"), {})
+    # 跨模块核对仍用 20 日，和 market.*_20d 同一口径；主窗口数字走 facts
+    rel = _get(payload, "relative_strength") or {}
+    win20 = next((w for w in (rel.get("windows") or []) if w.get("days") == 20), None)
+    index_bars = ((win20 or rel).get("bars") if isinstance(win20 or rel, dict) else None) or rel.get("bars") or []
+    index_bar = next((row for row in index_bars if row.get("kind") == "index"), {})
     snap.flags["window_ret"] = _number(row20.get("ret"))
     snap.flags["index_ret"] = _number(index_bar.get("ret"))
     snap.flags["stall_hits"] = len(hits)
@@ -176,19 +183,23 @@ def sector(payload: dict | None, error: str = "") -> Snapshot:
     snap = _base("sector", payload, error)
     if payload is None or snap.status != STATUS_OK:
         return snap
-    stage = _get(payload, "stage", "current")
-    lines = _get(payload, "strength", "lines", default={}) or {}
+    primary = _get(payload, "sectors", "primary", default={}) or {}
+    stage = _get(primary, "stage", "current")
+    lines = _get(primary, "strength", "lines", default={}) or {}
     stock_line, sector_line, index_line = (lines.get(name) or [] for name in ("stock", "sector", "index"))
     _put(snap, "sector.view", view_text(snap))
     _put(snap, "sector.stage", stage)
-    _put(snap, "sector.days", _number(_get(payload, "stage", "days_in_round")))
-    _put(snap, "sector.role", _get(payload, "role", "value"))
+    _put(snap, "sector.days", _number(_get(primary, "stage", "days_in_round")))
+    _put(snap, "sector.role", _get(primary, "role", "value"))
     if sector_line and index_line:
         _put(snap, "sector.vs_index", round(sector_line[-1] - index_line[-1], 4))
     if stock_line and sector_line:
         _put(snap, "sector.stock_vs_sector", round(stock_line[-1] - sector_line[-1], 4))
-    hint = payload.get("position_hint") or {}
+    hint = primary.get("position_hint") or {}
     _put(snap, "sector.warn", bool(hint.get("climax") or hint.get("overdue")))
+    _put(snap, "sector.driver", _get(payload, "sectors", "driver", "type"))
+    _put(snap, "sector.secondary_stage", _get(payload, "sectors", "secondary", "stage", "current"))
+    _put(snap, "sector.divergent", bool(_get(payload, "sectors", "divergence", "active", default=False)))
     snap.flags["stage"] = stage
     snap.flags["index_ret"] = _number(index_line[-1]) if len(index_line) >= 10 else None
     if stage in _SECTOR_EVENT:
@@ -245,7 +256,7 @@ def fundamental(payload: dict | None, error: str = "") -> Snapshot:
     near = []
     for event in payload.get("holder_events") or []:
         days_left = _number(event.get("days_left"))
-        if days_left is None or not 0 <= days_left <= policy.FLOW_WINDOW or event.get("impact") not in ("positive", "negative"):
+        if days_left is None or not 0 <= days_left <= policy.NEAR_EVENT_DAYS or event.get("impact") not in ("positive", "negative"):
             continue
         name = _HOLDER_TYPE.get(event.get("type"), "股东事件")
         text = f"{name}（{_IMPACT[event['impact']]}），{int(days_left)} 个交易日内"

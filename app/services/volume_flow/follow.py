@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.services.volume_flow.rules import FLOW_EDGE, FOLLOW_MIN_MOVE, RATIO_EDGE, REL_LOUD, REL_QUIET
+from app.services.volume_flow.rules import FLOW_EDGE, FLOW_Z_EDGE, FOLLOW_MIN_MOVE, RATIO_EDGE, REL_LOUD, REL_QUIET
 
 _LEVELS = {
     "up": {
@@ -27,10 +27,11 @@ def follow(metrics: dict) -> dict:
     brief 是一句话（给 verdict.text 用），items[].text 是各项证据的完整说法。"""
     ret = metrics["price"].get("ret")
     if ret is None or abs(ret) < FOLLOW_MIN_MOVE:
-        return _plain("flat", "涨跌幅度很小，看不出谁在主导", "flat", [])
+        return _plain("flat", "涨跌幅度很小，看不出谁在主导", "flat", [_short_windows(metrics)])
     move = "up" if ret > 0 else "down"
     sign = 1 if ret > 0 else -1
-    items = [_volume(metrics), _updown(metrics, sign), _big(metrics, sign)]
+    # 结论仍按主窗口判；短窗对照只作依据，不参与计分
+    items = [_volume(metrics), _updown(metrics, sign), _big(metrics, sign), _short_windows(metrics)]
     scored = [item for item in items if item["status"] in {"agree", "neutral", "disagree"}]
     if len(scored) < 2:
         return _plain("unknown", "资金数据不全，看不出有没有人跟", move, items)
@@ -102,21 +103,56 @@ def _updown(metrics: dict, sign: int) -> dict:
 
 
 def _big(metrics: dict, sign: int) -> dict:
+    """大资金：近主窗口的净流入率，和这只股票自己过去的同长度窗口比。历史不够比时，退回数天数。"""
     daily = metrics["daily"]
-    total = daily["in_days"] + daily["out_days"]
     big = metrics["flow"].get("big")
-    if not total or big is None:
+    if big is None:
+        return _item("big_money", "大资金", "unknown", "", "缺少大资金（超大单 + 大单）的逐日数据")
+    window = len(metrics["price"]["bars"])
+    net = f"近 {window} 天合计净{'流入' if big > 0 else '流出'} {_num(abs(big) / 1e8, 1)} 亿元"
+    z = metrics["flow"].get("rate_z")
+    if z is not None:
+        if z >= FLOW_Z_EDGE:
+            side, brief, text = 1, "大资金比平时明显更流入", f"{net}，比这只股票自己平时更偏流入"
+        elif z <= -FLOW_Z_EDGE:
+            side, brief, text = -1, "大资金比平时明显更流出", f"{net}，比这只股票自己平时更偏流出"
+        else:
+            return _item("big_money", "大资金", "neutral", "大资金和平时差不多", f"{net}，和这只股票自己平时差不多")
+        return _item("big_money", "大资金", "agree" if side == sign else "disagree", brief, text)
+    total = daily["in_days"] + daily["out_days"]
+    if not total:
         return _item("big_money", "大资金", "unknown", "", "缺少大资金（超大单 + 大单）的逐日数据")
     inflow, outflow = daily["in_days"], daily["out_days"]
-    net = f"，近 {len(metrics['price']['bars'])} 天合计净{'流入' if big > 0 else '流出'} {_num(abs(big) / 1e8, 1)} 亿元"
+    net = f"，{net}"
     if inflow / total >= FLOW_EDGE and big > 0:
-        side, brief, text = 1, f"大资金 {total} 天里 {inflow} 天流入", f"大资金近 {total} 天有 {inflow} 天净流入{net}"
+        side, brief, text = 1, f"大资金 {total} 天里 {inflow} 天流入", f"大资金近 {total} 天有 {inflow} 天净流入{net}（历史太短，还没法和自己平时比）"
     elif outflow / total >= FLOW_EDGE and big < 0:
-        side, brief, text = -1, f"大资金 {total} 天里 {outflow} 天流出", f"大资金近 {total} 天有 {outflow} 天净流出{net}"
+        side, brief, text = -1, f"大资金 {total} 天里 {outflow} 天流出", f"大资金近 {total} 天有 {outflow} 天净流出{net}（历史太短，还没法和自己平时比）"
     else:
         return _item("big_money", "大资金", "neutral", "大资金流入流出各半", f"大资金近 {total} 天流入 {inflow} 天、流出 {outflow} 天{net}")
-    status = "agree" if side == sign else "disagree"
-    return _item("big_money", "大资金", status, brief, text)
+    return _item("big_money", "大资金", "agree" if side == sign else "disagree", brief, text)
+
+
+def _short_windows(metrics: dict) -> dict:
+    """主窗口外的对照：近 3 日看拐头，近 20 日看波段底色。"""
+    rows = {row.get("days"): row for row in metrics.get("windows") or []}
+    parts = []
+    for days in (3, 20):
+        row = rows.get(days)
+        if not row:
+            continue
+        bits = []
+        if row.get("ret") is not None:
+            bits.append(f"涨跌 {_num(row['ret'], 1)}%")
+        if row.get("rel_vol") is not None:
+            bits.append(f"相对量能 {_num(row['rel_vol'], 2)} 倍")
+        if row.get("net_rate") is not None:
+            bits.append(f"大资金净流入率 {_num(row['net_rate'], 2)}%")
+        if bits:
+            parts.append(f"近 {days} 日" + "、".join(bits))
+    if not parts:
+        return _item("short_windows", "多窗对照", "info", "", "缺少对照窗口数据")
+    return _item("short_windows", "多窗对照", "info", "多窗对照", "；".join(parts))
 
 
 def _item(key: str, name: str, status: str, brief: str, text: str) -> dict:

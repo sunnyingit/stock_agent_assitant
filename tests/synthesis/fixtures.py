@@ -50,9 +50,10 @@ def make_aligned(closes=None, last_volume=2_000_000.0, big_buy=2e6) -> dict:
             "date": dates[i], "close": round(close, 4), "volume": volume,
             "amount": close * volume, "chg": round(chg, 4), "turnover": 1.0,
         })
+        wobble = 1 + 0.1 * ((i * 7) % 5 - 2)      # 平时的大单净额有小幅波动：没有波动，就没有「和自己平时比」
         flow.append({
             "date": dates[i],
-            "super_large": big_buy if recent else 1e6, "large": big_buy / 2 if recent else 5e5,
+            "super_large": big_buy * 2 if recent else 1e6 * wobble, "large": big_buy if recent else 5e5 * wobble,     # 近 20 天放量的同时，大单净额占成交额也明显更高
             "medium": -5e5 if recent else -1e5, "small": -1e5,
         })
         sector.append({"date": dates[i], "chg": 0.2, "net": 100.0, "rate": 2.0})
@@ -65,7 +66,9 @@ def make_aligned(closes=None, last_volume=2_000_000.0, big_buy=2e6) -> dict:
 
 
 def volume_payload(aligned: dict | None = None, stock=None) -> dict:
-    return volume_flow_detail(stock or make_stock(), 20, aligned=aligned or make_aligned(), today=TODAY)
+    from app.services.volume_flow.rules import DEFAULT_WINDOW
+
+    return volume_flow_detail(stock or make_stock(), DEFAULT_WINDOW, aligned=aligned or make_aligned(), today=TODAY)
 
 
 def news_payload(impact="positive", priced="not_yet", state="ok", lean="bullish", level=2) -> dict:
@@ -84,10 +87,17 @@ def sector_payload(stage="main", lean="bullish", level=2, state="ok") -> dict:
     return {
         "meta": {"state": state, "as_of": TODAY.isoformat(), "rule_version": "sector-2"},
         "verdict": {"lean": lean, "level": level, "certainty": "medium"},
-        "stage": {"current": stage, "days_in_round": 6},
-        "role": {"value": "leader"},
-        "strength": {"lines": {"dates": [], "stock": [0.05, 0.12], "sector": [0.03, 0.08], "index": [0.01, 0.02]}},
-        "position_hint": {"climax": False, "overdue": False},
+        "sectors": {
+            "primary": {
+                "stage": {"current": stage, "days_in_round": 6},
+                "role": {"value": "leader"},
+                "strength": {"lines": {"dates": [], "stock": [0.05, 0.12], "sector": [0.03, 0.08], "index": [0.01, 0.02]}},
+                "position_hint": {"climax": False, "overdue": False},
+            },
+            "secondary": None,
+            "driver": {"type": "single"},
+            "divergence": {"active": False},
+        },
     }
 
 

@@ -31,9 +31,18 @@ def slim(verdict: dict) -> dict:
     return {key: verdict[key] for key in VERDICT_FIELDS}
 
 
-def summary_headline(review: dict | None, key: str) -> dict | None:
-    """AI 体检里"一句话总结"那一题（key）由模型写成时，返回和 verdict 同一套字段的 headline；否则 None，前端改用 verdict。"""
+def summary_headline(review: dict | None, key: str, *, allow_template: bool = False) -> dict | None:
+    """体检里"一句话总结"那一题。默认只要模型写的；allow_template 时规则模板答案也可作 headline（资金流分析师结论）。"""
     item = next((row for row in (review or {}).get("items") or [] if row.get("key") == key), None)
-    if not item or item.get("source") != "model":
+    if not item:
         return None
-    return model_fields(item.get("status"), item.get("answer"))
+    if item.get("source") == "model":
+        return model_fields(item.get("status"), item.get("answer"))
+    if allow_template and item.get("source") == "template" and item.get("status") in STATUS_TEXT and item.get("answer"):
+        return {
+            "source": "rule",
+            "status": item["status"],
+            "status_text": STATUS_TEXT[item["status"]],
+            "text": item["answer"],
+        }
+    return None

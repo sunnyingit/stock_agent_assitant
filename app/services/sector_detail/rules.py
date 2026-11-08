@@ -1,9 +1,9 @@
 """板块阶段、角色和力度。
 
-方向规则与 signal_bt/rules/sector.py 对齐，版本 sector-2。
-回测目前仍是「一只股票只归一个行业」：没有概念板块，没有按 20 日相关度选主板块，
-也没有连续 3 天才切换阶段。线上概念板块的结论因此没有回测依据。
+单个板块的阶段、角色规则与 signal_bt/rules/sector.py 对齐，版本 sector-3。
+回测目前仍是「一只股票只归一个行业」：没有概念板块，也没有连续 3 天才切换阶段。线上概念板块的结论因此没有回测依据。
 概念成分若没有历史进出日期，线上只能用当前名单，不能假装已经回测过。
+本股属于哪两个板块由 affiliation.py 判断；这里的 combine 把两个板块的结论按驱动占比合成一个方向，两个板块阶段对立时不平均，标成分歧。
 
 接口枚举：
 stage.current：start 启动，main 主升，climax 高潮，diverge 分歧，ebb 退潮，weak 弱势，none 没有明确阶段。
@@ -15,11 +15,10 @@ sustain.items[].status：ok 中性，warn 反向证据，support 支持当前方
 
 from __future__ import annotations
 
-RULE_VERSION = "sector-2"
+RULE_VERSION = "sector-3"
 DISCLAIMER = "只描述板块状态和个股位置，不推荐个股。研究分析，不构成投资建议。"
 
-INDEPENDENT_CORR = 0.6
-INDUSTRY_PREF_GAP = 0.05
+INDEPENDENT_CORR = 0.6   # 本股与板块 20 日相关低于这个值时，角色记为"独立"
 CONFIRM_DAYS = 3
 LEADER_TOP_N = 3
 CORE_TOP_PCT = 0.3
@@ -187,28 +186,6 @@ def confirm(raws: list[str], need: int = CONFIRM_DAYS) -> tuple[list[str], list[
     return stages, runs
 
 
-def arrange(sectors: list[dict]) -> tuple[dict | None, list[dict], bool]:
-    ordered = sorted(
-        sectors,
-        key=lambda item: item.get("corr_20d") if item.get("corr_20d") is not None else -1,
-        reverse=True,
-    )
-    top = ordered[:3]
-    if not ordered or ordered[0].get("corr_20d") is None or ordered[0]["corr_20d"] < INDEPENDENT_CORR:
-        return None, top, True
-    chosen = ordered[0]
-    if chosen.get("type") != "industry":
-        industries = [
-            item for item in ordered
-            if item.get("type") == "industry"
-            and item.get("corr_20d") is not None
-            and item["corr_20d"] >= INDEPENDENT_CORR
-        ]
-        if industries and chosen["corr_20d"] - industries[0]["corr_20d"] < INDUSTRY_PREF_GAP:
-            chosen = industries[0]
-    return chosen, top, False
-
-
 def evaluate(sector: dict, ts_code: str) -> dict:
     days = list(sector.get("days") or [])
     prepared = _prepare(days)
@@ -271,6 +248,11 @@ def evaluate(sector: dict, ts_code: str) -> dict:
             "stock": cumulative([day.get("stock") for day in window]),
             "sector": cumulative([day.get("sector") for day in window]),
             "index": cumulative([day.get("index") for day in window]),
+            "today": {
+                "stock": None if not window else window[-1].get("stock"),
+                "sector": None if not window else window[-1].get("sector"),
+                "index": None if not window else window[-1].get("index"),
+            },
         },
         "rank": {
             "value": last.get("rank"),
@@ -295,8 +277,112 @@ def evaluate(sector: dict, ts_code: str) -> dict:
     }
 
 
+_SIGN = {"bullish": 1, "bearish": -1}
+
+
+def combine(primary: dict, secondary: dict | None, weights: dict | None) -> dict:
+    """两个板块的方向按驱动占比合成一个。阶段对立（一多一空）时不平均成"中性"，标成分歧，把握降一档。
+    返回 lean / level / certainty / certainty_reasons / divergent。"""
+    if secondary is None or not weights:
+        return {
+            "lean": primary["lean"], "level": primary["level"], "certainty": primary["certainty"],
+            "certainty_reasons": list(primary["certainty_reasons"]), "divergent": False,
+        }
+    wp, ws = float(weights.get("primary") or 0.0), float(weights.get("secondary") or 0.0)
+    sp, ss = _SIGN.get(primary["lean"], 0) * primary["level"], _SIGN.get(secondary["lean"], 0) * secondary["level"]
+    divergent = sp * ss < 0
+    blend = wp * sp + ws * ss
+    if divergent:
+        lean, level = "neutral", 1
+    elif abs(blend) < 0.5:
+        lean, level = "unclear", 0
+    else:
+        lean, level = ("bullish" if blend > 0 else "bearish"), min(3, max(1, round(abs(blend))))
+    reasons = list(primary["certainty_reasons"])
+    ranked = [value for value in (primary["certainty"], secondary["certainty"]) if value in _CERTAINTY]
+    if divergent:
+        certainty = "low"
+        reasons.append("两个板块阶段对立")
+    elif lean in _SIGN:
+        dominant = primary if wp >= ws else secondary
+        certainty = max(ranked, key=_CERTAINTY.index) if ranked and min(wp, ws) >= 0.25 else dominant["certainty"]
+    else:
+        certainty = None
+    return {"lean": lean, "level": level, "certainty": certainty, "certainty_reasons": reasons, "divergent": divergent}
+
+
+def pick_tape_lens(primary: dict, secondary: dict | None, weights: dict | None) -> str:
+    """行情镜头：驱动占比更高的那块板；没有次板块时就是主板块。"""
+    if secondary is None or not weights:
+        return "primary"
+    wp = float(weights.get("primary") or 0.0)
+    ws = float(weights.get("secondary") or 0.0)
+    return "secondary" if ws > wp else "primary"
+
+
+def tape_verdict(primary: dict, secondary: dict | None, weights: dict | None) -> dict:
+    """开场方向跟行情镜头走，不跟申万归属标签走。
+
+    - 镜头 = 驱动占比更高的板（见 pick_tape_lens）
+    - 主/次阶段对立 → neutral，vs_belong=对立
+    - 归属主板块与镜头方向相反 → vs_belong=背离，仍用镜头 lean
+    - 镜头偏空但本股抗跌/独立/领涨且相对板块明显更强 → 降为 neutral（板块不构成支撑）
+    """
+    lens_role = pick_tape_lens(primary, secondary, weights)
+    lens = primary if lens_role == "primary" else secondary
+    assert lens is not None
+    belong_sign = _SIGN.get(primary["lean"], 0)
+    lens_sign = _SIGN.get(lens["lean"], 0)
+
+    if secondary is not None:
+        sec_sign = _SIGN.get(secondary["lean"], 0)
+        if belong_sign * sec_sign < 0:
+            return {
+                "lean": "neutral",
+                "level": 1,
+                "certainty": "low",
+                "certainty_reasons": ["两个板块阶段对立"],
+                "divergent": True,
+                "lens_role": lens_role,
+                "vs_belong": "对立",
+            }
+
+    if lens_role != "primary" and belong_sign * lens_sign < 0:
+        vs_belong = "背离"
+    elif lens_role != "primary" and primary["lean"] != lens["lean"]:
+        vs_belong = "背离"
+    else:
+        vs_belong = "同向"
+
+    lean = lens["lean"]
+    level = lens["level"]
+    certainty = lens["certainty"]
+    reasons = list(lens.get("certainty_reasons") or [])
+
+    stock_vs = (lens.get("gaps") or {}).get("stock_vs_sector")
+    role = lens.get("role")
+    # 弱势/偏空板里个股明显更强：不要把「板弱」直接打成开场偏空
+    if lean == "bearish" and role in {"resilient", "independent", "leader"} and stock_vs is not None and stock_vs >= 0.05:
+        lean, level, certainty = "neutral", 1, "low"
+        reasons = ["板块偏弱但本股相对更强，板块不构成支撑"] + reasons[:2]
+        vs_belong = "背离"
+
+    if lens_role != "primary":
+        reasons = [f"行情镜头取次板块（驱动占比更高）"] + reasons
+
+    return {
+        "lean": lean,
+        "level": level,
+        "certainty": certainty,
+        "certainty_reasons": reasons,
+        "divergent": False,
+        "lens_role": lens_role,
+        "vs_belong": vs_belong,
+    }
+
+
 def relative_verdict(stock_vs_index: float | None, warn_texts: list[str]) -> dict:
-    """没有主板块时，只保留个股相对大盘的强弱，力度固定 1。"""
+    """没有归属的板块、或板块解释不了本股走势时，只保留个股相对大盘的强弱，力度固定 1。"""
     if stock_vs_index is None:
         lean = "unclear"
     elif stock_vs_index > 0.03:
@@ -305,7 +391,7 @@ def relative_verdict(stock_vs_index: float | None, warn_texts: list[str]) -> dic
         lean = "bearish"
     else:
         lean = "neutral"
-    reasons = ["与板块相关度不足"]
+    reasons = ["没有可归属的板块"]
     reasons.extend(warn_texts)
     return {
         "lean": lean,
@@ -313,7 +399,7 @@ def relative_verdict(stock_vs_index: float | None, warn_texts: list[str]) -> dic
         "certainty": "low",
         "certainty_reasons": reasons,
         "tag_text": "独立走势，板块结论不适用",
-        "counter_text": warn_texts[0] if warn_texts else "相关度低于 0.6",
+        "counter_text": warn_texts[0] if warn_texts else "没有能解释本股走势的板块",
         "excess": stock_vs_index,
         "gaps": {
             "sector_vs_index": None,
@@ -643,7 +729,7 @@ def _sustain(sector: dict, days: list[dict], days_in_round: int, stage: str) -> 
     if pctile is None:
         crowding = {"key": "crowding", "status": "na", "text": "没有成交占比数据", "ref": None}
     elif pctile >= 0.90:
-        crowding = {"key": "crowding", "status": "warn", "text": "成交占比处在近一年高位", "ref": {"pctile_1y": pctile}}
+        crowding = {"key": "crowding", "status": "warn", "text": f"成交占比处在近一年高位（分位 {round(pctile * 100)}%）", "ref": {"pctile_1y": pctile}}
     else:
         crowding = {"key": "crowding", "status": "ok", "text": "成交占比不在近一年高位", "ref": {"pctile_1y": pctile}}
     median = sector.get("round_median")
@@ -665,7 +751,7 @@ def _sustain(sector: dict, days: list[dict], days_in_round: int, stage: str) -> 
             duration = {
                 "key": "duration",
                 "status": "warn",
-                "text": "本轮持续天数超过同类行情中位数",
+                "text": f"本轮持续天数超过同类行情中位数（已 {days_in_round} 天，中位数 {shown} 天）",
                 "ref": {"days": days_in_round, "median": median},
             }
     else:
@@ -689,9 +775,11 @@ def _sustain(sector: dict, days: list[dict], days_in_round: int, stage: str) -> 
     if index_20d is None:
         environment = {"key": "environment", "status": "na", "text": "没有大盘走势", "ref": None}
     elif index_20d < -0.03 and bearish:
-        environment = {"key": "environment", "status": "support", "text": "大盘近 20 日偏弱，和支持偏空一致", "ref": {"index_20d": round(index_20d, 4)}}
+        shown = f"{index_20d * 100:+.1f}%"
+        environment = {"key": "environment", "status": "support", "text": f"大盘近 20 日 {shown}，偏弱，和支持偏空一致", "ref": {"index_20d": round(index_20d, 4)}}
     elif index_20d < -0.03:
-        environment = {"key": "environment", "status": "warn", "text": "大盘近 20 日偏弱", "ref": {"index_20d": round(index_20d, 4)}}
+        shown = f"{index_20d * 100:+.1f}%"
+        environment = {"key": "environment", "status": "warn", "text": f"大盘近 20 日 {shown}，偏弱", "ref": {"index_20d": round(index_20d, 4)}}
     else:
         environment = {"key": "environment", "status": "ok", "text": "大盘没有明显走弱", "ref": {"index_20d": round(index_20d, 4)}}
     return [catalyst_item, crowding, duration, environment]

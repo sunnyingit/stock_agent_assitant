@@ -1,9 +1,12 @@
-"""新闻。个股用东方财富，热榜用 NewsNow，并按股票名称去重。"""
+"""新闻。个股用东方财富，按关键词搜索用东方财富搜索，热榜用 NewsNow。"""
 
 from __future__ import annotations
 
 import html
+import json
 import re
+import urllib.parse
+import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from xml.etree import ElementTree
@@ -20,6 +23,7 @@ EASTMONEY_NEWS = "https://emweb.securities.eastmoney.com/PC_HSF10/NewsBulletin/P
 HK_NEWS = "https://emweb.securities.eastmoney.com/PC_HKF10/CompanyNews/PageAjax"
 GOOGLE_RSS = "https://news.google.com/rss/search"
 GOOGLE_TIMEOUT = (2, 6)
+SEARCH_API = "https://search-api-web.eastmoney.com/search/jsonp"
 _TAG = re.compile(r"<[^>]+>")
 
 SOURCES = {
@@ -38,6 +42,7 @@ SOURCES = {
     "juejin": "掘金",
     "hackernews": "Hacker News",
     "eastmoney": "东方财富",
+    "search": "东方财富搜索",
     "google": "Google News",
 }
 
@@ -183,6 +188,73 @@ def parse_google_rss(xml_text: str, keyword: str, max_results: int) -> list[dict
     return items
 
 
+def parse_search_news(payload: dict, keyword: str, max_results: int) -> list[dict]:
+    result = (payload or {}).get("result") if isinstance(payload, dict) else None
+    rows = result.get("cmsArticleWebOld") if isinstance(result, dict) else None
+    items = []
+    for rank, row in enumerate((rows or [])[:max_results], start=1):
+        if not isinstance(row, dict):
+            continue
+        title = _plain_text(str(row.get("title") or ""))
+        if not title:
+            continue
+        media = str(row.get("mediaName") or "").strip()
+        items.append({
+            "rank": rank,
+            "source": "search",
+            "source_name": media or SOURCES["search"],
+            "title": title,
+            "url": str(row.get("url") or "").strip(),
+            "time": str(row.get("date") or "").strip() or None,
+            "summary": _plain_text(str(row.get("content") or "")),
+            "keyword": keyword,
+        })
+    return items
+
+
+def fetch_search_news(keyword: str, max_results: int = 12) -> list[dict]:
+    text = (keyword or "").strip()
+    if not text:
+        return []
+    cache_key = f"news:search:{text}:{max_results}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    param = {
+        "uid": "",
+        "keyword": text,
+        "type": ["cmsArticleWebOld"],
+        "client": "web",
+        "clientType": "web",
+        "clientVersion": "curr",
+        "param": {
+            "cmsArticleWebOld": {
+                "searchScope": "default",
+                "sort": "default",
+                "pageIndex": 1,
+                "pageSize": max_results,
+                "preTag": "",
+                "postTag": "",
+            }
+        },
+    }
+    # 这个接口对 requests 的请求会回一份无关结果，用标准库才能搜到文章。
+    body = json.dumps(param, ensure_ascii=False, separators=(",", ":"))
+    url = SEARCH_API + "?cb=&param=" + urllib.parse.quote(body)
+    request = urllib.request.Request(
+        url,
+        headers={"User-Agent": "Mozilla/5.0", "Referer": "https://so.eastmoney.com/"},
+    )
+    with urllib.request.urlopen(request, timeout=8) as response:
+        raw = response.read().decode("utf-8", "replace").strip()
+    if raw.endswith(")") and "(" in raw:
+        raw = raw[raw.find("(") + 1:-1]
+    items = parse_search_news(json.loads(raw), text, max_results)
+    cache.set(cache_key, items, config.CACHE_TTL["news"])
+    return items
+
+
 def fetch_google_news(keyword: str, language: str = "zh-CN", max_results: int = 12) -> list[dict]:
     cache_key = f"news:google:{keyword}:{language}:{max_results}"
     cached = cache.get(cache_key)
@@ -225,6 +297,20 @@ def _needles(stock: Stock) -> list[str]:
     return needles
 
 
+def search_query(stock: Stock, keyword: str) -> str:
+    """用户要搜的原话。不拼股票名称。空字符串表示不搜索。"""
+    del stock
+    return (keyword or "").strip()
+
+
+def _mentions(item: dict, keyword: str) -> bool:
+    text = (keyword or "").strip()
+    if not text:
+        return True
+    blob = " ".join(str(item.get(key) or "") for key in ("title", "summary"))
+    return text in blob
+
+
 def related_news(items: list[dict], stock: Stock) -> list[dict]:
     needles = _needles(stock)
     matched = []
@@ -242,8 +328,9 @@ def merge_news(
     stock: Stock,
     limit: int,
     direct_items: list[dict] | None = None,
+    search_items: list[dict] | None = None,
 ) -> tuple[bool, list[dict]]:
-    del source_ids
+    del source_ids, stock
     seen: set[str] = set()
     items: list[dict] = []
 
@@ -254,35 +341,43 @@ def merge_news(
         seen.add(title)
         items.append(item)
 
+    for item in search_items or []:
+        add(item)
     for item in direct_items or []:
         add(item)
-    for item in related_news(google_items, stock):
+    for item in google_items:
         add(item)
-    for item in related_news(hot_items, stock):
+    for item in hot_items:
         add(item)
     return bool(items), items[:limit]
 
 
-def get_news(stock: Stock, limit: int = 24, sources: list[str] | None = None) -> dict:
+def get_news(stock: Stock, limit: int = 24, sources: list[str] | None = None, keyword: str = "") -> dict:
+    keyword = (keyword or "").strip()
     source_ids = [
         source_id for source_id in (sources or list(SOURCES))
-        if source_id not in ("google", "eastmoney")
+        if source_id not in ("google", "eastmoney", "search")
     ]
-    cache_key = f"news:related:{stock.ts_code}:{limit}:{','.join(source_ids)}:eastmoney"
+    cache_key = f"news:related:{stock.ts_code}:{limit}:{','.join(source_ids)}:eastmoney:{keyword}"
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
 
     hot: list[dict] = []
     google_items: list[dict] = []
+    search_items: list[dict] = []
     direct_items: list[dict] = []
     unavailable: list[str] = []
-    workers = min(8, max(1, len(source_ids) + 1))
+    query = search_query(stock, keyword)
+    workers = min(8, max(1, len(source_ids) + 2))
     futures = {}
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        if stock.em_code:
+        if stock.em_code and not keyword:
             market = "HK" if is_hk(stock) else "CN"
             futures[pool.submit(fetch_stock_news, stock.em_code, max(limit, 10), market)] = "eastmoney"
+        if query:
+            futures[pool.submit(fetch_search_news, query, min(max(limit, 12), 20))] = "search"
+            futures[pool.submit(fetch_google_news, query, "zh-CN", min(max(limit, 12), 20))] = "google"
         for source_id in source_ids:
             futures[pool.submit(fetch_hot_news, source_id, max(limit, 15))] = source_id
         for future in as_completed(futures):
@@ -295,16 +390,39 @@ def get_news(stock: Stock, limit: int = 24, sources: list[str] | None = None) ->
                 continue
             if source_id == "google":
                 google_items.extend(rows)
+            elif source_id == "search":
+                search_items.extend(rows)
             elif source_id == "eastmoney":
                 direct_items.extend(rows)
             else:
                 hot.extend(rows)
 
-    if not hot and not google_items and not direct_items:
-        raise RuntimeError("未获取到新闻")
+    if keyword:
+        direct_items = [item for item in direct_items if _mentions(item, keyword)]
+        hot = [item for item in hot if _mentions(item, keyword)]
+    if not hot and not google_items and not direct_items and not search_items:
+        if not keyword:
+            raise RuntimeError("未获取到新闻")
+        result = {
+            "matched": False,
+            "count": 0,
+            "sources": [],
+            "unavailable": unavailable,
+            "items": [],
+            "query": query,
+            "keyword": keyword,
+        }
+        cache.set(cache_key, result, 60)
+        return result
 
-    matched, items = merge_news(google_items, hot, source_ids, stock, limit, direct_items)
+    matched, items = merge_news(google_items, hot, source_ids, stock, limit, direct_items, search_items)
     used = []
+    if search_items:
+        used.append({
+            "id": "search",
+            "name": SOURCES["search"],
+            "count": sum(1 for item in items if item.get("source") == "search"),
+        })
     if direct_items:
         used.append({
             "id": "eastmoney",
@@ -323,6 +441,8 @@ def get_news(stock: Stock, limit: int = 24, sources: list[str] | None = None) ->
         "sources": used,
         "unavailable": unavailable,
         "items": items,
+        "query": query,
+        "keyword": keyword,
     }
     cache.set(cache_key, result, config.CACHE_TTL["news"])
     return result

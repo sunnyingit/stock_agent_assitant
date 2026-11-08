@@ -27,10 +27,6 @@ _TOKEN_STOP = (
     "关于", "发布", "表示", "以及", "其他", "高端", "本周", "密集", "动向", "证券",
     "报道", "董事会", "股东会", "股东大会", "投资者", "有限公司",
 )
-_ROUTINE = (
-    "翌日披露", "月报表", "证券变动", "会议召开日期", "法律意见书", "核查意见",
-    "独立意见", "述职报告",
-)
 _ART = re.compile(r"AN\d+")
 
 
@@ -211,10 +207,6 @@ def clean_news(
             reason = "market_recap" if _quote_page(row, stock) or _broadcast(title, stock) else "irrelevant"
             dropped.append(_drop(row, reason))
             continue
-        if _routine(title):
-            dropped.append(_drop(row, "routine"))
-            dropped_relevance += 1
-            continue
         if not _fresh(row, today, dates, window_days):
             if _mentions(title, stock) and _within_long(row, today, dates):
                 reprints.append(row)
@@ -346,10 +338,6 @@ def _art_code(row: dict) -> str:
 def _publish_day(row: dict) -> str:
     moment = _parse_time(row.get("time"))
     return moment.strftime("%Y%m%d") if moment else ""
-
-
-def _routine(title: str) -> bool:
-    return any(word in title for word in _ROUTINE)
 
 
 def _drop(row: dict, reason: str) -> dict:

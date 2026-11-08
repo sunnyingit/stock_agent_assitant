@@ -3,7 +3,7 @@
 存档和战绩都带 POLICY_VERSION：改了任何一项，都要升版本号。
 """
 
-POLICY_VERSION = "policy-7"   # 2：上下价位不再为空（补底候选）；3：页面带走势与判断；4：均线、成本区按相对现价的位置归到上方或下方；5：新高新低时用波动带兜底；6：走势带判断分段和区间涨幅；7：走势带今天的判断和高亮起点
+POLICY_VERSION = "policy-9"   # 2：上下价位不再为空（补底候选）；3：页面带走势与判断；4：均线、成本区按相对现价的位置归到上方或下方；5：新高新低时用波动带兜底；6：走势带判断分段和区间涨幅；7：走势带今天的判断和高亮起点；8：量价主窗口改为 5 日；9：资金流判断按和自己过去比，形态要涨跌够 1%
 
 # 参与综合的维度。海外映射上线时在这里加一项，可信度分母和文案都会跟着变。
 DIMENSIONS = ("volume_flow", "news", "sector", "finance", "fundamental")
@@ -19,7 +19,8 @@ DIMENSION_LABEL = {
 STALE_TRADING_DAYS = 5          # 数据日期落后超过这么多个工作日，视为过期
 COLLECT_TIMEOUT = 45            # 页面请求里并发取 5 个维度最多等多少秒；冷启动时板块可能要几分钟
 COLLECT_TIMEOUT_BACKGROUND = 300   # 后台重算的等待秒数；超时的维度按"还在整理"处理，下一次再取
-FLOW_WINDOW = 20                # 量价详情的窗口
+FLOW_WINDOW = 5                 # 量价详情主窗口（A 股短线）；3 / 20 日作对照
+NEAR_EVENT_DAYS = 20            # 新闻里「临近事件」回看天数（与量价主窗口无关）
 
 # ---- 输入体检 ----
 RET_TOLERANCE = 0.02            # 跨模块同一口径的涨跌允许相差 2 个百分点
@@ -31,7 +32,7 @@ DIMENSION_WEIGHT = {key: 1.0 for key in DIMENSIONS}
 DIVERGENCE_PAIRS = (("finance", "volume_flow"), ("finance", "news"))
 KEY_FACTS = {
     "finance": ("fin.growth", "fin.quality", "fin.warn_hits", "fin.days_since"),
-    "volume_flow": ("flow.pattern", "flow.big_trend", "flow.net_rate"),
+    "volume_flow": ("flow.pattern", "flow.vs_self", "flow.big_trend", "flow.net_rate"),
     "news": ("news.main_event", "news.priced_in"),
 }
 RULE_EDGE = 1.0                 # 加权得分绝对值低于它 → 不明

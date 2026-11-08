@@ -26,28 +26,35 @@ def detect(d: dict, facts: list[Fact]) -> list[dict]:
     if rate is not None and abs(rate) > 1.0:
         out.append(_row("high", "资金流金额超过成交额", f"大资金净额占成交额达到 {text.get('fr.net_rate_20d', '')}，超出合理范围，数据口径可疑。", ["fr.net_rate_20d"], ids))
 
-    ret, big, rate = d.get("ret_20d"), d.get("big_net_20d"), d.get("net_rate_20d")
+    ret, big, rate = d.get("ret_5d"), d.get("big_net_5d"), d.get("net_rate_5d")
     if ret is not None and big is not None and rate is not None and abs(rate) >= 0.01:
         if ret > 0.03 and big < 0:
-            out.append(_row("high", "上涨，但大资金在净流出", f"近 20 日股价 {text['fr.ret_20d']}，大资金同期净额 {text['fr.big_net_20d']}，价格和资金方向相反。", ["fr.ret_20d", "fr.big_net_20d", "fr.net_rate_20d"], ids))
+            out.append(_row("high", "上涨，但大资金在净流出", f"近 5 日股价 {text['fr.ret_5d']}，大资金同期净额 {text['fr.big_net_5d']}，价格和资金方向相反。", ["fr.ret_5d", "fr.big_net_5d", "fr.net_rate_5d"], ids))
         elif ret < -0.03 and big > 0:
-            out.append(_row("medium", "下跌，但大资金在净流入", f"近 20 日股价 {text['fr.ret_20d']}，大资金同期净额 {text['fr.big_net_20d']}，可能有资金承接，也可能只是下跌途中的反复。", ["fr.ret_20d", "fr.big_net_20d", "fr.net_rate_20d"], ids))
+            out.append(_row("medium", "下跌，但大资金在净流入", f"近 5 日股价 {text['fr.ret_5d']}，大资金同期净额 {text['fr.big_net_5d']}，可能有资金承接，也可能只是下跌途中的反复。", ["fr.ret_5d", "fr.big_net_5d", "fr.net_rate_5d"], ids))
 
     z = d.get("last_day_z")
     if z is not None and abs(z) >= 2.5:
         word = "流入" if z > 0 else "流出"
         out.append(_row("high" if abs(z) >= 3.5 else "medium", f"最近一天大资金{word}异常大", f"最近一个交易日大资金净额 {text.get('fr.last_day_net', '')}，偏离近 60 日均值 {text['fr.last_day_z']}。", ["fr.last_day_net", "fr.last_day_z"], ids))
-    trend = d.get("trend")
+    trend = d.get("trend") or ((d.get("path") or {}).get("label") if isinstance(d.get("path"), dict) else None)
     if trend == "turning_out":
-        out.append(_row("medium", "大资金由流入转为流出", "近期大资金方向出现反转，前几天还在流入，最近转为流出。", ["fr.trend"], ids))
+        out.append(_row("medium", "大资金由流入转为流出", "近期大资金方向出现反转，前几天还在流入，最近转为流出。", ["fr.path", "fr.trend"], ids))
+    elif trend == "turning_in":
+        out.append(_row("medium", "大资金由流出转为流入", "近期大资金出现 V 形回升，前半偏流出、后半转为流入，需结合力度看是否站稳。", ["fr.path", "fr.trend", "fr.level_z"], ids))
     elif trend == "accelerating_out":
-        out.append(_row("high", "大资金流出在加快", "大资金连续净流出，并且力度越来越大。", ["fr.trend", "fr.streak"], ids))
+        out.append(_row("high", "大资金流出在加快", "大资金连续净流出，并且力度越来越大。", ["fr.path", "fr.trend", "fr.streak"], ids))
+    share3 = d.get("last_share_3d")
+    if share3 is not None and abs(share3) >= 0.6:
+        out.append(_row("medium", "最近一日主导近 3 日资金", f"最近一日大资金净额占近 3 日 {text.get('fr.last_share_3d', '')}，勿一日定乾坤。", ["fr.last_share_3d", "fr.last_day_net"], ids))
 
     hints = d.get("hints") or []
     if hints:
         out.append(_row("high" if len(hints) >= 2 else "medium", "出现位置提示：" + "、".join(hints), "这些是高位常见的风险迹象，需要结合位置一起看。", ["fr.hints", "fr.from_year_high"], ids))
-    if d.get("rel_vol") is not None and d["rel_vol"] >= 2.5:
-        out.append(_row("medium", "成交量异常放大", f"近 20 日日均成交量是此前 60 日的 {text.get('fr.rel_vol', '')}。", ["fr.rel_vol"], ids))
+    rel = d.get("rel_vol_5d") if d.get("rel_vol_5d") is not None else d.get("rel_vol")
+    rel_id = "fr.rel_vol_5d" if d.get("rel_vol_5d") is not None else "fr.rel_vol"
+    if rel is not None and rel >= 2.5:
+        out.append(_row("medium", "成交量异常放大", f"相对量能达到此前 60 日均量的 {text.get(rel_id, '')}。", [rel_id], ids))
 
     if d.get("limit_days"):
         out.append(_row("medium", "窗口内有疑似涨跌停", f"近 20 日有 {text['fr.limit_days']}涨幅或跌幅接近涨跌停，那几天的成交和资金流不能直接当常规数据看。", ["fr.limit_days", "fr.limit_last"], ids))

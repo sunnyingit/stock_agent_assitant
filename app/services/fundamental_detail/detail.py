@@ -189,8 +189,10 @@ def _assemble(stock: Stock, snapshot: dict, today: date) -> dict:
             },
             "peers": peers,
         },
+        "price": _price_position(snapshot),
         "quality": {"items": items, "weakest": weak},
         "holder_events": public,
+        "business": _public_business(snapshot.get("business")),
         "table": {"rows": _rows(snapshot, metric, value, mid, items)},
         "position_input": {
             "valuation_pctile_5y": pctile,
@@ -224,6 +226,28 @@ def public(payload: dict) -> dict:
 
 
 ANCHOR_NOTE = "估值锚点 = 自身 5 年历史的 20%、50%、80% 分位倍数 × 当前扣非每股收益，只描述历史倍数对应的价格位置，不是目标价，不构成投资建议。"
+
+
+def _price_position(snapshot: dict) -> dict:
+    """当前股价在近 5 年收盘价里的位置。回答的是价格高不高，不是估值贵不贵。"""
+    points = _history(snapshot.get("price_history") or [])
+    values = [item["value"] for item in points if item.get("value")]
+    close = snapshot.get("close")
+    raw = percentile(close, values)
+    bands = quantiles(values)
+    return {
+        "close": None if close is None else round(float(close), 2),
+        "pctile_5y": None if raw is None else round(raw, 2),
+        "low": None if not values else round(min(values), 2),
+        "high": None if not values else round(max(values), 2),
+        "history": {
+            "dates": [item["date"] for item in points],
+            "values": [None if item.get("value") is None else round(float(item["value"]), 2) for item in points],
+            "p20": bands["p20"],
+            "p50": bands["p50"],
+            "p80": bands["p80"],
+        },
+    }
 
 
 def _anchors(metric: str, value, close, bands: dict) -> dict | None:
@@ -364,6 +388,27 @@ def _event_id(event: dict) -> str:
         return str(event["event_id"])
     raw = f"{event.get('type')}|{event.get('title')}|{event.get('date') or ''}"
     return "fh_" + hashlib.sha1(raw.encode("utf-8")).hexdigest()[:4]
+
+
+def _public_business(raw) -> dict | None:
+    """对外只留主营描述和产品线，给页面「靠什么赚钱」用。"""
+    if not isinstance(raw, dict):
+        return None
+    text = str(raw.get("main_business") or "").strip()
+    items = []
+    for item in (raw.get("items") or [])[:4]:
+        if not isinstance(item, dict) or not str(item.get("item") or "").strip():
+            continue
+        items.append({
+            "item": item.get("item"),
+            "sales_yi": item.get("sales_yi"),
+            "share": item.get("share"),
+            "yoy": item.get("yoy"),
+            "gross_margin": item.get("gross_margin"),
+        })
+    if not text and not items:
+        return None
+    return {"main_business": text, "period": raw.get("period") or "", "items": items}
 
 
 def _rows(snapshot: dict, metric: str, value, mid, items: list[dict]) -> list[dict]:

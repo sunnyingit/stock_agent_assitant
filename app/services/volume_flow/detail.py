@@ -14,6 +14,7 @@ from app.services.volume_flow.copy import write_text
 from app.services.volume_flow.follow import follow as follow_of, refine
 from app.services.volume_flow.metrics import compute
 from app.services.volume_flow.rules import (
+    DEFAULT_WINDOW,
     DISCLAIMER_TEXT,
     FLOW_SOURCE,
     RULE_VERSION,
@@ -22,10 +23,10 @@ from app.services.volume_flow.rules import (
     position_hints,
 )
 
-FORMULA_TEXT = "相对量能 = 窗口日均成交量 ÷ 窗口之前 60 日均量（两段不重叠）；净流入率 = 大资金（超大单 + 大单）净流入 ÷ 成交额。"
+FORMULA_TEXT = "相对量能 = 窗口日均成交量 ÷ 窗口之前 60 日均量（两段不重叠）；净流入率 = 大资金（超大单 + 大单）净流入 ÷ 成交额；强弱 = 净流入率相对自身历史的稳健 z（中位数+MAD，不够则均值标准差）；短线主窗 3 日。"
 
 
-def build_detail(stock: Stock, window: int = 20, aligned: dict | None = None, today: date | None = None) -> dict:
+def build_detail(stock: Stock, window: int = DEFAULT_WINDOW, aligned: dict | None = None, today: date | None = None) -> dict:
     """不调用大模型：文字用模板，AI 解读由 app/flow_review 另外生成，路由层并进返回。"""
     if is_hk(stock):
         raise RuntimeError(f"{stock.ts_code} 是港股，暂无与 A 股相同的资金流数据")
@@ -52,10 +53,15 @@ def build_detail(stock: Stock, window: int = 20, aligned: dict | None = None, to
         "meta": _meta(data, window, stale, today),
         "verdict": {
             **rule_fields(verdict.get("lean") or "", text),
-            # 下面三项只给综合判断读，对外响应里由 public() 去掉
+            # 下面几项只给综合判断读，对外响应里由 public() 去掉
             "lean": verdict.get("lean") or "",
             "level": verdict.get("level"),
             "certainty": verdict.get("certainty"),
+            "path": (verdict.get("path") or {}).get("label") or verdict.get("trend") or "",
+            "path_text": (verdict.get("path") or {}).get("text") or "",
+            "structure_text": (verdict.get("structure") or {}).get("text") or "",
+            "price_flow": verdict.get("price_flow") or "",
+            "rate_z": metrics["flow"].get("rate_z"),
         },
         "follow": _follow_public(follow),
         "disclaimer_text": DISCLAIMER_TEXT,
@@ -67,24 +73,37 @@ def build_detail(stock: Stock, window: int = 20, aligned: dict | None = None, to
             "up_down_vol_ratio": metrics["price"]["up_down_vol_ratio"],
             "turnover": _ratio(metrics["price"]["turnover"]),
             "turnover_pctile": _ratio(metrics["price"]["turnover_pctile"]),
+            # 图单独用近 20 日，主窗口数字仍在 bars
+            "chart": {
+                "bars": [_bar(row) for row in (metrics.get("price_chart") or {}).get("bars") or []],
+                "vol_base": (metrics.get("price_chart") or {}).get("vol_base"),
+                "days": (metrics.get("price_chart") or {}).get("days") or 0,
+            },
         },
         "flow_by_size": {
             "rows": metrics["flow"]["rows"],
             "concentration": metrics["flow"]["concentration"],
             "pattern": verdict.get("flow_pattern") or "",
+            # 净流入率和自己过去的同长度窗口比：z 是高于平时几个标准差，state 是据此分的五档
+            "rate": _ratio(metrics["flow"].get("rate")),
+            "rate_z": metrics["flow"].get("rate_z"),
+            "rate_pctile": metrics["flow"].get("rate_pctile"),
+            "state": verdict.get("flow_state") or "",
         },
         "flow_daily": {
             "days": metrics["daily"]["days"],
+            "history": (metrics.get("history") or {}).get("days") or [],
             "trend": verdict.get("trend") or "",
+            "path": verdict.get("path") or {},
+            "structure": verdict.get("structure") or {},
         },
         "relative_strength": {
-            "bars": [_ret_bar(row) for row in (
-                metrics["relative"]["stock"],
-                metrics["relative"]["sector"],
-                metrics["relative"]["index"],
-            )],
-            "sector_flow": metrics["relative"]["sector_flow"],
-            "net_rate_vs_sector": _ratio(metrics["relative"]["net_rate_vs_sector"]),
+            **_relative_public(metrics["relative"]),
+            # 3 / 5 / 20：用来区分「本股更强」还是「板块大盘一起涨」
+            "windows": [
+                {"days": row["days"], **_relative_public(row)}
+                for row in metrics.get("relative_windows") or []
+            ],
         },
         "position_hints": {
             "items": hints,
@@ -151,6 +170,15 @@ def _ret_bar(row: dict) -> dict:
     return {**row, "ret": _ratio(row.get("ret"))}
 
 
+def _relative_public(block: dict) -> dict:
+    """相对强弱一块：主窗口和多窗口共用同一套字段。"""
+    return {
+        "bars": [_ret_bar(row) for row in (block["stock"], block["sector"], block["index"])],
+        "sector_flow": block.get("sector_flow") or "",
+        "net_rate_vs_sector": _ratio(block.get("net_rate_vs_sector")),
+    }
+
+
 def _window_row(row: dict) -> dict:
     return {**row, "ret": _ratio(row.get("ret")), "net_rate": _ratio(row.get("net_rate"))}
 
@@ -175,7 +203,7 @@ def _window(value: int) -> int:
     try:
         days = int(value)
     except (TypeError, ValueError):
-        return 20
+        return DEFAULT_WINDOW
     if days < 1:
-        return 20
+        return DEFAULT_WINDOW
     return min(days, 60)

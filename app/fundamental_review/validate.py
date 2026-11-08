@@ -1,6 +1,4 @@
 """公司画像的校验。画像来自模型已有知识，代码核对不了真假，只做格式检查：数量、长度、取值、禁用词、不含数字、去重。
-
-逐题答案的校验用 app/reviews/validate.py 的 merge_items（数字要出自所引用的事实、引用要存在、不能含禁用词）。
 """
 
 from __future__ import annotations

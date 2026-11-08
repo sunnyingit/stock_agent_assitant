@@ -26,7 +26,7 @@ class RouteValidationTest(unittest.TestCase):
         self.client = create_app().test_client()
 
     def test_missing_query(self):
-        response = self.client.get("/api/stocks/moneyflow")
+        response = self.client.get("/api/stocks/news")
         self.assertEqual(response.status_code, 400)
         self.assertIn("缺少参数", response.get_json()["error"])
 
@@ -38,17 +38,6 @@ class RouteValidationTest(unittest.TestCase):
     def test_unknown_stock(self, _resolve):
         response = self.client.post("/api/stocks/news", json={"q": "不存在的股票"})
         self.assertEqual(response.status_code, 404)
-
-    @patch("app.services.moneyflow.get_moneyflow", return_value={"days": []})
-    @patch("app.api.stocks.resolve_stock")
-    def test_moneyflow_ok(self, resolve, _analyze):
-        resolve.return_value = _sample()
-        response = self.client.get("/api/stocks/moneyflow?q=贵州茅台")
-        body = response.get_json()
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(body["status"], "ok")
-        self.assertEqual(body["ts_code"], "600519.SH")
-        self.assertEqual(body["data"], {"days": []})
 
     def test_days_must_be_positive(self):
         response = self.client.get("/api/stocks/bars?q=600519&days=0")

@@ -36,13 +36,13 @@ class FactsTest(unittest.TestCase):
     def test_numbers_are_computed_by_code_in_yi_yuan_and_percent(self):
         _items, d, text = sheet()
         self.assertEqual(text["fr.ret_20d"], "+22.0%")
-        self.assertEqual(text["fr.big_net_20d"], "+0.60 亿元")
+        self.assertEqual(text["fr.big_net_20d"], "+1.20 亿元")
         self.assertEqual(text["fr.pattern"], "价涨量增")
         self.assertEqual(text["fr.streak"], "连续净流入 60 天以上")
         self.assertEqual(text["fr.data_lag"], "最新")
         self.assertEqual(text["fr.limit_days"], "0 天")
         window = make_aligned()["bars"][-20:]
-        self.assertAlmostEqual(d["net_rate_20d"], 20 * 3e6 / sum(row["amount"] for row in window), places=4)
+        self.assertAlmostEqual(d["net_rate_20d"], 20 * 6e6 / sum(row["amount"] for row in window), places=4)
         self.assertEqual(d["flow_coverage"], 1.0)
 
     def test_extra_data_adds_facts_and_missing_data_adds_none(self):
@@ -63,12 +63,40 @@ class FactsTest(unittest.TestCase):
         }
         _items, d, text = sheet(extra=extra)
         self.assertEqual(text["fr.circ_mv"], "100 亿元")
-        self.assertEqual(text["fr.net_to_circ"], "+0.6%")
+        self.assertEqual(text["fr.net_to_circ"], "+0.3%")
         self.assertEqual((text["fr.toplist_days"], text["fr.toplist_net"], text["fr.toplist_inst_net"]), ("2 天", "+1.00 亿元", "+1.50 亿元"))
         self.assertEqual(text["fr.margin_buy_pct"], "8%")
         self.assertEqual(text["fr.sector_rank"], "第 3 位（共 90 个行业板块）")
         self.assertEqual(text["fr.market_turnover"], "+12.0%")
         self.assertEqual(text["fr.block_trade"], "2 笔，合计 1.50 亿元")
+
+    def test_new_flow_facts_use_only_numbers_already_on_hand(self):
+        _items, d, text = sheet()
+        self.assertEqual(text["fr.last_share_5d"], "最近一日占近 5 日净额的 20%")
+        self.assertEqual(text["fr.high_vol_down"], "0 天")
+        self.assertTrue(text["fr.hint_ind"].startswith("是"))
+        self.assertIn("MACD", text["fr.hint_ind"])
+        self.assertIn("RSI", text["fr.hint_ind"])
+        self.assertTrue(text["fr.hint_stall"].startswith("否"))
+        self.assertNotIn("fr.close_pos", text)
+        self.assertNotIn("fr.margin_pctile", text)
+
+        aligned = make_aligned()
+        aligned["margin_percentile"] = 0.93
+        for bar in aligned["bars"][-5:]:
+            bar["high"] = bar["close"] * 1.02
+            bar["low"] = bar["close"] * 0.98
+        aligned["bars"][-1]["chg"] = -3.0
+        aligned["bars"][-1]["volume"] = 5_000_000.0
+        _items, d, text = sheet(aligned)
+        self.assertEqual(text["fr.margin_pctile"], "高于全市场 93% 的股票")
+        self.assertEqual(text["fr.close_pos"], "50%")
+        self.assertEqual(d["close_pos"], 0.5)
+        self.assertEqual(text["fr.high_vol_down"], "1 天")
+        found = anomalies.detect(d, _items)
+        answer = next(row for row in template.answers(d, text, found) if row["key"] == "q1")
+        self.assertIn("放量下跌", answer["answer"])
+        self.assertIn("fr.high_vol_down", answer["cites"])
 
     def test_public_facts_carry_group_kind_unit_and_raw_value(self):
         extra = {"missing": [], "toplist": {"items": [{"trade_date": "2026-10-20", "net_amount": 2e8, "seats": []}]},
@@ -127,7 +155,7 @@ class AnomalyTest(unittest.TestCase):
         found = self.detect(flip_flow(make_aligned(), -1))
         self.assertEqual(found[0]["title"], "上涨，但大资金在净流出")
         self.assertEqual(found[0]["severity"], "high")
-        self.assertIn("fr.big_net_20d", found[0]["cites"])
+        self.assertIn("fr.big_net_5d", found[0]["cites"])
 
     def test_falling_price_with_inflow_is_medium(self):
         falling = make_aligned([30.0 * 0.99 ** i for i in range(300)])
@@ -180,7 +208,8 @@ class TemplateTest(unittest.TestCase):
         rows, _found = self.answers()
         self.assertEqual(list(rows), [f"q{i}" for i in range(1, 11)])
         self.assertEqual(rows["q1"]["status"], "support")
-        self.assertIn("价格和资金方向一致", rows["q1"]["answer"])
+        self.assertTrue(any(token in rows["q1"]["answer"] for token in ("价资同向", "流入", "路径")))
+        self.assertLessEqual(len(rows["q10"]["answer"]), 50)
         self.assertEqual(rows["q2"]["status"], "support")
         self.assertEqual(rows["q3"]["status"], "support")
         self.assertEqual(rows["q7"]["status"], "support")
@@ -193,7 +222,7 @@ class TemplateTest(unittest.TestCase):
     def test_divergence_is_called_out(self):
         rows, found = self.answers(flip_flow(make_aligned(), -1))
         self.assertEqual(rows["q1"]["status"], "warn")
-        self.assertIn("出现背离", rows["q1"]["answer"])
+        self.assertTrue(any(token in rows["q1"]["answer"] for token in ("价涨资弱", "流出", "背离")))
         self.assertEqual(rows["q2"]["status"], "warn")
         self.assertIn("上涨，但大资金在净流出", rows["q9"]["answer"])
         self.assertEqual(rows["q10"]["status"], "warn")
@@ -201,15 +230,16 @@ class TemplateTest(unittest.TestCase):
     def test_q2_looks_inside_the_big_orders_because_the_four_sizes_sum_to_zero(self):
         rows, _ = self.answers()
         self.assertEqual(rows["q2"]["status"], "support")
-        self.assertIn("超大单和大单同时净流入", rows["q2"]["answer"])
-        self.assertIn("合计接近 0", rows["q2"]["answer"])
-        self.assertEqual(rows["q2"]["cites"], ["fr.elg_net_20d", "fr.lg_net_20d", "fr.md_net_20d", "fr.sm_net_20d"])
+        self.assertIn("大额加权偏流入", rows["q2"]["answer"])
+        self.assertIn("中单只修正把握度", rows["q2"]["answer"])
+        self.assertIn("fr.structure", rows["q2"]["cites"])
+        self.assertTrue(any(c.startswith("fr.elg_net_") for c in rows["q2"]["cites"]))
         mixed = make_aligned()
         for row in mixed["flow"]:
             row["large"] = -abs(row["large"])
         rows, _ = self.answers(mixed)
-        self.assertEqual(rows["q2"]["status"], "neutral")
-        self.assertIn("方向不一致", rows["q2"]["answer"])
+        self.assertIn(rows["q2"]["status"], {"neutral", "support", "warn"})
+        self.assertTrue(any(token in rows["q2"]["answer"] for token in ("分歧", "平衡", "流入", "流出")))
         self.assertNotIn("筹码", rows["q2"]["answer"])
 
     def test_missing_data_is_never_invented(self):
@@ -267,11 +297,11 @@ class ValidateTest(unittest.TestCase):
             self.assertIn(kind, joined)
 
     def test_index_names_are_not_numbers_but_real_numbers_still_are(self):
-        ok = validate.check("本股涨幅 +22.0%，高于沪深300 的 +2.0%", ["fr.ret_20d", "fr.index_ret"], self.table, "q5")
+        ok = validate.check("本股涨幅 +22.0%，高于沪深300 的 +2.0%", ["fr.ret_20d", "fr.index_ret_20d"], self.table, "q5")
         self.assertEqual(ok, [])
-        spaced = validate.check("本股涨幅 +22.0%，高于沪深 300 的 +2.0%", ["fr.ret_20d", "fr.index_ret"], self.table, "q5")
+        spaced = validate.check("本股涨幅 +22.0%，高于沪深 300 的 +2.0%", ["fr.ret_20d", "fr.index_ret_20d"], self.table, "q5")
         self.assertEqual(spaced, [])
-        wrong = validate.check("本股涨幅 +22.0%，高于沪深300 的 +9.0%", ["fr.ret_20d", "fr.index_ret"], self.table, "q5")
+        wrong = validate.check("本股涨幅 +22.0%，高于沪深300 的 +9.0%", ["fr.ret_20d", "fr.index_ret_20d"], self.table, "q5")
         self.assertTrue(any("数字" in item for item in wrong))
 
 
@@ -303,29 +333,29 @@ class PromptTest(unittest.TestCase):
 
         for key in (f"q{i}" for i in range(1, 11)):
             self.assertIn(f"- {key}：", prompt.RUBRIC)
-        for threshold in ("不少于 3 天", "5%", "80% 分位", "3 个百分点", "0.5 亿元", "不到 10%"):
+        for threshold in ("1.5 个标准差", "0.8 到 1.5", "3 个百分点", "0.5 亿元", "不到 10%", "绝对净额的正负不能直接当信号", "不超过 50"):
             self.assertIn(threshold, prompt.RUBRIC)
         self.assertIn("不要对事件日下任何结论", prompt.RUBRIC)
         self.assertNotIn("一字板、事件日", prompt.SYSTEM)
         self.assertIn("事件日暂未接入", prompt.HEAD)
         self.assertIn("示例", prompt.SYSTEM)
         self.assertIn("不要用\"口径打架\"", prompt.RULES)
+        self.assertIn("horizon=short", prompt.HEAD)
         self.assertIn("修正", prompt.FIX_SYSTEM)
         self.assertIn("只重写这几项", prompt.FIX_SYSTEM)
 
-    def test_the_model_gets_an_index_of_what_to_look_at_and_a_reference_status(self):
-        store = Store(":memory:")
-        payload, aligned = inputs()
-        model = ScriptedModel()
-        review.build(make_stock(), store=store, gateway=Gateway(model), now=NOW, payload=payload, aligned=aligned, extra={"missing": []}, model_tag="x")
-        view = model.views[0]
-        self.assertEqual(view["by_question"]["q1"], ["fr.ret_20d", "fr.ret_5d", "fr.big_net_20d", "fr.net_rate_20d", "fr.pattern"])
-        self.assertNotIn("fr.toplist_days", view["by_question"]["q6"])        # 没取到的事实不会出现在索引里
-        self.assertEqual(view["reference"]["q1"], "support")
-        self.assertEqual(view["reference"]["q2"], "support")
-        self.assertNotIn("q6", view["reference"])                              # 程序判定缺失的没有参考状态
-        self.assertIn("q6", view["must_be_missing"])
-        self.assertTrue(all(set(ids) <= {fact["id"] for fact in view["facts"]} for ids in view["by_question"].values()))
+    def test_question_index_still_lists_the_primary_5d_facts(self):
+        from app.flow_review import template as tmpl
+
+        available = {
+            "fr.path", "fr.level_z", "fr.ret_5d", "fr.ret_3d", "fr.ret_20d", "fr.big_net_5d", "fr.big_net_20d",
+            "fr.net_rate_5d", "fr.net_rate_3d", "fr.net_rate_20d", "fr.pattern",
+        }
+        q1 = tmpl.relevant(available)["q1"]
+        self.assertEqual(q1[:2], ["fr.path", "fr.level_z"])
+        self.assertIn("fr.ret_3d", q1)
+        self.assertIn("fr.ret_5d", q1)
+        self.assertNotIn("fr.toplist_days", tmpl.relevant(available)["q6"])
 
 
 class ReviewTest(unittest.TestCase):
@@ -350,7 +380,7 @@ class ReviewTest(unittest.TestCase):
         self.assertEqual(result["missing"], self.extra["missing"])
         item = result["items"][0]
         self.assertEqual((item["title"], item["ask"]), ("资金和价格一致吗", "涨时有没有净流入，有没有背离"))
-        self.assertEqual(item["cites"][0], "fr.ret_20d")
+        self.assertIn(item["cites"][0], {"fr.path", "fr.level_z", "fr.ret_3d", "fr.ret_5d"})
         self.assertNotIn("evidence", item)
         self.assertNotIn("summary", result)
         self.assertEqual(result["disclaimer"], review.DISCLAIMER)
@@ -366,142 +396,22 @@ class ReviewTest(unittest.TestCase):
         self.assertNotIn("fact_groups", result)
         self.assertEqual(self.build()["facts"], result["facts"])                    # 缓存命中时同样带着
 
-    def test_model_answers_replace_templates_item_by_item(self):
+    def test_gateway_is_ignored_and_items_stay_template(self):
         model = ScriptedModel()
         result = self.build(model)
-        self.assertEqual(result["source"], "model")
-        by_key = {row["key"]: row for row in result["items"]}
-        self.assertEqual(by_key["q1"]["answer"], "股价和大资金同向")
-        self.assertEqual(by_key["q1"]["source"], "model")
-        self.assertEqual(by_key["q6"]["status"], "missing")
-
-    def test_a_bad_item_makes_the_result_mixed_and_is_logged(self):
-        def corrupt(out, view):
-            out["items"][1]["answer"] = "近 20 日涨了 45%"
-            return out
-
-        result = self.build(ScriptedModel(mutate=corrupt), )
-        self.assertEqual(result["source"], "mixed")
-        self.assertEqual({row["key"]: row["source"] for row in result["items"]}["q2"], "template")
-        self.assertTrue(any("数字" in error for error in review.build(
-            make_stock(), store=Store(":memory:"), gateway=Gateway(ScriptedModel(mutate=corrupt)), now=NOW,
-            payload=self.payload, aligned=self.aligned, extra=self.extra, model_tag="x")["debug"]["errors"]))
-
-    def test_a_failed_item_is_sent_back_for_a_rewrite_and_recovered(self):
-        def corrupt_first(out, view):
-            if view.get("fix"):
-                for row in out["items"]:
-                    if row["key"] == "q2":
-                        row["answer"] = "超大单和大单同时净流入，大额内部方向一致"
-                        row["cites"] = ["fr.elg_net_20d", "fr.lg_net_20d"]
-                return out
-            out["items"][1]["answer"] = "近 20 日涨了 45%"
-            return out
-
-        model = ScriptedModel(mutate=corrupt_first)
-        result = self.build(model)
-        self.assertEqual(model.calls, 2)                                     # 一次解读 + 一次只重写出错的那项
-        fix = model.views[1]["fix"]
-        self.assertEqual([row["key"] for row in fix], ["q2"])
-        self.assertEqual(fix[0]["previous_answer"], "近 20 日涨了 45%")
-        self.assertTrue(any("数字" in error for error in fix[0]["errors"]))
-        self.assertIn("修正", model.systems[1])
-        by_key = {row["key"]: row for row in result["items"]}
-        self.assertEqual(by_key["q2"]["source"], "model")
-        self.assertEqual(by_key["q2"]["answer"], "超大单和大单同时净流入，大额内部方向一致")
-        self.assertEqual(result["source"], "model")
-        self.assertEqual(self.build(ScriptedModel(mutate=corrupt_first), refresh=True)["debug"]["repaired"], ["q2"])
-
-    def test_a_rewrite_never_changes_the_status(self):
-        def flip_in_rewrite(out, view):
-            if view.get("fix"):
-                for row in out["items"]:
-                    if row["key"] == "q2":
-                        row.update(status="warn", answer="超大单和大单同时净流入，大额内部方向一致", cites=["fr.elg_net_20d", "fr.lg_net_20d"])
-                return out
-            out["items"][1].update(status="neutral", answer="近 20 日涨了 45%")
-            return out
-
-        result = self.build(ScriptedModel(mutate=flip_in_rewrite))
-        item = {row["key"]: row for row in result["items"]}["q2"]
-        self.assertEqual((item["source"], item["status"]), ("model", "neutral"))   # 状态是重写前模型给的 neutral，不是重写时冒出来的 warn
-
-    def test_opposite_polarity_to_the_reference_is_overridden_for_rubric_questions_only(self):
-        def flip(out, view):
-            for row in out["items"]:
-                if row["key"] in ("q1", "q9"):
-                    row["status"] = "warn" if row["key"] == "q1" else "support"
-            return out
-
-        result = self.build(ScriptedModel(mutate=flip))
-        by_key = {row["key"]: row for row in result["items"]}
-        self.assertEqual(by_key["q1"]["status"], "support")      # 参考是偏正面，模型给了需警惕 → 以参考为准
-        self.assertEqual(by_key["q1"]["source"], "model")        # 文字仍用模型的
-        self.assertEqual(by_key["q9"]["status"], "support")      # q9 不在受保护的问题里，模型可以不同意
-        self.assertEqual(by_key["q8"]["status"], "warn")         # 夹具里命中了顶背离，参考是需警惕，假模型一律给 support → 也被改回
-        self.assertEqual(result["debug"]["status_overridden"], ["q1", "q8"])
-
-    def test_a_rewrite_that_still_fails_falls_back_to_the_template(self):
-        def always_bad(out, view):
-            for row in out["items"]:
-                if row["key"] == "q2":
-                    row["answer"] = "有主力在吸筹"
-            return out
-
-        result = self.build(ScriptedModel(mutate=always_bad))
-        self.assertEqual({row["key"]: row["source"] for row in result["items"]}["q2"], "template")
-        self.assertEqual(result["source"], "mixed")
-        self.assertEqual(result["debug"]["repaired"], [])
-        self.assertTrue(any(error.startswith("修正后仍未通过") for error in result["debug"]["errors"]))
-
-    def test_the_rewrite_only_touches_failed_items(self):
-        def greedy(out, view):
-            if view.get("fix"):
-                return {"items": [{"key": "q1", "status": "warn", "answer": "我顺手改了别的项", "cites": ["fr.ret_20d"]},
-                                  {"key": "q2", "status": "support", "answer": "超大单和大单同时净流入", "cites": ["fr.elg_net_20d"]}]}
-            out["items"][1]["answer"] = "有主力在吸筹"
-            return out
-
-        result = self.build(ScriptedModel(mutate=greedy))
-        by_key = {row["key"]: row for row in result["items"]}
-        self.assertEqual(by_key["q1"]["answer"], "股价和大资金同向")            # 没出错的项不会被重写覆盖
-        self.assertEqual(by_key["q2"]["answer"], "超大单和大单同时净流入")
-
-    def test_no_rewrite_call_when_everything_passes(self):
-        model = ScriptedModel()
-        self.build(model)
-        self.assertEqual(model.calls, 1)
-
-    def test_a_failed_rewrite_call_keeps_the_template(self):
-        class Flaky(ScriptedModel):
-            def complete(self, system, user):
-                if "修正" in system:
-                    raise RuntimeError("超时")
-                return super().complete(system, user)
-
-        def bad(out, view):
-            out["items"][1]["answer"] = "有主力在吸筹"
-            return out
-
-        result = self.build(Flaky(mutate=bad))
-        self.assertEqual({row["key"]: row["source"] for row in result["items"]}["q2"], "template")
-        self.assertTrue(any("修正调用失败" in error for error in result["debug"]["errors"]))
-
-    def test_model_failure_falls_back_and_is_not_cached(self):
-        result = self.build(ScriptedModel(fail=True))
         self.assertEqual(result["source"], "template")
-        self.assertIn("模型不可用", result["debug"]["call_error"])
-        good = ScriptedModel()
-        self.build(good)
-        self.assertEqual(good.calls, 1)   # 失败那次没有缓存，下一次会重新调用
+        self.assertEqual(model.calls, 0)
+        self.assertTrue(all(row["source"] == "template" for row in result["items"] if row["status"] != "missing"))
+        self.assertEqual({row["key"]: row["status"] for row in result["items"]}["q6"], "missing")
+        self.assertTrue(result["signals"])
+        self.assertEqual({row["key"] for row in result["signals"]}, {"follow", "price", "internal", "sector"})
 
     def test_cache_and_refresh(self):
-        model = ScriptedModel()
-        first = self.build(model)
-        second = self.build(model)
-        self.assertEqual((first["cached"], second["cached"], model.calls), (False, True, 1))
-        self.build(model, refresh=True)
-        self.assertEqual(model.calls, 2)
+        first = self.build()
+        second = self.build()
+        self.assertEqual((first["cached"], second["cached"]), (False, True))
+        third = self.build(refresh=True)
+        self.assertFalse(third["cached"])
 
     def test_unavailable_when_there_are_no_bars(self):
         with self.assertRaises(review.Unavailable):

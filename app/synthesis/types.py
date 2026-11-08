@@ -67,6 +67,7 @@ class FactTable:
     candidates: list[dict] = field(default_factory=list)   # {id, dir, name, dist, sources, consequence}
     rule: dict = field(default_factory=dict)               # 规则版结论（只给主 Agent，标为"供参考"）
     context: dict = field(default_factory=dict)            # 完成数、分母、新鲜度、各维度方向
+    headlines: list[dict] = field(default_factory=list)    # 五位分析师的 headline，只给主 Agent
 
     def fact(self, fact_id: str) -> Fact | None:
         for item in self.facts:
@@ -90,11 +91,10 @@ class FactTable:
 
     def chief_view(self) -> dict:
         view = self.sides_view()
-        view["candidates"] = [
-            {key: item.get(key) for key in ("id", "dir", "name", "dist", "sources", "consequence", "verified")}
-            for item in self.candidates
-        ]
+        view["candidates"] = [_candidate_view(item) for item in self.candidates]
         view["rule_reference"] = self.rule_reference()
+        view["headlines"] = list(self.headlines)
+        view["dimensions"] = list((self.context or {}).get("dim_view") or [])
         return view
 
     def rule_reference(self) -> dict:
@@ -127,6 +127,7 @@ class FactTable:
             "candidates": self.candidates,
             "rule": self.rule,
             "context": self.context,
+            "headlines": self.headlines,
         }
 
     @classmethod
@@ -138,7 +139,20 @@ class FactTable:
             candidates=list(data.get("candidates") or []),
             rule=dict(data.get("rule") or {}),
             context=dict(data.get("context") or {}),
+            headlines=list(data.get("headlines") or []),
         )
+
+
+def _candidate_view(item: dict) -> dict:
+    """给主分析师看的候选：有算法说明，没有价格。价格由代码按他选的编号再算。"""
+    from app.synthesis.levels.candidates import FORMULA
+
+    shown = {key: item.get(key) for key in ("id", "dir", "name", "dist", "sources", "consequence", "verified")}
+    names = [name for name in (item.get("sources") or []) if name in FORMULA]
+    if not names and item.get("name") in FORMULA:
+        names = [item["name"]]
+    shown["basis"] = "；".join(FORMULA[name] for name in names)
+    return shown
 
 
 def digest(payload: Any) -> str:

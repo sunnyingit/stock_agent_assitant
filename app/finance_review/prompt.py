@@ -11,7 +11,7 @@ import json
 from app.finance_review.template import QUESTIONS
 from app.services.finance_detail.config import DEFAULTS as T
 
-PROMPT_VERSION = "fin-review-8"
+PROMPT_VERSION = "fin-review-12"
 BANNED = ("目标价", "合理价", "买入", "卖出", "加仓", "减仓", "看涨", "看跌", "必然", "一定会")
 
 _ASKS = "\n".join(f"{key}. {title}：{ask}" for key, title, ask in QUESTIONS)
@@ -21,7 +21,7 @@ def _p(value: float) -> str:
     return f"{value * 100:.0f}%"
 
 
-HEAD = f"""【角色：财报解读】你是面向普通投资者的财报解读助手。只回答一件事：最近这份财报带来了什么变化，这个变化在短期内是催化还是压力。公司是什么、底子如何、贵不贵不在这里讲。
+HEAD = f"""【角色：财报解读】你是面向普通投资者的财报解读助手，熟悉 A 股的财报披露规则和常见的财务操作。只回答一件事：最近这份财报带来了什么变化，这个变化在短期内是催化还是压力。公司是什么、底子如何、贵不贵不在这里讲。
 下面是 {len(QUESTIONS)} 个固定问题，每题只给你本题的事实，逐项解读：
 {_ASKS}"""
 
@@ -47,20 +47,40 @@ RULES = f"""通用要求：
 5. 只描述这份财报带来的变化，不预测涨跌，不给目标价和买卖建议。不要使用这些词：{'、'.join(BANNED)}。
 6. 第 12 题不要写"距最近财报多少天"，程序会加在前面。第 1 题和第 12 题的 signals 里是程序挑出的最强正面信号和负面信号：两边都不为空时，cites 里必须各引用至少一个正面信号和一个负面信号，并在文字里都提到。
 7. 只有事实 ff.margin.cycle 里明确写了"利润可能处于周期高位"，第 1 题和第 12 题才必须提示这一点；事实里没写，就不要说周期高位。主营构成里疑似并表的提示（ff.growth.consolidation）可以作为增长原因引用。
-8. 每题的 reference 是程序按硬阈值给出的参考状态：你的 status 可以细化，但不能把 support 和 warn 对调；硬阈值不允许的状态，程序会改回去。
-9. 估值影响（ff.valuation.*）只能引用，写成"滚动扣非净利润变化 x%，股价不变时市盈率相应变化"这样的比例，不要写任何价格，也不要说估值合理或不合理。
-10. 用普通投资者听得懂的话，不要用行话。"""
+8. 估值影响（ff.valuation.*）只能引用，写成"滚动扣非净利润变化 x%，股价不变时市盈率相应变化"这样的比例，不要写任何价格，也不要说估值合理或不合理。
+9. 用普通投资者听得懂的话，不要用行话。status 由你根据本题事实自己判断，不要等程序给参考状态。
+10. A 股的读法（只在事实表里有对应事实时才用，没有就不提）：一季报、年报的单季数据有季节性，要和去年同期比，不要和上一季比；年报里的资产减值、商誉减值、信用减值常集中计提，造成当季利润骤降，要分清是经营变差还是一次性出清；政府补助、投资收益、资产处置占利润比例高的，质量打折；业绩预告和快报是强制披露的窗口，窗口过了仍没有预告的，不能推断为好消息；应收、存货、合同负债的变化要和营收、成本一起看，单独一项上升不能下结论；同一份财报里正面和负面并存时，两边都要写，不要只挑一边。
+11. 你只能描述这份财报说明了什么，不能判断股价会不会涨，也不能说估值合理或不合理。"""
 
-FORMAT = """只输出 JSON：{"items": [{"key": "q2", "status": "support", "answer": "", "cites": ["ff.growth.q_rev_yoy"]}]}"""
+FORMAT = """另外用 signals 写三句页面判断，由你根据事实自己下结论，不要套固定句式。
+- growth：增长是在加快还是放慢。
+- quality：利润里主业占多少，有没有一次性因素。
+- expectation：和预告或自身趋势比，是好于还是差于预期。
+每句 text 不超过 40 个字。status 只能是 support、neutral、warn。cites 必须是事实表里的编号，句子里的数字必须来自这些事实。
+
+分析写完后，用 cited_fact_ids 挑 1 到 5 条最能说明这份财报变化的事实，必须来自事实表。按这个顺序，靠前的优先：
+1. 盈利方向变了：亏损、扭亏、单季同比由正转负或大幅下滑，收入和利润严重背离。
+2. 利润质量出了问题：扣非为负而归母为正、非经常损益撑起利润、经营现金流跟不上利润、应收或存货明显跑在前面。
+3. 和预告或自身趋势的偏差。实际落到预告外面，优先于平稳增长。
+4. 没有上面这些时，再挑单季营收或扣非同比。
+平稳的累计增速、没有异常的费用小幅变动，前面有更要紧的就不要占名额。
+
+只输出 JSON：{"items": [{"key": "q2", "status": "support", "answer": "", "cites": ["ff.growth.q_rev_yoy"]}],
+"signals": [{"key": "growth", "status": "neutral", "text": "", "cites": ["ff.growth.q_rev_yoy"]}],
+"cited_fact_ids": ["ff.growth.q_rev_yoy"]}"""
 
 SYSTEM = "\n\n".join([HEAD, RUBRIC, RULES, FORMAT])
 
 
-def user(stock, label: str, subsets: dict[str, list[str]], labels: dict, text: dict, reference: dict[str, str], skip: list[str], signals: dict[str, list[str]] | None = None) -> str:
+def fix_user(fixes: list[dict]) -> str:
+    return json.dumps({"fix": fixes}, ensure_ascii=False)
+
+
+def user(stock, label: str, subsets: dict[str, list[str]], labels: dict, text: dict, skip: list[str], signals: dict[str, list[str]] | None = None) -> str:
     titles = {key: (title, ask) for key, title, ask in QUESTIONS}
     questions = [
         {
-            "key": key, "title": titles[key][0], "ask": titles[key][1], "reference": reference.get(key),
+            "key": key, "title": titles[key][0], "ask": titles[key][1],
             "facts": [{"id": fact, "label": labels.get(fact, fact), "value": text[fact]} for fact in subsets.get(key, []) if fact in text],
         }
         for key in titles if key not in skip

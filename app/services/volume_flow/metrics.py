@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 _SIZES = ("super_large", "large", "medium", "small")
+# 相对强弱多窗口：短 / 一周交易日 / 主窗口常用档；和 windows.rows 里的 3、5、20 对齐
+REL_WINDOWS = (3, 5, 20)
+# 量价图展示窗口：主结论可以是 5 日，图仍看近 20 日更清楚
+CHART_WINDOW = 20
 
 
 def compute(aligned: dict, window: int) -> dict:
@@ -28,6 +32,7 @@ def compute(aligned: dict, window: int) -> dict:
     if big is not None and big > 0 and elg is not None and elg > 0:
         concentration = round(elg / big, 4)
     daily = _daily(bars[-10:], flow)
+    daily_history = _daily(bars, flow)
     return {
         "price": {
             "bars": [_bar(row) for row in chosen],
@@ -38,11 +43,86 @@ def compute(aligned: dict, window: int) -> dict:
             "turnover_pctile": _percentile(turnover, history),
             "ret": _round(_cumulative([row.get("chg") for row in chosen]), 2),
         },
-        "flow": {"rows": flow_rows, "big": big, "concentration": concentration},
+        "price_chart": _price_chart(bars),
+        "flow": {"rows": flow_rows, "big": big, "concentration": concentration, **_rate_context(bars, flow, window)},
         "daily": daily,
+        "history": daily_history,
         "relative": _relative(chosen, flow, sector, index, aligned),
-        "windows": [_window_row(bars, flow, days) for days in (3, 5, 10, 20)],
+        "relative_windows": [
+            {"days": days, **_relative(bars[-days:], flow, sector, index, aligned)}
+            for days in REL_WINDOWS
+        ],
+        "windows": [_window_row(bars, flow, days) for days in (1, 3, 5, 10, 20, 60)],
         "signals": _signals(bars, concentration, elg, big, aligned.get("margin_percentile")),
+    }
+
+
+REF_POINTS = 200        # 拿自己过去最多这么多个窗口（逐日滑动）做参照
+MIN_REF = 30            # 参照窗口少于这个数就不给强弱（新股、资金流缺数据）
+MIN_INDEPENDENT = 6     # 逐日滑动的窗口互相重叠；至少要有这么多段互不重叠的历史，标准差才靠得住
+MAD_SCALE = 1.4826      # 正态近似：σ ≈ 1.4826 × MAD
+
+
+def _median(values: list[float]) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    mid = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[mid]
+    return (ordered[mid - 1] + ordered[mid]) / 2
+
+
+def _robust_z(current: float, ref: list[float]) -> float | None:
+    """优先中位数 + MAD；MAD 为 0 时回退均值标准差。"""
+    med = _median(ref)
+    if med is None:
+        return None
+    mad = _median([abs(value - med) for value in ref])
+    if mad is not None and mad > 0:
+        return (current - med) / (MAD_SCALE * mad)
+    mean = sum(ref) / len(ref)
+    std = (sum((value - mean) ** 2 for value in ref) / len(ref)) ** 0.5
+    if std == 0:
+        return None
+    return (current - mean) / std
+
+
+def _rate_context(bars: list[dict], flow: dict, window: int) -> dict:
+    """窗口净流入率，放到这只股票自己过去的同长度窗口里比：高于平时多少个标准差。
+    参照窗口全都在当前窗口之前、不和它重叠。优先稳健 z（中位数+MAD）。"""
+    current = _stock_rate(bars[-window:], flow)
+    ref: list[float] = []
+    for stop in range(len(bars) - window, window - 1, -1):
+        rate = _stock_rate(bars[stop - window:stop], flow)
+        if rate is not None:
+            ref.append(rate)
+        if len(ref) >= REF_POINTS:
+            break
+    out = {"rate": _round(current, 2), "rate_z": None, "rate_pctile": None, "rate_n": len(ref), "rate_z_method": ""}
+    if current is None or len(ref) < max(MIN_REF, MIN_INDEPENDENT * window):
+        return out
+    z = _robust_z(current, ref)
+    if z is None:
+        return out
+    med = _median(ref)
+    mad = _median([abs(value - med) for value in ref]) if med is not None else None
+    out["rate_z"] = round(z, 2)
+    out["rate_pctile"] = round(sum(1 for value in ref if value <= current) / len(ref), 4)
+    out["rate_z_method"] = "mad" if mad is not None and mad > 0 else "mean_std"
+    return out
+
+
+def _price_chart(bars: list[dict]) -> dict:
+    """量价图专用：固定近 CHART_WINDOW 日，和主窗口判断脱钩。"""
+    chosen = bars[-CHART_WINDOW:]
+    start = max(0, len(bars) - CHART_WINDOW)
+    prior = bars[max(0, start - 60):start]
+    vol_base = _mean([row["volume"] for row in prior]) if len(prior) >= 60 else None
+    return {
+        "bars": [_bar(row) for row in chosen],
+        "vol_base": None if vol_base is None else int(round(vol_base)),
+        "days": len(chosen),
     }
 
 
@@ -70,6 +150,7 @@ def _sum_size(bars: list[dict], flow: dict, size: str) -> dict:
 
 def _daily(bars: list[dict], flow: dict) -> dict:
     nets = []
+    rates = []
     for bar in bars:
         row = flow.get(bar["date"]) or {}
         elg = row.get("super_large")
@@ -79,10 +160,22 @@ def _daily(bars: list[dict], flow: dict) -> dict:
         else:
             net = round((elg or 0) + (large or 0), 2)
         nets.append(net)
+        amount = bar.get("amount")
+        if net is None or not amount:
+            rates.append(None)
+        else:
+            rates.append(round(net / amount * 100, 4))
     levels = _intensity([value or 0 for value in nets])
     days = []
-    for bar, net, level in zip(bars, nets, levels):
-        days.append({"date": bar["date"], "net": net, "intensity": level})
+    for bar, net, rate, level in zip(bars, nets, rates, levels):
+        days.append({
+            "date": bar["date"],
+            "net": net,
+            "net_rate": rate,
+            "intensity": level,
+            "close": bar.get("close"),
+            "chg": bar.get("chg"),
+        })
     return {
         "days": days,
         "in_days": sum(1 for value in nets if value is not None and value > 0),
@@ -136,11 +229,13 @@ def _window_row(bars: list[dict], flow: dict, days: int) -> dict:
     current = _mean([row["volume"] for row in chosen])
     base = _mean([row["volume"] for row in prior]) if len(prior) >= 60 else None
     rel = None if current is None or not base else round(current / base, 2)
+    context = _rate_context(bars, flow, days)
     return {
         "days": days,
         "ret": _round(_cumulative([row.get("chg") for row in chosen]), 2),
         "rel_vol": rel,
         "net_rate": _round(_stock_rate(chosen, flow), 2),
+        "net_rate_z": context["rate_z"],
     }
 
 

@@ -21,8 +21,8 @@ INCOME_FIELDS = (
 )
 CASHFLOW_FIELDS = "ts_code,ann_date,f_ann_date,end_date,report_type,update_flag,n_cashflow_act,c_pay_acq_const_fiolta"
 BALANCE_FIELDS = (
-    "ts_code,ann_date,f_ann_date,end_date,report_type,update_flag,accounts_receiv,notes_receiv,inventories,contract_liab,adv_receipts,"
-    "st_borr,lt_borr,bond_payable,non_cur_liab_due_1y,money_cap,goodwill,total_hldr_eqy_exc_min_int"
+    "ts_code,ann_date,f_ann_date,end_date,report_type,update_flag,accounts_receiv,notes_receiv,receiv_financing,inventories,contract_liab,adv_receipts,"
+    "st_borr,lt_borr,bond_payable,non_cur_liab_due_1y,lease_liab,money_cap,goodwill,total_hldr_eqy_exc_min_int"
 )
 
 

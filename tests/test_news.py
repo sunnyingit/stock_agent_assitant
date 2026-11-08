@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from unittest.mock import patch
 
-from app.services.news import fetch_announcements, merge_news, parse_google_rss, related_news
+from app.services.news import fetch_announcements, merge_news, parse_google_rss, parse_search_news, related_news
 from app.tools.stock import Stock
 
 
@@ -57,10 +57,29 @@ class GoogleRssTest(unittest.TestCase):
         self.assertIn("贵州茅台", items[0]["summary"])
 
 
+class SearchNewsTest(unittest.TestCase):
+    def test_parse_keeps_articles_that_do_not_name_the_stock(self):
+        payload = {"result": {"cmsArticleWebOld": [{
+            "date": "2026-11-02 01:22:00",
+            "title": "政策利率正式换锚",
+            "content": "货币政策信号传导更加通畅",
+            "mediaName": "证券时报",
+            "url": "http://finance.eastmoney.com/a/1.html",
+        }]}}
+        items = parse_search_news(payload, "924政策", 5)
+        self.assertEqual(items[0]["source"], "search")
+        self.assertEqual(items[0]["source_name"], "证券时报")
+        self.assertEqual(items[0]["title"], "政策利率正式换锚")
+        self.assertEqual(items[0]["keyword"], "924政策")
+
+
 class MergeNewsTest(unittest.TestCase):
     def test_keeps_google_and_other_sources(self):
         stock = Stock("600519.SH", "600519", "贵州茅台", "1.600519", "SH600519")
-        google_items = [{"source": "google", "title": "贵州茅台发布年报", "url": "https://g.example"}]
+        google_items = [
+            {"source": "google", "title": "贵州茅台发布年报", "url": "https://g.example"},
+            {"source": "google", "title": "央行开展互换便利操作", "url": "https://g.example/pboc"},
+        ]
         hot_items = [
             {"source": "cls", "title": "电投产融净利润增长"},
             {"source": "weibo", "title": "微博热搜第一"},
@@ -69,7 +88,7 @@ class MergeNewsTest(unittest.TestCase):
         matched, items = merge_news(google_items, hot_items, ["cls", "weibo"], stock, 10)
         titles = [item["title"] for item in items]
         self.assertTrue(matched)
-        self.assertEqual(titles, ["贵州茅台发布年报", "贵州茅台获调研"])
+        self.assertEqual(titles, ["贵州茅台发布年报", "央行开展互换便利操作", "电投产融净利润增长", "微博热搜第一", "贵州茅台获调研"])
 
     def test_keeps_eastmoney_items_without_a_title_match(self):
         stock = Stock("600519.SH", "600519", "贵州茅台", "1.600519", "SH600519")
@@ -78,7 +97,7 @@ class MergeNewsTest(unittest.TestCase):
         self.assertTrue(matched)
         self.assertEqual(items, direct)
 
-    def test_drops_unrelated_hot_lists_when_nothing_matches(self):
+    def test_keeps_hot_lists_without_stock_name(self):
         stock = Stock("600519.SH", "600519", "贵州茅台", "1.600519", "SH600519")
         hot_items = [
             {"source": "cls", "title": "国瓷材料：第三季度净利润1.83亿元"},
@@ -86,8 +105,8 @@ class MergeNewsTest(unittest.TestCase):
             {"source": "xueqiu", "title": "药明康德", "url": "https://xueqiu.com/s/SH603259"},
         ]
         matched, items = merge_news([], hot_items, ["cls", "wallstreetcn", "xueqiu"], stock, 10)
-        self.assertFalse(matched)
-        self.assertEqual(items, [])
+        self.assertTrue(matched)
+        self.assertEqual([item["title"] for item in items], [item["title"] for item in hot_items])
 
 
 if __name__ == "__main__":

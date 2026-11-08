@@ -10,6 +10,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from app.synthesis import policy
+
 _NUMBER = re.compile(r"\d+(?:\.\d+)?")
 
 
@@ -44,6 +46,7 @@ _ROLE = _enum(
     ("leader", "领涨"), ("resilient", "抗跌"), ("core", "中军"),
     ("follower", "跟风"), ("independent", "独立走势"),
 )
+_DRIVER = _enum(("dual", "两个板块共同驱动"), ("single", "单一板块驱动"), ("independent", "走势独立于板块"))
 _PHASE = _enum(("active", "财报披露期"), ("upcoming", "即将披露"), ("quiet", "无新财报"))
 _FIN_GROWTH = _enum(("up", "增长向上"), ("down", "增长向下"), ("mixed", "营收和利润分化"), ("loss", "亏损"), ("na", "暂无法比较"))
 _FIN_QUALITY = _enum(("good", "含金量较好"), ("ok", "含金量一般"), ("poor", "含金量偏弱"), ("na", "暂无法判断"))
@@ -51,15 +54,17 @@ _VALUATION = _enum(("cheap", "偏便宜"), ("fair", "合理"), ("expensive", "�
 _QUALITY = _enum(("strong", "较好"), ("medium", "中等"), ("weak", "偏弱"))
 _HOLDERS = _enum(("positive", "偏多"), ("offset", "相抵"), ("negative", "偏空"), ("quiet", "没有动作"))
 _VIEW_NOTE = "该维度自己的结论"
+_FLOW_STATE = _enum(("in_strong", "比自己平时明显更流入"), ("in", "比自己平时偏流入"), ("normal", "和自己平时差不多"), ("out", "比自己平时偏流出"), ("out_strong", "比自己平时明显更流出"))
 
 _DEFS = (
     # 量价资金
     FactDef("flow.view", "volume_flow", f"量价资金：{_VIEW_NOTE}", "text"),
-    FactDef("flow.rel_vol", "volume_flow", "近 20 日相对量能（相对此前 60 日均量）", "ratio"),
+    FactDef("flow.rel_vol", "volume_flow", f"近 {policy.FLOW_WINDOW} 日相对量能（相对此前 60 日均量）", "ratio"),
     FactDef("flow.pattern", "volume_flow", "量价形态", "enum", _PATTERN),
     FactDef("flow.up_down_vol", "volume_flow", "上涨日与下跌日的成交量比", "ratio"),
     FactDef("flow.big_trend", "volume_flow", "大资金近期趋势", "enum", _BIG_TREND),
-    FactDef("flow.net_rate", "volume_flow", "近 20 日大资金净流入占成交额", "pct"),
+    FactDef("flow.net_rate", "volume_flow", f"近 {policy.FLOW_WINDOW} 日大资金净流入占成交额", "pct"),
+    FactDef("flow.vs_self", "volume_flow", f"近 {policy.FLOW_WINDOW} 日大资金净流入率和这只股票自己平时比", "enum", _FLOW_STATE),
     FactDef("flow.stall", "volume_flow", "命中的涨不动迹象", "text"),
     # 新闻
     FactDef("news.view", "news", f"新闻：{_VIEW_NOTE}", "text"),
@@ -75,6 +80,9 @@ _DEFS = (
     FactDef("sector.vs_index", "sector", "板块 20 日涨幅减大盘", "pct"),
     FactDef("sector.stock_vs_sector", "sector", "本股 20 日涨幅减板块", "pct"),
     FactDef("sector.warn", "sector", "板块是否出现高潮或持续过久的提示", "bool"),
+    FactDef("sector.driver", "sector", "两个板块对本股走势的驱动方式", "enum", _DRIVER),
+    FactDef("sector.secondary_stage", "sector", "次板块当前阶段（没有次板块则不出）", "enum", _STAGE),
+    FactDef("sector.divergent", "sector", "主、次板块阶段是否对立", "bool"),
     # 财报
     FactDef("fin.view", "finance", f"财报：{_VIEW_NOTE}", "text"),
     FactDef("fin.phase", "finance", "财报阶段", "enum", _PHASE),

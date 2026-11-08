@@ -24,8 +24,14 @@ def profit_yoy(g: dict):
 
 def growth_level(m: dict) -> str:
     g = m["growth"]
-    if g["loss_now"] or g["loss_prior"]:
+    # 去年同期亏损时百分比没有意义。两期都亏才叫亏损；本期已经盈利是扭亏，按营收方向归类。
+    if g["loss_now"] and g["loss_prior"]:
         return "loss"
+    if g["loss_prior"] and not g["loss_now"]:
+        rev = g["q_rev_yoy"]
+        if rev is not None and rev < 0:
+            return "mixed"
+        return "up"
     rev, prof = g["q_rev_yoy"], profit_yoy(g)
     if rev is None or prof is None:
         return "na"
@@ -183,8 +189,11 @@ def yi(value) -> str:
 
 def _growth_note(m: dict) -> str:
     g = m["growth"]
-    if g["loss_now"] or g["loss_prior"]:
-        return f"单季归母 {yi(g['q_np'])}，较去年同期{'减亏' if (g['loss_change'] or 0) > 0 else '增亏'} {yi(abs(g['loss_change'] or 0))}"
+    change = g["loss_change"] or 0
+    if g["loss_now"] and g["loss_prior"]:
+        return f"单季归母 {yi(g['q_np'])}，较去年同期{'减亏' if change > 0 else '增亏'} {yi(abs(change))}"
+    if g["loss_prior"] and not g["loss_now"]:
+        return f"去年同期亏损，本期盈利 {yi(g['q_np'])}"
     return f"单季营收 {pct(g['q_rev_yoy'], 0, True)}，归母 {pct(g['q_np_yoy'], 0, True)}，扣非 {pct(g['q_ded_yoy'], 0, True)}"
 
 
