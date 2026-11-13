@@ -352,6 +352,74 @@ def merge_news(
     return bool(items), items[:limit]
 
 
+def get_topic_news(keyword: str, limit: int = 24) -> dict:
+    """无绑定股票：按主题搜东方财富 / Google，并筛热榜。"""
+    keyword = (keyword or "").strip()
+    if not keyword:
+        raise ValueError("主题新闻需要 keyword")
+    limit = max(1, min(int(limit or 24), 80))
+    cache_key = f"news:topic:{keyword}:{limit}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+    search_items: list[dict] = []
+    google_items: list[dict] = []
+    hot: list[dict] = []
+    unavailable: list[str] = []
+    source_ids = [sid for sid in list(SOURCES) if sid not in ("google", "eastmoney", "search")]
+    with ThreadPoolExecutor(max_workers=min(6, 2 + len(source_ids))) as pool:
+        futures = {
+            pool.submit(fetch_search_news, keyword, min(max(limit, 12), 30)): "search",
+            pool.submit(fetch_google_news, keyword, "zh-CN", min(max(limit, 12), 20)): "google",
+        }
+        for source_id in source_ids:
+            futures[pool.submit(fetch_hot_news, source_id, max(limit, 15))] = source_id
+        for future in as_completed(futures):
+            source_id = futures[future]
+            try:
+                rows = future.result()
+            except Exception:
+                if source_id not in unavailable:
+                    unavailable.append(source_id)
+                continue
+            if source_id == "search":
+                search_items.extend(rows)
+            elif source_id == "google":
+                google_items.extend(rows)
+            else:
+                hot.extend(rows)
+    hot = [item for item in hot if _mentions(item, keyword)]
+    # merge_news 里 stock 未使用，传占位对象会更麻烦；直接本地去重
+    seen: set[str] = set()
+    items: list[dict] = []
+    for item in list(search_items) + list(google_items) + list(hot):
+        title = (item.get("title") or "").strip()
+        if not title or title in seen or len(items) >= limit:
+            continue
+        seen.add(title)
+        items.append(item)
+    used = []
+    if search_items:
+        used.append({"id": "search", "name": SOURCES["search"], "count": sum(1 for i in items if i.get("source") == "search")})
+    if google_items:
+        used.append({"id": "google", "name": SOURCES["google"], "count": sum(1 for i in items if i.get("source") == "google")})
+    for source_id in source_ids:
+        count = sum(1 for i in items if i.get("source") == source_id)
+        if count:
+            used.append({"id": source_id, "name": SOURCES.get(source_id, source_id), "count": count})
+    result = {
+        "matched": bool(items),
+        "count": len(items),
+        "sources": used,
+        "unavailable": unavailable,
+        "items": items,
+        "query": keyword,
+        "keyword": keyword,
+    }
+    cache.set(cache_key, result, config.CACHE_TTL["news"] if items else 60)
+    return result
+
+
 def get_news(stock: Stock, limit: int = 24, sources: list[str] | None = None, keyword: str = "") -> dict:
     keyword = (keyword or "").strip()
     source_ids = [

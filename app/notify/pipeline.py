@@ -206,18 +206,41 @@ class Notifier:
 
 
 _notifier: Notifier | None = None
+_by_user: dict[str, Notifier] = {}
 _lock = threading.Lock()
 
 
 def current() -> Notifier:
-    global _notifier
+    """返回当前请求用户的 Notifier；无请求上下文时用 LEGACY_USER。install() 覆盖供测试。"""
+    from app.auth.migrate import LEGACY_USER
+    from app.auth.user import current_user_id
+    from app.notify.store import get_base_store
+
+    uid = current_user_id() or LEGACY_USER
     with _lock:
-        if _notifier is None:
-            _notifier = Notifier()
-        return _notifier
+        if _notifier is not None:
+            store = _notifier.store
+            if getattr(store, "user_id", LEGACY_USER) == uid:
+                return _notifier
+            scoped = store.for_user(uid)
+            n = Notifier.__new__(Notifier)
+            n.store = scoped
+            n.clock = _notifier.clock
+            n.on_delivery = _notifier.on_delivery
+            n._lock = _notifier._lock
+            n.ensure_channels()
+            return n
+        cached = _by_user.get(uid)
+        if cached is not None:
+            return cached
+        n = Notifier(store=get_base_store().for_user(uid))
+        _by_user[uid] = n
+        return n
 
 
 def install(notifier: Notifier | None) -> None:
     global _notifier
     with _lock:
         _notifier = notifier
+        if notifier is None:
+            _by_user.clear()

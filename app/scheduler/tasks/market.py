@@ -1,4 +1,4 @@
-"""市场页的两个定时任务：盘前简报和收盘复盘。原来 market_job 里写死的 08:30 / 15:35 线程改成调度器任务。"""
+"""市场页的两个定时任务定义。真正的触发已迁到 go-harness 的调度器（任务页可见），这里保留给旧测试。"""
 
 from __future__ import annotations
 
@@ -35,12 +35,12 @@ def _brief(summary: dict) -> dict:
 
 
 @task("market.pre", "盘前简报", {"kind": "daily", "at": "08:30", "window_min": 20, "days": "trading"},
-      queue="data", timeout_s=300, catchup_ttl_min=300, misfire="run_latest", overdue_after_min=90)
+      queue="data", timeout_s=300, catchup_ttl_min=300, misfire="run_latest", overdue_after_min=90, enabled=False)
 def market_pre(ctx):
     return _run(ctx, "pre")
 
 
 @task("market.close", "收盘复盘", {"kind": "daily", "at": "15:35", "window_min": 20, "days": "trading"},
-      queue="data", timeout_s=600, catchup_ttl_min=960, misfire="run_latest", overdue_after_min=120)
+      queue="data", timeout_s=600, catchup_ttl_min=960, misfire="run_latest", overdue_after_min=120, enabled=False)
 def market_close(ctx):
     return _run(ctx, "close")

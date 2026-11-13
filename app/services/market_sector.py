@@ -159,17 +159,23 @@ def daily_flows(shares: list[dict], closes: list[dict]) -> list[tuple[str, float
 
 
 def heat(shares: list[dict], closes: list[dict]) -> float | None:
-    """今天换手率 ÷ 近一年平均换手率。换手率 = 成交量（手）× 100 ÷ 份额（万份 × 1 万）。"""
+    """今天换手率 ÷ 近一年平均换手率。换手率 = 成交量（手）× 100 ÷ 份额（万份 × 1 万）。
+
+    只算到份额末日，不拿「有成交、没份额」的那天硬算热度。
+    """
     held = sorted(
         [(tape.ymd(row.get("trade_date")), tape.num(row.get("fd_share"))) for row in shares if tape.num(row.get("fd_share"))],
     )
     if not held:
         return None
+    share_last = held[-1][0]
     rates = []
     pointer = 0
     current = held[0][1]
     for row in sorted(closes, key=lambda item: tape.ymd(item.get("trade_date"))):
         day = tape.ymd(row.get("trade_date"))
+        if day > share_last:
+            break
         while pointer < len(held) and held[pointer][0] <= day:
             current = held[pointer][1]
             pointer += 1
@@ -184,10 +190,16 @@ def heat(shares: list[dict], closes: list[dict]) -> float | None:
 
 
 def etf_series(shares: list[dict], bars: list[dict]) -> dict:
-    """ETF 的每日净申购（亿元）、收盘价、成交额、逐日规模。"""
+    """ETF 的每日净申购（亿元）、收盘价、成交额、逐日规模。
+
+    份额通常晚一天：价/量/热度裁到份额末日，避免和「钱」的日期错位。
+    """
     daily = daily_flows(shares, bars)
     ordered = sorted([row for row in bars if tape.num(row.get("close")) is not None], key=lambda row: tape.ymd(row.get("trade_date")))
     held = sorted((tape.ymd(row.get("trade_date")), tape.num(row.get("fd_share"))) for row in shares if tape.num(row.get("fd_share")) is not None)
+    if held:
+        share_last = held[-1][0]
+        ordered = [row for row in ordered if tape.ymd(row.get("trade_date")) <= share_last]
     held_map = {day: share for day, share in held}
     closes = [(tape.ymd(row.get("trade_date")), tape.num(row.get("close"))) for row in ordered]
     amounts = [(tape.ymd(row.get("trade_date")), tape.num(row.get("amount")) or 0.0) for row in ordered]
@@ -413,6 +425,15 @@ def _scores_at(series: dict, bench_closes: list[tuple[str, float]], bench_amount
 def make_row(name: str, group: str, code: str, source: str, series: dict, bench_closes: list[tuple[str, float]],
              bench_amounts: list[tuple[str, float]], lever_value: float | None, l1: str = "") -> dict:
     """把一个板块的几条序列拼成一行：新口径钱/价/热，2 日确认状态，刚启动/可能在退。"""
+    # 基准也裁到本板块序列末日，避免份额滞后时热度/超额和「钱」不在同一天
+    last_day = ""
+    if series.get("closes"):
+        last_day = series["closes"][-1][0]
+    elif series.get("daily"):
+        last_day = series["daily"][-1][0]
+    if last_day:
+        bench_closes = [(day, value) for day, value in bench_closes if day <= last_day]
+        bench_amounts = [(day, value) for day, value in bench_amounts if day <= last_day]
     daily_all = series["daily"]
     if len(daily_all) < CONCLUSION_DAYS + 5:
         return {
@@ -473,8 +494,9 @@ def make_row(name: str, group: str, code: str, source: str, series: dict, bench_
 # ---------------------------------------------------------------- 取数
 def _bench(today: date) -> tuple[list[tuple[str, float]], list[tuple[str, float]]]:
     start = tape._ymd_offset(today, 400)
-    rows = tape.cached(f"holdidx:{start}", lambda: tape.pro().index_daily(
-        ts_code="000300.SH", start_date=start, end_date=tape._ymd(today), fields="trade_date,close,amount",
+    end = tape._ymd(today)
+    rows = tape._cached_through(f"holdidx:{start}:{end}", end, lambda: tape.pro().index_daily(
+        ts_code="000300.SH", start_date=start, end_date=end, fields="trade_date,close,amount",
     ))
     ordered = sorted([row for row in rows if tape.num(row.get("close"))], key=lambda row: tape.ymd(row.get("trade_date")))
     closes = [(tape.ymd(row.get("trade_date")), tape.num(row.get("close"))) for row in ordered]

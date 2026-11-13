@@ -2,9 +2,11 @@
 
 import os
 
-from flask import Flask
+from flask import Flask, g
 
+from app.api.holdings import bp as holdings_bp
 from app.api.shared import bp as shared_bp
+from app.auth.user import is_personal_path, resolve_user_id, unauthorized_response
 from app.notify.api import bp as notify_bp
 from app.scheduler.api import bp as sched_bp
 from app.api.stocks import bp
@@ -59,7 +61,7 @@ def create_app() -> Flask:
     app = Flask(__name__)
 
     @app.before_request
-    def _cors_preflight():
+    def _auth_and_cors_preflight():
         # 浏览器跨域 DELETE/POST 会先发 OPTIONS；缺 Allow-Methods 时删自选会被拦下
         from flask import request
 
@@ -68,16 +70,21 @@ def create_app() -> Flask:
 
             return make_response("", 204)
 
+        g.user_id = resolve_user_id(request)
+        if is_personal_path(request.path) and not g.user_id:
+            return unauthorized_response()
+
     @app.after_request
     def _cors(response):
         response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-User-Id, Authorization"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
         return response
 
     app.register_blueprint(bp)
     app.register_blueprint(v1_bp)
     app.register_blueprint(shared_bp)   # 持仓页在客户端本机算，这里只提供和个人无关的共享输入
+    app.register_blueprint(holdings_bp)
     app.register_blueprint(sched_bp)
     app.register_blueprint(notify_bp)
     app.register_blueprint(synthesis_bp)
@@ -104,6 +111,9 @@ def main() -> None:
 
     market_page.warm()   # 有昨天的结果就先用，今天的在后台算
     attach.enable()   # 资金流、基本面详情里的 AI 体检在后台生成
+    # 市场页的两个定时任务（盘前简报 / 收盘复盘）已迁到 go-harness 的调度器：
+    # 交易日在 08:30 / 15:35 由 go-harness 调 POST /api/v1/market/refresh 触发重算，
+    # 再取 /api/v1/market/summary 出简报。这里不再启动调度线程。
     print(f"股票查询服务: http://localhost:{port}")
     for item in _ROUTES:
         label, path = item[0], item[1]

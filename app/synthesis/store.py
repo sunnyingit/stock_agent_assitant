@@ -1,6 +1,7 @@
 """存档、缓存、任务队列和战绩，全部放在一个 SQLite 文件里（标准库，不加依赖）。
 
 多实例部署时把这一层换成共享库即可：对外只有这些方法。
+个人表按 user_id 隔离；finance_signals / sector_affiliations 保持全局。
 """
 
 from __future__ import annotations
@@ -13,11 +14,14 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
+from app.auth.migrate import LEGACY_USER, ensure_user_id_column, rebuild_jobs, rebuild_watchlist
+
 _DEFAULT_PATH = Path(__file__).resolve().parents[2] / "data" / "synthesis.db"
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL DEFAULT 'default',
   ts_code TEXT NOT NULL,
   session TEXT NOT NULL,
   trade_date TEXT NOT NULL,
@@ -38,25 +42,28 @@ CREATE TABLE IF NOT EXISTS runs (
   policy_version TEXT NOT NULL DEFAULT '',
   data TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS runs_by_stock ON runs (ts_code, id DESC);
-CREATE INDEX IF NOT EXISTS runs_by_hash ON runs (ts_code, facts_hash);
 CREATE TABLE IF NOT EXISTS kv_cache (key TEXT PRIMARY KEY, value TEXT NOT NULL, expires_at REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS jobs (
-  ts_code TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL DEFAULT 'default',
+  ts_code TEXT NOT NULL,
   due_at REAL NOT NULL,
   first_at REAL NOT NULL,
   reason TEXT NOT NULL DEFAULT '',
   attempts INTEGER NOT NULL DEFAULT 0,
-  running INTEGER NOT NULL DEFAULT 0
+  running INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, ts_code)
 );
 CREATE TABLE IF NOT EXISTS watchlist (
-  ts_code TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  ts_code TEXT NOT NULL,
   name TEXT NOT NULL,
   added_at REAL NOT NULL,
-  sort_order REAL NOT NULL DEFAULT 0
+  sort_order REAL NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, ts_code)
 );
 CREATE TABLE IF NOT EXISTS alerts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL DEFAULT 'default',
   ts_code TEXT NOT NULL,
   side TEXT NOT NULL,
   price REAL NOT NULL,
@@ -64,7 +71,6 @@ CREATE TABLE IF NOT EXISTS alerts (
   base_name TEXT NOT NULL DEFAULT '',
   created_at REAL NOT NULL
 );
-CREATE INDEX IF NOT EXISTS alerts_by_stock ON alerts (ts_code);
 CREATE TABLE IF NOT EXISTS finance_signals (
   ts_code TEXT NOT NULL,
   report_end TEXT NOT NULL,
@@ -89,6 +95,7 @@ CREATE TABLE IF NOT EXISTS sector_affiliations (
   PRIMARY KEY (ts_code, as_of, version)
 );
 CREATE TABLE IF NOT EXISTS outcomes (
+  user_id TEXT NOT NULL DEFAULT 'default',
   run_id INTEGER NOT NULL,
   horizon INTEGER NOT NULL,
   ret REAL NOT NULL,
@@ -97,23 +104,50 @@ CREATE TABLE IF NOT EXISTS outcomes (
 );
 """
 
+# 索引在 migrate 补齐 user_id 之后再建，避免旧库缺列时 CREATE INDEX 失败
+_INDEXES = """
+CREATE INDEX IF NOT EXISTS runs_by_stock ON runs (user_id, ts_code, id DESC);
+CREATE INDEX IF NOT EXISTS runs_by_hash ON runs (user_id, ts_code, facts_hash);
+CREATE INDEX IF NOT EXISTS alerts_by_stock ON alerts (user_id, ts_code);
+"""
+
 
 class Store:
-    def __init__(self, path: str | os.PathLike | None = None):
+    def __init__(self, path: str | os.PathLike | None = None, user_id: str = LEGACY_USER):
         self.path = str(path or os.environ.get("SYNTHESIS_DB") or _DEFAULT_PATH)
+        self.user_id = (user_id or LEGACY_USER).strip() or LEGACY_USER
         if self.path != ":memory:":
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self._memory = sqlite3.connect(":memory:", check_same_thread=False) if self.path == ":memory:" else None
         self._lock = threading.RLock()
         with self._conn() as conn:
             conn.executescript(_SCHEMA)
-            columns = {row["name"] for row in conn.execute("PRAGMA table_info(finance_signals)")}
-            if "tracked" not in columns:   # 早先建的库没有这一列
-                conn.execute("ALTER TABLE finance_signals ADD COLUMN tracked TEXT NOT NULL DEFAULT '{}'")
-            watch_cols = {row["name"] for row in conn.execute("PRAGMA table_info(watchlist)")}
-            if "sort_order" not in watch_cols:
-                conn.execute("ALTER TABLE watchlist ADD COLUMN sort_order REAL NOT NULL DEFAULT 0")
-                conn.execute("UPDATE watchlist SET sort_order = added_at")
+            self._migrate(conn)
+            conn.executescript(_INDEXES)
+
+    def for_user(self, user_id: str) -> "Store":
+        other = Store.__new__(Store)
+        other.path = self.path
+        other.user_id = (user_id or LEGACY_USER).strip() or LEGACY_USER
+        other._memory = self._memory
+        other._lock = self._lock
+        return other
+
+    def _migrate(self, conn: sqlite3.Connection) -> None:
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(finance_signals)")}
+        if "tracked" not in columns:   # 早先建的库没有这一列
+            conn.execute("ALTER TABLE finance_signals ADD COLUMN tracked TEXT NOT NULL DEFAULT '{}'")
+        watch_cols = {row["name"] for row in conn.execute("PRAGMA table_info(watchlist)")}
+        if "sort_order" not in watch_cols:
+            conn.execute("ALTER TABLE watchlist ADD COLUMN sort_order REAL NOT NULL DEFAULT 0")
+            conn.execute("UPDATE watchlist SET sort_order = added_at")
+        for table in ("runs", "alerts", "outcomes"):
+            ensure_user_id_column(conn, table)
+        rebuild_watchlist(conn)
+        rebuild_jobs(conn)
+
+    def _cache_key(self, key: str) -> str:
+        return f"{self.user_id}:{key}"
 
     @contextmanager
     def _conn(self):
@@ -133,12 +167,12 @@ class Store:
         rule = run["rule"]
         with self._conn() as conn:
             cursor = conn.execute(
-                """INSERT INTO runs (ts_code, session, trade_date, created_at, facts_hash, mode, source,
+                """INSERT INTO runs (user_id, ts_code, session, trade_date, created_at, facts_hash, mode, source,
                    fallback_reason, direction, level, position, rule_direction, rule_level, rule_position,
                    diverged, model, prompt_version, policy_version, data)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
-                    run["ts_code"], run["session"], run["trade_date"], run.get("created_at") or time.time(),
+                    self.user_id, run["ts_code"], run["session"], run["trade_date"], run.get("created_at") or time.time(),
                     run["facts_hash"], run["mode"], run["source"], run.get("fallback_reason") or "",
                     final["direction"], final["level"], final["position"],
                     rule["direction"], rule["level"], rule["position"],
@@ -156,21 +190,23 @@ class Store:
         return out
 
     def latest(self, ts_code: str, session: str | None = None) -> dict | None:
-        sql = "SELECT * FROM runs WHERE ts_code=?" + (" AND session=?" if session else "") + " ORDER BY id DESC LIMIT 1"
-        args = (ts_code, session) if session else (ts_code,)
+        sql = "SELECT * FROM runs WHERE user_id=? AND ts_code=?" + (" AND session=?" if session else "") + " ORDER BY id DESC LIMIT 1"
+        args = (self.user_id, ts_code, session) if session else (self.user_id, ts_code)
         with self._conn() as conn:
             return self._row(conn.execute(sql, args).fetchone())
 
     def run(self, run_id: int) -> dict | None:
         with self._conn() as conn:
-            return self._row(conn.execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone())
+            return self._row(conn.execute(
+                "SELECT * FROM runs WHERE id=? AND user_id=?", (run_id, self.user_id)
+            ).fetchone())
 
     def by_hash(self, ts_code: str, facts_hash: str, session: str, trade_date: str) -> dict | None:
         """同一个交易日内，事实没变才复用；换了一天就要重新存一条，否则每日判断会出现空洞。"""
         with self._conn() as conn:
             row = conn.execute(
-                "SELECT * FROM runs WHERE ts_code=? AND facts_hash=? AND session=? AND trade_date=? ORDER BY id DESC LIMIT 1",
-                (ts_code, facts_hash, session, trade_date),
+                "SELECT * FROM runs WHERE user_id=? AND ts_code=? AND facts_hash=? AND session=? AND trade_date=? ORDER BY id DESC LIMIT 1",
+                (self.user_id, ts_code, facts_hash, session, trade_date),
             ).fetchone()
             return self._row(row)
 
@@ -178,7 +214,8 @@ class Store:
         """每个交易日页面上实际展示的判断，按日期升序。同一天优先取收盘后那一份，否则取最新的。"""
         with self._conn() as conn:
             rows = conn.execute(
-                "SELECT trade_date, session, data FROM runs WHERE ts_code=? ORDER BY id DESC LIMIT ?", (ts_code, limit),
+                "SELECT trade_date, session, data FROM runs WHERE user_id=? AND ts_code=? ORDER BY id DESC LIMIT ?",
+                (self.user_id, ts_code, limit),
             ).fetchall()
         by_date: dict[str, dict] = {}
         for row in rows:
@@ -200,21 +237,26 @@ class Store:
         """每只股票最新的一次运行，新的在前。想买页「今天判断偏多的」从这里挑。"""
         with self._conn() as conn:
             rows = conn.execute(
-                "SELECT r.* FROM runs r JOIN (SELECT ts_code, MAX(id) AS mid FROM runs GROUP BY ts_code) m ON r.id=m.mid"
-                " ORDER BY r.id DESC LIMIT ?",
-                (limit,),
+                "SELECT r.* FROM runs r JOIN (SELECT ts_code, MAX(id) AS mid FROM runs WHERE user_id=? GROUP BY ts_code) m"
+                " ON r.id=m.mid WHERE r.user_id=? ORDER BY r.id DESC LIMIT ?",
+                (self.user_id, self.user_id, limit),
             ).fetchall()
             return [self._row(row) for row in rows]
 
     def recent(self, ts_code: str, limit: int = 10) -> list[dict]:
         with self._conn() as conn:
-            rows = conn.execute("SELECT * FROM runs WHERE ts_code=? ORDER BY id DESC LIMIT ?", (ts_code, limit)).fetchall()
+            rows = conn.execute(
+                "SELECT * FROM runs WHERE user_id=? AND ts_code=? ORDER BY id DESC LIMIT ?",
+                (self.user_id, ts_code, limit),
+            ).fetchall()
             return [self._row(row) for row in rows]
 
-    # ------------------------------------------------------------ 缓存（正反方论据）
+    # ------------------------------------------------------------ 缓存（正反方论据）；key 前缀 user_id:
     def get(self, key: str):
         with self._conn() as conn:
-            row = conn.execute("SELECT value, expires_at FROM kv_cache WHERE key=?", (key,)).fetchone()
+            row = conn.execute(
+                "SELECT value, expires_at FROM kv_cache WHERE key=?", (self._cache_key(key),)
+            ).fetchone()
         if row is None or row["expires_at"] < time.time():
             return None
         return json.loads(row["value"])
@@ -223,7 +265,7 @@ class Store:
         with self._conn() as conn:
             conn.execute(
                 "INSERT OR REPLACE INTO kv_cache (key, value, expires_at) VALUES (?,?,?)",
-                (key, json.dumps(value, ensure_ascii=False, default=str), time.time() + ttl),
+                (self._cache_key(key), json.dumps(value, ensure_ascii=False, default=str), time.time() + ttl),
             )
 
     # ------------------------------------------------------------ 任务队列
@@ -231,75 +273,109 @@ class Store:
         """同一只股票短时间内多次触发会合并：每次触发把到期时间推后 delay，但最久不超过 max_wait。"""
         now = now if now is not None else time.time()
         with self._conn() as conn:
-            row = conn.execute("SELECT first_at, running FROM jobs WHERE ts_code=?", (ts_code,)).fetchone()
+            row = conn.execute(
+                "SELECT first_at, running FROM jobs WHERE user_id=? AND ts_code=?", (self.user_id, ts_code)
+            ).fetchone()
             if row is None:
                 conn.execute(
-                    "INSERT INTO jobs (ts_code, due_at, first_at, reason) VALUES (?,?,?,?)",
-                    (ts_code, now + delay, now, reason),
+                    "INSERT INTO jobs (user_id, ts_code, due_at, first_at, reason) VALUES (?,?,?,?,?)",
+                    (self.user_id, ts_code, now + delay, now, reason),
                 )
             elif not row["running"]:
                 due = min(now + delay, row["first_at"] + max_wait)
-                conn.execute("UPDATE jobs SET due_at=?, reason=? WHERE ts_code=?", (due, reason, ts_code))
+                conn.execute(
+                    "UPDATE jobs SET due_at=?, reason=? WHERE user_id=? AND ts_code=?",
+                    (due, reason, self.user_id, ts_code),
+                )
 
     def claim_due(self, now: float | None = None) -> list[dict]:
         now = now if now is not None else time.time()
         with self._conn() as conn:
-            rows = conn.execute("SELECT * FROM jobs WHERE running=0 AND due_at<=?", (now,)).fetchall()
+            rows = conn.execute(
+                "SELECT * FROM jobs WHERE user_id=? AND running=0 AND due_at<=?", (self.user_id, now)
+            ).fetchall()
             claimed = []
             for row in rows:
-                conn.execute("UPDATE jobs SET running=1, attempts=attempts+1 WHERE ts_code=?", (row["ts_code"],))
+                conn.execute(
+                    "UPDATE jobs SET running=1, attempts=attempts+1 WHERE user_id=? AND ts_code=?",
+                    (self.user_id, row["ts_code"]),
+                )
                 claimed.append({**dict(row), "attempts": row["attempts"] + 1})
             return claimed
 
     def finish(self, ts_code: str) -> None:
         with self._conn() as conn:
-            conn.execute("DELETE FROM jobs WHERE ts_code=?", (ts_code,))
+            conn.execute("DELETE FROM jobs WHERE user_id=? AND ts_code=?", (self.user_id, ts_code))
 
     def retry(self, ts_code: str, delay: float, now: float | None = None) -> None:
         now = now if now is not None else time.time()
         with self._conn() as conn:
-            conn.execute("UPDATE jobs SET running=0, due_at=? WHERE ts_code=?", (now + delay, ts_code))
+            conn.execute(
+                "UPDATE jobs SET running=0, due_at=? WHERE user_id=? AND ts_code=?",
+                (now + delay, self.user_id, ts_code),
+            )
 
     def pending(self, ts_code: str) -> bool:
         with self._conn() as conn:
-            return conn.execute("SELECT 1 FROM jobs WHERE ts_code=?", (ts_code,)).fetchone() is not None
+            return conn.execute(
+                "SELECT 1 FROM jobs WHERE user_id=? AND ts_code=?", (self.user_id, ts_code)
+            ).fetchone() is not None
 
     def release_stuck(self, older_than: float = 600.0, now: float | None = None) -> None:
         """进程重启后，把卡在"运行中"的任务放回队列。"""
         now = now if now is not None else time.time()
         with self._conn() as conn:
-            conn.execute("UPDATE jobs SET running=0 WHERE running=1 AND due_at<?", (now - older_than,))
+            conn.execute(
+                "UPDATE jobs SET running=0 WHERE user_id=? AND running=1 AND due_at<?",
+                (self.user_id, now - older_than),
+            )
 
     # ------------------------------------------------------------ 自选
     def watch_add(self, ts_code: str, name: str, now: float | None = None) -> bool:
         """加入自选。已经在里面返回 False。新加的排到用户序末尾。"""
         now = now if now is not None else time.time()
         with self._conn() as conn:
-            row = conn.execute("SELECT MAX(sort_order) AS m FROM watchlist").fetchone()
+            row = conn.execute(
+                "SELECT MAX(sort_order) AS m FROM watchlist WHERE user_id=?", (self.user_id,)
+            ).fetchone()
             tail = (row["m"] if row and row["m"] is not None else now) + 1
             cursor = conn.execute(
-                "INSERT OR IGNORE INTO watchlist (ts_code, name, added_at, sort_order) VALUES (?,?,?,?)",
-                (ts_code, name, now, tail),
+                "INSERT OR IGNORE INTO watchlist (user_id, ts_code, name, added_at, sort_order) VALUES (?,?,?,?,?)",
+                (self.user_id, ts_code, name, now, tail),
             )
             return cursor.rowcount > 0
 
     def watch_remove(self, ts_code: str) -> bool:
         with self._conn() as conn:
-            return conn.execute("DELETE FROM watchlist WHERE ts_code=?", (ts_code,)).rowcount > 0
+            return conn.execute(
+                "DELETE FROM watchlist WHERE user_id=? AND ts_code=?", (self.user_id, ts_code)
+            ).rowcount > 0
 
     def watch_list(self) -> list[dict]:
         with self._conn() as conn:
-            return [dict(row) for row in conn.execute("SELECT * FROM watchlist ORDER BY sort_order, ts_code").fetchall()]
+            return [
+                dict(row)
+                for row in conn.execute(
+                    "SELECT * FROM watchlist WHERE user_id=? ORDER BY sort_order, ts_code", (self.user_id,)
+                ).fetchall()
+            ]
 
     def watch_pin(self, ts_code: str) -> bool:
         """置顶到用户序第一位（「需要留意」区之后仍由列表组装决定）。"""
         with self._conn() as conn:
-            row = conn.execute("SELECT 1 FROM watchlist WHERE ts_code=?", (ts_code,)).fetchone()
+            row = conn.execute(
+                "SELECT 1 FROM watchlist WHERE user_id=? AND ts_code=?", (self.user_id, ts_code)
+            ).fetchone()
             if row is None:
                 return False
-            top = conn.execute("SELECT MIN(sort_order) AS m FROM watchlist").fetchone()
+            top = conn.execute(
+                "SELECT MIN(sort_order) AS m FROM watchlist WHERE user_id=?", (self.user_id,)
+            ).fetchone()
             head = (top["m"] if top and top["m"] is not None else time.time()) - 1
-            conn.execute("UPDATE watchlist SET sort_order=? WHERE ts_code=?", (head, ts_code))
+            conn.execute(
+                "UPDATE watchlist SET sort_order=? WHERE user_id=? AND ts_code=?",
+                (head, self.user_id, ts_code),
+            )
             return True
 
     def watch_reorder(self, codes: list[str]) -> bool:
@@ -308,11 +384,17 @@ class Store:
         if len(wanted) != len(set(wanted)):
             return False
         with self._conn() as conn:
-            held = [row["ts_code"] for row in conn.execute("SELECT ts_code FROM watchlist").fetchall()]
+            held = [
+                row["ts_code"]
+                for row in conn.execute("SELECT ts_code FROM watchlist WHERE user_id=?", (self.user_id,)).fetchall()
+            ]
             if set(wanted) != set(held):
                 return False
             for index, code in enumerate(wanted):
-                conn.execute("UPDATE watchlist SET sort_order=? WHERE ts_code=?", (float(index), code))
+                conn.execute(
+                    "UPDATE watchlist SET sort_order=? WHERE user_id=? AND ts_code=?",
+                    (float(index), self.user_id, code),
+                )
             return True
 
     # ------------------------------------------------------------ 提醒
@@ -320,26 +402,34 @@ class Store:
         """同一只股票、同一个方向、同一个价只存一条：重复设置返回已有的那条。"""
         with self._conn() as conn:
             row = conn.execute(
-                "SELECT * FROM alerts WHERE ts_code=? AND side=? AND ABS(price-?)<0.005", (ts_code, side, price),
+                "SELECT * FROM alerts WHERE user_id=? AND ts_code=? AND side=? AND ABS(price-?)<0.005",
+                (self.user_id, ts_code, side, price),
             ).fetchone()
             if row is None:
                 cursor = conn.execute(
-                    "INSERT INTO alerts (ts_code, side, price, confirm, base_name, created_at) VALUES (?,?,?,?,?,?)",
-                    (ts_code, side, price, confirm, base_name, now if now is not None else time.time()),
+                    "INSERT INTO alerts (user_id, ts_code, side, price, confirm, base_name, created_at) VALUES (?,?,?,?,?,?,?)",
+                    (self.user_id, ts_code, side, price, confirm, base_name, now if now is not None else time.time()),
                 )
-                row = conn.execute("SELECT * FROM alerts WHERE id=?", (cursor.lastrowid,)).fetchone()
+                row = conn.execute(
+                    "SELECT * FROM alerts WHERE id=? AND user_id=?", (cursor.lastrowid, self.user_id)
+                ).fetchone()
             return dict(row)
 
     def alerts(self, ts_code: str | None = None) -> list[dict]:
-        sql = "SELECT * FROM alerts" + (" WHERE ts_code=?" if ts_code else "") + " ORDER BY id"
+        if ts_code:
+            sql, args = "SELECT * FROM alerts WHERE user_id=? AND ts_code=? ORDER BY id", (self.user_id, ts_code)
+        else:
+            sql, args = "SELECT * FROM alerts WHERE user_id=? ORDER BY id", (self.user_id,)
         with self._conn() as conn:
-            return [dict(row) for row in conn.execute(sql, (ts_code,) if ts_code else ()).fetchall()]
+            return [dict(row) for row in conn.execute(sql, args).fetchall()]
 
     def alert_remove(self, alert_id: int) -> bool:
         with self._conn() as conn:
-            return conn.execute("DELETE FROM alerts WHERE id=?", (alert_id,)).rowcount > 0
+            return conn.execute(
+                "DELETE FROM alerts WHERE id=? AND user_id=?", (alert_id, self.user_id)
+            ).rowcount > 0
 
-    # ------------------------------------------------------------ 财报信号（回测用）
+    # ------------------------------------------------------------ 财报信号（回测用，全局）
     def save_finance_signal(self, ts_code: str, report_end: str, version: str, announced: str, lean: str, source: str, statuses: dict, tracked: dict | None = None) -> bool:
         """每份财报、每个版本只记第一次：回测要看的是披露后第一时间的判断。返回是否新记。"""
         with self._conn() as conn:
@@ -373,7 +463,7 @@ class Store:
                 (ret, excess, ts_code, report_end, version),
             )
 
-    # ------------------------------------------------------------ 板块归属（回测用）
+    # ------------------------------------------------------------ 板块归属（回测用，全局）
     def save_sector_affiliation(self, ts_code: str, as_of: str, version: str, primary: dict | None, secondary: dict | None, driver: str, belongs: list[str]) -> bool:
         """每只股票、每个数据日、每个判定版本只记第一次。返回是否新记。"""
         with self._conn() as conn:
@@ -399,17 +489,17 @@ class Store:
     def unsettled(self, horizon: int, limit: int = 500) -> list[dict]:
         with self._conn() as conn:
             rows = conn.execute(
-                """SELECT r.* FROM runs r LEFT JOIN outcomes o ON o.run_id=r.id AND o.horizon=?
-                   WHERE o.run_id IS NULL AND r.session='close' ORDER BY r.id LIMIT ?""",
-                (horizon, limit),
+                """SELECT r.* FROM runs r LEFT JOIN outcomes o ON o.run_id=r.id AND o.horizon=? AND o.user_id=r.user_id
+                   WHERE r.user_id=? AND o.run_id IS NULL AND r.session='close' ORDER BY r.id LIMIT ?""",
+                (horizon, self.user_id, limit),
             ).fetchall()
             return [self._row(row) for row in rows]
 
     def save_outcome(self, run_id: int, horizon: int, ret: float) -> None:
         with self._conn() as conn:
             conn.execute(
-                "INSERT OR REPLACE INTO outcomes (run_id, horizon, ret, settled_at) VALUES (?,?,?,?)",
-                (run_id, horizon, ret, time.time()),
+                "INSERT OR REPLACE INTO outcomes (user_id, run_id, horizon, ret, settled_at) VALUES (?,?,?,?,?)",
+                (self.user_id, run_id, horizon, ret, time.time()),
             )
 
     def stats(self, horizon: int) -> list[dict]:
@@ -421,8 +511,9 @@ class Store:
         with self._conn() as conn:
             rows = conn.execute(
                 """SELECT r.source, r.level, r.direction, r.rule_level, r.rule_direction, r.diverged, o.ret
-                   FROM runs r JOIN outcomes o ON o.run_id=r.id WHERE o.horizon=?""",
-                (horizon,),
+                   FROM runs r JOIN outcomes o ON o.run_id=r.id AND o.user_id=r.user_id
+                   WHERE o.horizon=? AND r.user_id=?""",
+                (horizon, self.user_id),
             ).fetchall()
         buckets: dict[tuple, dict] = {}
 
@@ -443,3 +534,26 @@ class Store:
             bucket["hit_rate"] = round(bucket["hits"] / bucket["n"], 4)
             out.append(bucket)
         return sorted(out, key=lambda item: (item["source"], item["level"], item["diverged"]))
+
+
+_lock = threading.Lock()
+_store: Store | None = None
+
+
+def get_store(user_id: str | None = None) -> Store:
+    global _store
+    with _lock:
+        if _store is None:
+            _store = Store(user_id=LEGACY_USER)
+        base = _store
+    if user_id is not None:
+        return base.for_user(user_id)
+    from app.auth.user import current_user_id
+
+    return base.for_user(current_user_id() or LEGACY_USER)
+
+
+def set_store(store: Store | None) -> None:
+    global _store
+    with _lock:
+        _store = store

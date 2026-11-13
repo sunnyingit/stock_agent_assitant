@@ -30,6 +30,17 @@ class RouteValidationTest(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("缺少参数", response.get_json()["error"])
 
+    @patch("app.services.news.get_topic_news", return_value={"matched": True, "count": 1, "items": [{"title": "政策解读"}], "query": "财政政策", "keyword": "财政政策"})
+    def test_topic_news_without_stock(self, mock_topic):
+        response = self.client.get("/api/stocks/news?keyword=财政政策&limit=10")
+        body = response.get_json()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(body["status"], "ok")
+        self.assertEqual(body["ts_code"], "")
+        self.assertEqual(body["data"]["query"], "财政政策")
+        mock_topic.assert_called_once()
+        self.assertEqual(mock_topic.call_args.args[0], "财政政策")
+
     def test_bad_price(self):
         response = self.client.get("/api/stocks/financial?q=600519&price=abc")
         self.assertEqual(response.status_code, 400)

@@ -9,7 +9,7 @@ import threading
 from typing import Callable
 
 from app.synthesis import policy
-from app.synthesis.store import Store
+from app.synthesis.store import Store, get_store, set_store
 
 DEBOUNCE_SECONDS = 30.0
 MAX_WAIT_SECONDS = 120.0
@@ -17,22 +17,7 @@ RETRY_SECONDS = 15.0
 MAX_ATTEMPTS = 3
 
 _lock = threading.Lock()
-_store: Store | None = None
 _worker: "Worker | None" = None
-
-
-def get_store() -> Store:
-    global _store
-    with _lock:
-        if _store is None:
-            _store = Store()
-        return _store
-
-
-def set_store(store: Store | None) -> None:
-    global _store
-    with _lock:
-        _store = store
 
 
 class Worker(threading.Thread):
@@ -80,7 +65,7 @@ def start(runner: Callable[[str, str], dict | None] | None = None) -> Worker:
     global _worker
     with _lock:
         if _worker is None or not _worker.is_alive():
-            _worker = Worker(_store or Store(), runner or default_runner)
+            _worker = Worker(get_store(), runner or default_runner)
             _worker.start()
         return _worker
 

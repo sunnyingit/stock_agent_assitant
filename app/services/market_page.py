@@ -32,6 +32,9 @@ CORE = (
 LAZY = ("south", "shibor", "funds", "margin_industry")
 PARTS = CORE + LAZY
 TABS = ("fund", "team", "sector", "mood", "cal", "macro")
+# 首屏三张独立卡：资金 / 国家队 / 板块（money 是 fund 的别名）
+CARDS = ("fund", "team", "sector")
+_CARD_ALIASES = {"money": "fund"}
 _WEEKDAY = "一二三四五六日"
 
 
@@ -78,8 +81,67 @@ def _age(day: str, today: date | None = None, previous: str = "") -> str:
     return day[5:]
 
 
+def _updated_label(iso: str, today: date | None = None) -> str:
+    """卡首行用的时效标签：一律写月-日，不出现「今日」。today 保留兼容旧调用。"""
+    if not iso:
+        return ""
+    day = iso[:10] if len(iso) >= 10 else iso
+    if len(day) >= 7 and day[4] == "-":
+        return day[5:]
+    return day
+
+
 def _previous_open(parts: dict, today: date) -> str:
     return parts.get("_prev") or ""
+
+
+def _session_phase(now: datetime | None = None) -> dict:
+    """盘前 / 盘中 / 盘后会话态，供头栏 wm=pre|live|post 对齐各端。"""
+    now = now or datetime.now(_ZONE)
+    day = now.date()
+    trading = True
+    try:
+        from app.scheduler.calendar import TradingCalendar
+
+        trading = TradingCalendar().is_trading_day(day)
+    except Exception:
+        trading = day.weekday() < 5
+    minute = now.hour * 60 + now.minute
+    open_m, close_m = 9 * 60 + 30, 15 * 60
+    if not trading:
+        phase, label = "post", "休市日"
+    elif minute < open_m:
+        phase, label = "pre", "盘前"
+    elif minute < close_m:
+        phase, label = "live", "盘中"
+    else:
+        phase, label = "post", "盘后"
+    # 免费行情常见延迟；盘中标 0 表示按实时口径，盘前/盘后用收盘价。
+    delay = 0 if phase == "live" else None
+    return {
+        "session": phase,
+        "phase": phase,
+        "phase_label": label,
+        "trading_day": trading,
+        "quote_delay_sec": delay,
+        "clock": now.strftime("%H:%M:%S"),
+    }
+
+
+def _unchanged_since(day: date) -> str:
+    """当前结论档位从哪天起没变；没有快照时返回空。"""
+    try:
+        rows = market_changes.history(get_store().snapshots())
+    except Exception:
+        return ""
+    if not rows:
+        return ""
+    latest = rows[0]
+    since = str(latest.get("since") or "")
+    until = str(latest.get("until") or "")
+    if until and until != day.isoformat() and until < day.isoformat():
+        return since
+    return since
 
 
 def _stat(label: str, value: str, on: bool = False) -> dict:
@@ -597,6 +659,7 @@ def _mood_card(parts: dict) -> dict:
             for row in indexes
         ],
         "scope": "全 A 不含 ST · 指数日线 · 涨停按 limit_list_d · 收盘后更新",
+        "asof_note": "涨跌家数、涨跌停、指数日线收盘后一般当天就有",
     }
 
 
@@ -747,6 +810,7 @@ def _macro_card(parts: dict) -> dict:
             p=policy, a=liquidity, b=profit, c=value, t=direction["score"]),
         "next": "下次发布：下月的 PPI 和 M1 / M2（通常次月上中旬）",
         "scope": "1 / 3 / 5 分按规则速查；方向分是位置不是预测；政策看新闻搜索里的官方标题，可能有遗漏；估值用沪深 300 盈利收益率的 3 年分位，不是 ERP",
+        "asof_note": "宏观是月频（M1/M2/PPI 等），标的是数据所属月份，不是交易日",
         "metrics": {
             "m1": macro.get("m1_yoy"), "m2": macro.get("m2_yoy"), "ppi": macro.get("ppi_yoy"), "sf": macro.get("sf_month"),
             "pe": valuation.get("pe"), "earn_yield": valuation.get("earn_yield"), "value_pctile": valuation.get("pctile"),
@@ -792,6 +856,8 @@ def _calendar_card(parts: dict, watch: list[dict], today: date) -> dict:
         "label": "事件偏密" if dense else "事件正常", "tone": "warn" if dense else "flat",
         "rows": rows[:8], "mine_count": len(mine), "unlock": unlock,
         "scope": "解禁按股数，没按市值；交割日按每月第三个周五，遇休市顺延；只提示，不改档位",
+        "date": today.isoformat(),
+        "asof_note": "按今天日历筛未来两周事件，日期就是打开页面的当天",
     }
 
 
@@ -1122,8 +1188,6 @@ _TEAM_RULE = (
     "汇金公告和买入那天对上，才写成确认汇金托市。只有公告、份额上没看到，写成已表态。诚通、国新单独写。"
     "买入之后看份额从高点掉了多少，卖出之后看从低点回来了多少。掉或回来不到 10%、10% 到 30%、超过 30%，分别是钱还在、部分回落、可能在撤；卖出则是还没回补、部分回补、明显回补。"
     "不跌的日子里至少 3 组宽基明显赎回，近 3 天里有 2 天，也是可能在撤。两种一起出现，标迹象较强。"
-    "成交放大会先看当天所有达标宽基组，每组跟自己近 60 天成交额中位数比；只写出放大最多的那一组和日期。"
-    "「中位水平」是这组自己过去 60 个交易日成交额的中位数，不是全市场平均。这只是旁证，不能单独证明是国家队。"
 )
 
 
@@ -1198,6 +1262,7 @@ def _team_card(team: dict, announce: dict) -> dict:
         "when": "市场在跌、钱进宽基、至少两组不像平时，同一天都碰上，才是疑似托市。市场没承压、但至少一组宽基明显偏离，是疑似异动。汇金公告对上才写成确认汇金托市。这张卡不改市场总档。",
         "scope": "看按指数合并后的宽基份额。行业和跨境只用来看钱去了哪，半导体、医药、有色黄金、软件的异常只提示。份额第二天早上才到。",
         "date": team.get("latest", ""),
+        "asof_note": "宽基份额 T+1，收盘后通常要到第二天早上才有今天的数；有「待更新」就是指数已到今天、份额还停在昨天",
         "announce": [row for row in (team.get("stance") or [])[:1] or announce.get("items", [])[:1]],
     }
 
@@ -1223,7 +1288,7 @@ def _team_tab(parts: dict, day: date) -> dict:
     act = _block(
         "act", "最近有没有托市", "承压托市，或没承压时的宽基异动", f"近 5 天 {_stored(counts, 5) or 0} 次", _age(team["latest"], day, previous), team["label"], card["tone"],
         _span_stats(counts, lambda value: f"{0 if value is None else value} 次", 5),
-        _TEAM_RULE, story=card["qa"][0]["detail"], open=False,
+        _TEAM_RULE, story=card["qa"][0]["detail"], open=True,
         chart={"kind": "team", "unit": "亿元", "points": team["series"],
                "legend": [
                    {"t": "净申购", "c": "#D9483F"}, {"t": "净赎回", "c": "#2E8B57"},
@@ -1303,17 +1368,79 @@ def build_summary(today: date | None = None, record: bool = True) -> dict:
             market_notify.record(summary, parts)
         except Exception:
             pass   # 存档失败不能让页面打不开
+    # money / team / sectors 仍随 summary 返回：前端首屏依赖它们；
+    # /market/card/* 留给单独刷新或并行预取，不再从 summary 里剥掉。
     return summary
 
 
+def build_workbench(today: date | None = None) -> dict:
+    """今天工作台：结论精简版 + 会话态 + 分时，不打开依据栏。计划待办由 harness 拼。"""
+    summary = build_summary(today)
+    keep = (
+        "generated_at", "today", "indexes", "dates", "time_basis",
+        "session", "phase", "phase_label", "trading_day", "quote_delay_sec",
+        "unchanged_since", "conclusion", "mood", "watch", "ages",
+    )
+    slim = {key: summary[key] for key in keep if key in summary}
+    try:
+        intraday = market_intraday.build()
+    except Exception:
+        intraday = {"ok": False, "live": False}
+    return {"status": "ok", "view": "today", **slim, "intraday": intraday}
+
+
+def build_card(name: str, today: date | None = None) -> dict:
+    """单张卡：fund / team / sector（money 等同 fund）。"""
+    key = _CARD_ALIASES.get(name, name)
+    if key not in CARDS:
+        raise ValueError(f"未知 card {name}")
+    day = today or datetime.now(_ZONE).date()
+    parts = bundle(day)
+    previous = _previous_open(parts, day)
+    if key == "fund":
+        card = _money_card(parts, _money_signal(parts))
+    elif key == "team":
+        card = _team_card(parts.get("team") or {}, parts.get("announce") or {})
+    else:
+        sector_rows = _sector_rows(parts["sectors"], parts.get("catalysts"))
+        card = {
+            "rows": sector_rows,
+            "date": parts["sectors"].get("date") or "",
+            "headline": _sector_headline(sector_rows),
+            "buckets": _sector_buckets(sector_rows),
+            "coverage": parts["sectors"].get("coverage"),
+            "conclusion_days": parts["sectors"].get("conclusion_days") or market_sector.CONCLUSION_DAYS,
+            "scope": SECTOR_SCOPE,
+        }
+    card["key"] = key
+    card["updated"] = _updated_label(card.get("date") or "", day)
+    card["age"] = _age(card.get("date") or "", day, previous)
+    if key == "fund" and not card.get("asof_note"):
+        dates = card.get("dates") or {}
+        card["asof_note"] = _money_asof_note(dates.get("turnover") or "", dates.get("etf") or "", dates.get("margin") or "")
+    elif key == "team":
+        card["asof_note"] = card.get("asof_note") or "宽基份额 T+1，收盘后通常要到第二天早上才有今天的数；有「待更新」就是指数已到今天、份额还停在昨天"
+    elif key == "sector":
+        card["asof_note"] = card.get("asof_note") or "板块「钱」按 ETF 份额算，份额末日是哪天卡就标到哪天；价/热度也裁到同一天，避免和份额错位"
+    return card
+
+
 def refresh(today: date | None = None) -> None:
-    """让下一次取数重新算（定时任务用）。进行中的后台刷新不会把旧结果写回来。"""
+    """丢掉今天的市场包并同步重算。go-harness 盘前/收盘定时会先调这里再取 summary。"""
     global _GENERATION
+    from app.services import market_tape
+
     day = today or datetime.now(_ZONE).date()
     with _REFRESH_LOCK:
         _GENERATION += 1
+        generation = _GENERATION
     cache.set(_bundle_key(day), None, 0)
     market_disk.drop(f"bundle:{day.isoformat()}")
+    market_tape.invalidate_today_series(day)
+    try:
+        _store_bundle(_compute(day), day, generation)
+    except Exception:
+        _kick(day)
 
 
 def changes_view(mode: str, since_ts: float | None = None, today: date | None = None) -> dict:
@@ -1355,10 +1482,19 @@ def notify_payload(today: date | None = None, inbox: list[dict] | None = None) -
     return market_notify.notifications(upcoming=upcoming, today=day, inbox=inbox)
 
 
+def _stamp_card(card: dict, day: date, date_key: str = "date") -> dict:
+    """给卡打上首行用的 updated 标签。"""
+    raw = card.get(date_key) or card.get("date") or card.get("month") or ""
+    card["updated"] = _updated_label(str(raw), day)
+    return card
+
+
 def summarize(parts: dict, day: date) -> dict:
     money = _money_signal(parts)
-    mood = _mood_card(parts)
-    macro = _macro_card(parts)
+    mood = _stamp_card(_mood_card(parts), day)
+    macro = _stamp_card(_macro_card(parts), day, "month")
+    calendar = _stamp_card(_calendar_card(parts, parts["watch"], day), day)
+    calendar["updated"] = calendar.get("updated") or _updated_label(day.isoformat(), day)
     sector_rows = _sector_rows(parts["sectors"], parts.get("catalysts"))
     good_sectors = [row["name"] for row in sector_rows if row["bucket"] in ("main", "next")]
     signals = [
@@ -1372,34 +1508,67 @@ def summarize(parts: dict, day: date) -> dict:
     better, worse = _better_worse(parts, mood)
     indexes = (parts["index"] or {}).get("rows") or []
     previous = _previous_open(parts, day)
+    money_card = _stamp_card(_money_card(parts, money), day)
+    team_card = _stamp_card(_team_card(parts.get("team") or {}, parts.get("announce") or {}), day)
+    sectors = _stamp_card({
+        "rows": sector_rows, "date": parts["sectors"].get("date"), "headline": _sector_headline(sector_rows),
+        "buckets": _sector_buckets(sector_rows), "coverage": parts["sectors"].get("coverage"),
+        "conclusion_days": parts["sectors"].get("conclusion_days") or market_sector.CONCLUSION_DAYS,
+        "scope": SECTOR_SCOPE,
+    }, day)
+    now = datetime.now(_ZONE)
+    session = _session_phase(now)
+    quote_asof = indexes[0]["date"] if indexes else ""
+    funds_asof = (parts["turnover"] or {}).get("date") or (parts["margin"] or {}).get("date") or ""
+    macro_asof = (parts["macro"] or {}).get("month") or ""
+    unchanged = _unchanged_since(day)
+    index_rows = [
+        {
+            "name": row["name"],
+            "code": row.get("code") or row.get("ts_code") or "",
+            "ts_code": row.get("code") or row.get("ts_code") or "",
+            "close": row.get("close"),
+            "pct": row.get("pct"),
+            "date": row.get("date"),
+        }
+        for row in indexes
+    ]
     return {
-        "generated_at": datetime.now(_ZONE).strftime("%Y-%m-%d %H:%M"),
+        "generated_at": now.strftime("%Y-%m-%d %H:%M"),
         "today": day.isoformat(),
-        "indexes": [{"name": row["name"], "close": row.get("close"), "pct": row.get("pct"), "date": row.get("date")} for row in indexes],
+        "indexes": index_rows,
         "dates": {
-            "quote": indexes[0]["date"] if indexes else "",
-            "money": (parts["turnover"] or {}).get("date") or (parts["margin"] or {}).get("date") or "",
-            "macro": (parts["macro"] or {}).get("month") or "",
+            "quote": quote_asof,
+            "money": funds_asof,
+            "macro": macro_asof,
         },
+        "time_basis": {
+            "quotes": quote_asof,
+            "funds": funds_asof,
+            "macro": macro_asof,
+        },
+        "session": session["session"],
+        "phase": session["phase"],
+        "phase_label": session["phase_label"],
+        "trading_day": session["trading_day"],
+        "quote_delay_sec": session["quote_delay_sec"],
+        "unchanged_since": unchanged,
         "conclusion": {
             "level": total["level"], "tilt": total["tilt"], "count": total["count"],
             "gate": money["head"]["gate"], "gate_text": money["head"]["gate_text"],
             "headline": "、".join(item["text"] for item in signals if (item["tier"] and item["tier"] != "平") or item.get("label") in ("托市中", "异动中", "可能在撤", "已表态")) or "成交、宽基、两融和指数没有一起指向一边",
             "action": rules.action_text(total["level"], total["tilt"], good_sectors),
             "signals": signals, "better": better, "worse": worse,
+            "phase_label": session["phase_label"],
+            "unchanged_since": unchanged,
             "note": "按框架规则得出，不构成投资建议。" + ("" if (parts.get("team") or {}).get("ok") else "国家队没取到，总档位只用已经取到的信号。"),
         },
-        "money": _money_card(parts, money),
-        "team": _team_card(parts.get("team") or {}, parts.get("announce") or {}),
+        "money": money_card,
+        "team": team_card,
         "mood": mood,
         "macro": macro,
-        "calendar": _calendar_card(parts, parts["watch"], day),
-        "sectors": {
-            "rows": sector_rows, "date": parts["sectors"].get("date"), "headline": _sector_headline(sector_rows),
-            "buckets": _sector_buckets(sector_rows), "coverage": parts["sectors"].get("coverage"),
-            "conclusion_days": parts["sectors"].get("conclusion_days") or market_sector.CONCLUSION_DAYS,
-            "scope": SECTOR_SCOPE,
-        },
+        "calendar": calendar,
+        "sectors": sectors,
         "watch": {"rows": parts["watch"], "scope": "动作词由「板块结论 × 个股判断」按规则生成，不是买卖指令；只读已有判断，不在这里批量发起诊断"},
         "ages": {"turnover": _age((parts["turnover"] or {}).get("date", ""), day, previous), "etf": _age((parts["etf"] or {}).get("latest_date", ""), day, previous)},
     }
@@ -1504,8 +1673,27 @@ def _money_card(parts: dict, money: dict) -> dict:
         "when": "宽基净流入且成交不冷清 → 「在进」。成交正常并且两融加速下降时仍是「观望」。成交冷清且两融在降或加速下降 → 「偏弱」。",
         "scope": "成交、宽基、两融都按自身近 60 个交易日的常态偏离来判；回购按公司只留最新一条实施公告",
         "marks": money["head"].get("notes") or [],
-        "date": margin.get("date") or turn.get("date") or "",
+        # 首行时效跟「今天成交额」对齐；两融/份额常晚一天，不拿它们把日期拖旧
+        "date": turn.get("date") or margin.get("date") or "",
+        "dates": {
+            "turnover": turn.get("date") or "",
+            "margin": margin.get("date") or "",
+            "etf": etf.get("latest_date") or etf.get("date") or "",
+        },
+        "asof_note": _money_asof_note(turn.get("date") or "", etf.get("latest_date") or etf.get("date") or "", margin.get("date") or ""),
     }
+
+
+def _money_asof_note(turn_day: str, etf_day: str, margin_day: str) -> str:
+    """资金卡首行日期后的取数说明。"""
+    bits = []
+    if turn_day:
+        bits.append(f"成交额到 {turn_day[5:]}")
+    if etf_day:
+        bits.append(f"宽基份额到 {etf_day[5:]}（份额 T+1）")
+    if margin_day:
+        bits.append(f"两融到 {margin_day[5:]}")
+    return "；".join(bits) if bits else "成交额收盘后当天有；宽基份额、两融常晚一天"
 
 
 # ---------------------------------------------------------------- 依据 tab
@@ -1583,7 +1771,7 @@ def _fund_tab(parts: dict, day: date) -> dict:
                    "legend": [{"t": "当天净买入", "c": "#D9483F"}, {"t": "当天净卖出", "c": "#2E8B57"},
                               {"t": "总份额", "c": "#2457D6"}, index_legend],
                    "note": "蓝线是宽基总份额，底柱是当天净申购/赎回。灰线是上证指数收盘价。"},
-            items=etf.get("items") or [],
+            items=etf.get("items") or [], open=True,
         ),
         _block(
             "margin", "两融余额", "借钱炒股的人多不多", _yi(margin.get("balance")), _age(margin.get("date", ""), day, previous),
@@ -1596,6 +1784,7 @@ def _fund_tab(parts: dict, day: date) -> dict:
                    "legend": [{"t": "当天净借入", "c": "#D9483F"}, {"t": "当天净还款", "c": "#2E8B57"},
                               {"t": "两融余额", "c": "#2457D6"}, index_legend],
                    "note": "蓝线是两融余额，底柱是当天净借入/还款。灰线是上证指数收盘价。"},
+            open=True,
         ),
     ]
     where = [
@@ -1606,6 +1795,7 @@ def _fund_tab(parts: dict, day: date) -> dict:
             "大数字是港股通买入额 − 卖出额，单位沿用 ggt_daily 接口。北向资金已不按日披露，所以不看。不改上面的档位。",
             pctile=_pctile_info("近 20 日南下规模处在一年里", south.get("pctile20")),
             chart={"kind": "bars", "unit": "", "points": south.get("series") or [], "legend": ["当天净买入港股", "当天净卖出"], "signed": True},
+            open=True,
         ),
         _block(
             "shibor", "银行间的钱", "钱贵不贵（Shibor 1 周）", "没有" if shibor.get("rate") is None else f"{shibor['rate']:.3f}%", _age(shibor.get("date", ""), day, previous),
@@ -1621,6 +1811,7 @@ def _fund_tab(parts: dict, day: date) -> dict:
             [_stat("增持", _yi(supply.get("buy")), True), _stat("减持", _yi(supply.get("sell"))), _stat("回购累计", _yi(supply.get("repo")))],
             "回购按公司只保留最新一条实施公告，是累计金额，不是这 28 天的增量，所以图里只画增持和减持。定增和再融资没有全市场日接口。",
             chart={"kind": "weeks", "unit": "亿元", "points": supply.get("weeks") or [], "legend": ["增持", "减持"]},
+            open=True,
         ),
         _block(
             "funds", "新发基金", "老百姓有没有买基金入市", "没有" if funds.get("count") is None else f"{funds['count']} 只", "月频",
@@ -1628,6 +1819,7 @@ def _fund_tab(parts: dict, day: date) -> dict:
             [_stat("发行份额", "多数没公布" if funds.get("amount") is None else f"{funds['amount']:.2f} 亿份", True), _stat("范围", funds.get("scope") or "—"), _stat("只数", "—" if funds.get("count") is None else str(funds["count"]))],
             "月度数据，只看方向，不参与短期判断。新开户数没有接口，不放。",
             chart={"kind": "months", "unit": "只", "points": funds.get("months") or [], "legend": ["新发偏股基金只数"]},
+            open=True,
         ),
     ]
     return {
@@ -1644,34 +1836,88 @@ def _fund_tab(parts: dict, day: date) -> dict:
 
 
 def _mood_tab(parts: dict) -> dict:
+    from app.services import market_tape as tape
+
     mood = _mood_card(parts)
     breadth, limits = parts["breadth"], parts["limits"]
+    age = _age(breadth.get("date") or limits.get("date") or "")
+    stages = mood.get("stages") or []
+    index_by = _index_by_day((parts.get("turnover") or {}).get("series"))
+    sh_legend = {"t": "上证", "c": "#5B6372"}
+    limit_pts = _with_index(
+        [{"date": row["date"], "up": row.get("up") or 0, "down": row.get("down") or 0} for row in stages],
+        index_by,
+    )
+    asof = (parts.get("_day") or breadth.get("date") or datetime.now(_ZONE).date().isoformat())[:10]
+    breadth_pts = _with_index(
+        list(breadth.get("series") or tape.advance_decline_series(date.fromisoformat(asof), 30)),
+        index_by,
+    )
+    vol_pts = ((parts.get("turnover") or {}).get("series") or [])[-30:]
+    stage_pts = _with_index(
+        [{"date": row["date"], "stage": row.get("stage"), "up": row.get("up"), "down": row.get("down")} for row in stages],
+        index_by,
+    )
+    trend_pts = [{"date": row["date"], "value": row["index"], "index": row["index"]} for row in vol_pts if row.get("index") is not None]
     return {
-        "title": "好不好做", "label": mood["label"], "tone": mood["tone"], "age": _age(breadth.get("date") or limits.get("date") or ""), "summary": mood["summary"],
+        "title": "好不好做", "label": mood["label"], "tone": mood["tone"], "age": age, "summary": mood["summary"],
         "means": mood["means"], "when": mood["when"], "indexes": mood["indexes"],
         "sections": [{"title": "看懂好不好做", "hint": "", "blocks": [
-            _block("trend", "大盘趋势", "指数在均线上还是下", mood["qa"][0]["a"], _age(breadth.get("date") or limits.get("date") or ""), mood["qa"][0]["a"], mood["qa"][0]["tone"], [],
-                   "看 60 日线定方向，前低 = 今天之前 20 个交易日的最低收盘价，今天收在它下面算破位。", story=mood["qa"][0]["detail"], open=True),
-            _block("breadth", "多数股票", "涨的多还是跌的多", f"{breadth.get('up', '—')} / {breadth.get('down', '—')}", _age(breadth.get("date") or limits.get("date") or ""), mood["qa"][1]["a"], mood["qa"][1]["tone"],
-                   [_stat("上涨", str(breadth.get("up", "—")), True), _stat("下跌", str(breadth.get("down", "—"))), _stat("新高 / 新低", f"{breadth.get('highs', '—')} / {breadth.get('lows', '—')}")],
-                   "全 A 不含 ST；新高、新低按近 25 个交易日。", story=mood["qa"][1]["detail"]),
-            _block("limits", "短线情绪", "追涨能不能赚钱", f"涨停 {limits.get('up', '—')}", _age(breadth.get("date") or limits.get("date") or ""), mood["qa"][2]["a"], mood["qa"][2]["tone"],
-                   [_stat("跌停", str(limits.get("down", "—"))), _stat("炸板", str(limits.get("broken", "—"))), _stat("最高连板", str(limits.get("height", "—")), True)],
-                   "不含 ST、北交所；20cm（创业板、科创板）的涨跌幅折成 10cm 再平均。连板高度来自 limit_times。", story=mood["qa"][2]["detail"]),
-        ] + ([_block("volume", "成交量", "放量还是缩量", mood["volume"]["word"], _age(breadth.get("date") or limits.get("date") or ""), mood["volume"]["word"], "flat",
-                     [_stat("今天", _yi(mood["volume"]["amount"]), True), _stat("前 20 日均", _yi(mood["volume"]["base"])),
-                      _stat("近一年分位", "—" if mood["volume"]["pctile"] is None else f"{round(mood['volume']['pctile'] * 100)}%")],
-                     "今天成交额是前 20 个交易日均值的 1.2 倍以上算放量，0.8 倍以下算缩量；近一年分位在最低 10% 算地量，最高 10% 算天量。"
-                     "放量、缩量要和涨跌一起看：放量下跌是抛压还没完，缩量下跌是抛压在减弱，放量反抽比缩量反弹可信。不单独改「好不好做」的档位。",
-                     story=next((row["detail"] for row in mood["qa"] if row["q"] == "成交量怎么样？"), ""), chart={"kind": "bars", "unit": "亿元", "points": (parts.get("turnover") or {}).get("series") or [], "legend": ["上涨日", "下跌日"]})] if mood.get("volume") else [])
-          + ([_block("theme", "涨停主线", "涨停集中在哪几个行业", mood["theme"]["word"], _age(breadth.get("date") or limits.get("date") or ""), mood["theme"]["word"], mood["theme"]["tone"], [],
-                     "看今天涨停最集中的前三个行业，占全部涨停的多少；再看昨天的主线今天平均涨跌。前三占 35% 以上算有主线，20% 以下算没主线；"
-                     "昨天的主线今天平均亏过 1.5%，算主线在退，接力常在这时断掉。",
-                     story=mood["theme"]["detail"])] if mood.get("theme") else [])
-          + ([_block("stage", "情绪阶段", "近 20 个交易日每天所处阶段", mood["stage"], _age(breadth.get("date") or limits.get("date") or ""), mood["stage"], mood["qa"][3]["tone"], [],
-                     "冰点 → 修复 → 发酵 → 高潮 → 退潮，一圈通常几周。按当天的涨停数、跌停数、昨涨停今日平均涨跌（20cm 折成 10cm）、炸板率、最高连板和昨天主线今天的表现判，并且接着前一天走；"
-                     "高标断板、主线大面也算退潮的信号。阈值按这一年的行情定。",
-                     story=mood["qa"][3]["detail"], chart={"kind": "stages", "points": mood["stages"]})] if mood.get("stage") else [])}],
+            _block(
+                "trend", "大盘趋势", "指数在均线上还是下", mood["qa"][0]["a"], age, mood["qa"][0]["a"], mood["qa"][0]["tone"], [],
+                "看 60 日线定方向，前低 = 今天之前 20 个交易日的最低收盘价，今天收在它下面算破位。",
+                story=mood["qa"][0]["detail"], open=True,
+                chart={"kind": "line", "unit": "点", "points": trend_pts, "legend": [sh_legend],
+                       "note": f"近 {len(trend_pts)} 个交易日 · 上证收盘"} if trend_pts else None,
+            ),
+            _block(
+                "breadth", "多数股票", "涨的多还是跌的多", f"{breadth.get('up', '—')} / {breadth.get('down', '—')}", age,
+                mood["qa"][1]["a"], mood["qa"][1]["tone"],
+                [_stat("上涨", str(breadth.get("up", "—")), True), _stat("下跌", str(breadth.get("down", "—"))),
+                 _stat("新高 / 新低", f"{breadth.get('highs', '—')} / {breadth.get('lows', '—')}")],
+                "全 A 不含 ST；新高、新低按近 25 个交易日。灰线是上证收盘。",
+                story=mood["qa"][1]["detail"], open=True,
+                chart={"kind": "limits", "unit": "家", "points": breadth_pts,
+                       "legend": [{"t": "上涨", "c": "#D9483F"}, {"t": "下跌", "c": "#2E8B57"}, sh_legend],
+                       "note": f"近 {len(breadth_pts) or 30} 个交易日 · 上涨 / 下跌家数"} if breadth_pts else None,
+            ),
+            _block(
+                "limits", "涨停 / 跌停", "家数怎么走", f"涨停 {limits.get('up', '—')}", age, mood["qa"][2]["a"], mood["qa"][2]["tone"],
+                [_stat("跌停", str(limits.get("down", "—"))), _stat("炸板", str(limits.get("broken", "—"))),
+                 _stat("最高连板", str(limits.get("height", "—")), True)],
+                "不含 ST、北交所；20cm（创业板、科创板）的涨跌幅折成 10cm 再平均。连板高度来自 limit_times。"
+                "上图是近 30 个交易日每天的涨停、跌停家数；灰线是上证。追涨能不能赚钱看下面的判定。",
+                story=mood["qa"][2]["detail"], open=True,
+                chart={"kind": "limits", "unit": "家", "points": limit_pts,
+                       "legend": [{"t": "涨停", "c": "#D9483F"}, {"t": "跌停", "c": "#2E8B57"}, sh_legend],
+                       "note": f"近 {len(limit_pts) or 30} 个交易日 · 家数"} if limit_pts else None,
+            ),
+        ] + ([_block(
+            "volume", "成交量", "放量还是缩量", mood["volume"]["word"], age, mood["volume"]["word"], "flat",
+            [_stat("今天", _yi(mood["volume"]["amount"]), True), _stat("前 20 日均", _yi(mood["volume"]["base"])),
+             _stat("近一年分位", "—" if mood["volume"]["pctile"] is None else f"{round(mood['volume']['pctile'] * 100)}%")],
+            "今天成交额是前 20 个交易日均值的 1.2 倍以上算放量，0.8 倍以下算缩量；近一年分位在最低 10% 算地量，最高 10% 算天量。"
+            "放量、缩量要和涨跌一起看。灰线是上证。不单独改「好不好做」的档位。",
+            story=next((row["detail"] for row in mood["qa"] if row["q"] == "成交量怎么样？"), ""), open=True,
+            chart={"kind": "bars", "unit": "亿元", "points": vol_pts,
+                   "legend": [{"t": "上涨日", "c": "#D9483F"}, {"t": "下跌日", "c": "#2E8B57"}, sh_legend],
+                   "note": f"近 {len(vol_pts)} 个交易日 · 亿元"},
+        )] if mood.get("volume") else [])
+          + ([_block(
+              "theme", "涨停主线", "涨停集中在哪几个行业", mood["theme"]["word"], age, mood["theme"]["word"], mood["theme"]["tone"], [],
+              "看今天涨停最集中的前三个行业，占全部涨停的多少；再看昨天的主线今天平均涨跌。前三占 35% 以上算有主线，20% 以下算没主线；"
+              "昨天的主线今天平均亏过 1.5%，算主线在退，接力常在这时断掉。",
+              story=mood["theme"]["detail"], open=True,
+          )] if mood.get("theme") else [])
+          + ([_block(
+              "stage", "短线情绪", f"近 {len(stages) or 30} 个交易日每天所处阶段", mood["stage"], age, mood["stage"],
+              mood["qa"][3]["tone"] if len(mood.get("qa") or []) > 3 else "flat", [],
+              "冰点 → 修复 → 发酵 → 高潮 → 退潮，一圈通常几周。灰线是上证收盘。"
+              "按当天的涨停数、跌停数、昨涨停今日平均涨跌（20cm 折成 10cm）、炸板率、最高连板和昨天主线今天的表现判，并且接着前一天走；"
+              "高标断板、主线大面也算退潮的信号。",
+              story=mood["qa"][3]["detail"] if len(mood.get("qa") or []) > 3 else "", open=True,
+              chart={"kind": "stages", "points": stage_pts, "legend": [sh_legend]},
+          )] if mood.get("stage") else [])}],
         "footnote": "「好不好做」看的是买进去容不容易赚钱，不看钱从哪来（那是「市场资金」和「国家队」）。",
     }
 

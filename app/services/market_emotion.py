@@ -1,6 +1,6 @@
-"""短线情绪：近 20 个交易日每天落在冰点、修复、发酵、高潮、退潮的哪一段。规则在 market_rules.emotion_stage。
+"""短线情绪：近 30 个交易日每天落在冰点、修复、发酵、高潮、退潮的哪一段。规则在 market_rules.emotion_stage。
 
-阶段要看前一天落在哪，所以多取 WARMUP 天先把状态走起来，页面上只给最近 20 天。"""
+阶段要看前一天落在哪，所以多取 WARMUP 天先把状态走起来，页面上只给最近 30 天。"""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from datetime import date
 from app.services import market_rules as rules
 from app.services import market_tape as tape
 
-DAYS = 20
+DAYS = 30
 WARMUP = 10
 
 

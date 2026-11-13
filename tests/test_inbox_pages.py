@@ -115,9 +115,10 @@ class MarketDrawerTest(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         client = create_app().test_client()
-        body = client.get("/api/v1/market/notifications").get_json()
+        headers = {"X-User-Id": "default"}
+        body = client.get("/api/v1/market/notifications", headers=headers).get_json()
         notif = [i for g in body["groups"] for i in g["items"] if i["id"].startswith("inbox:")][0]
-        self.assertEqual(client.post("/api/v1/market/notifications/read", json={"ids": [notif["id"]]}).status_code, 200)
+        self.assertEqual(client.post("/api/v1/market/notifications/read", json={"ids": [notif["id"]]}, headers=headers).status_code, 200)
         self.assertEqual(self.n.store.unread_count(), 0)
 
 

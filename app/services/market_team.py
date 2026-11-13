@@ -595,8 +595,6 @@ def summarize(shares: dict[str, list[dict]], closes: dict[str, list[dict]], pct:
         if row["hit"]:
             industry.append(name)
     marks = []
-    if index_last > share_last:
-        marks.append("待更新")
     if pressures[last_i]["near"] and not pressures[last_i]["on"]:
         marks.append("接近承压")
     if last and last["split"]:
@@ -613,13 +611,6 @@ def summarize(shares: dict[str, list[dict]], closes: dict[str, list[dict]], pct:
         marks.append("基线不足")
     if sign1 and sign2:
         marks.append("迹象较强")
-    if last and last.get("multiple") and last["multiple"] >= 3:
-        turn_day = last.get("multiple_day") or last["day"]
-        turn_group = last.get("multiple_group") or "宽基"
-        # 当天所有达标宽基组都会比；这里只写出放大最多的那一组。
-        marks.append(
-            f"达标组里最热是 {turn_group}：{tape.iso(turn_day)[5:]} 成交为近 {BASELINE} 天中位水平的 {last['multiple']:.0f} 倍"
-        )
     found = None
     if last and last["pos"] + 1 < len(calendar):
         found = calendar[last["pos"] + 1]
@@ -671,11 +662,12 @@ def summarize(shares: dict[str, list[dict]], closes: dict[str, list[dict]], pct:
 
 def build(today: date) -> dict:
     start = tape._ymd_offset(today, 400)
+    end = tape._ymd(today)
     codes = [code for code, _name in _flat(BROAD + INDUSTRY + CROSS)]
     shares = dict(zip(codes, tape._parallel(codes, lambda code: tape.fund_share_rows(code, today))))
     closes = dict(zip(codes, tape._parallel(codes, lambda code: tape.fund_bar_rows(code, today))))
-    idx = tape.cached(f"indexpx:{start}", lambda: tape.pro().index_daily(
-        ts_code="000001.SH", start_date=start, end_date=tape._ymd(today), fields="trade_date,pct_chg,close",
+    idx = tape._cached_through(f"indexpx:{start}:{end}", end, lambda: tape.pro().index_daily(
+        ts_code="000001.SH", start_date=start, end_date=end, fields="trade_date,pct_chg,close",
     ))
     pct, index_close = {}, {}
     for row in idx:

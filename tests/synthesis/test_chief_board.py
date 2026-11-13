@@ -85,6 +85,7 @@ class ChiefBoardTest(unittest.TestCase):
 
     def test_detail_opens_the_saved_run_without_recomputing(self):
         client = create_app().test_client()
+        headers = {"X-User-Id": "default"}
         record = {
             "policy_version": 1, "trade_date": "2026-11-06", "session": "close", "created_at": 0,
             "data": _sample(),
@@ -94,18 +95,19 @@ class ChiefBoardTest(unittest.TestCase):
                 patch("app.synthesis.api._saved_detail_record", return_value=record), \
                 patch("app.synthesis.api._stale", return_value=False), \
                 patch("app.synthesis.api._agent_record", side_effect=AssertionError("不应重算")):
-            payload = client.get("/api/v1/stocks/600001.SH/chief/detail").get_json()
+            payload = client.get("/api/v1/stocks/600001.SH/chief/detail", headers=headers).get_json()
         self.assertEqual(payload["trend"]["ma"]["ma7"], 21.48)
         self.assertEqual(payload["direction"]["verdict"], "偏多 · 比较明显")
 
     def test_http_stream_is_the_card_and_detail_adds_the_chart(self):
         client = create_app().test_client()
+        headers = {"X-User-Id": "default"}
         record = {"data": _sample()}
         stock = Stock("600001.SH", "600001", "测试股份", "", "")
         with patch("app.synthesis.api.resolve_stock", return_value=stock), patch("app.synthesis.api._saved_detail_record", return_value=None), patch("app.synthesis.api._agent_record", return_value=record):
-            stream = client.get("/api/v1/stocks/600001.SH/chief/stream")
+            stream = client.get("/api/v1/stocks/600001.SH/chief/stream", headers=headers)
             body = stream.get_data(as_text=True)
-            detail_response = client.get("/api/v1/stocks/600001.SH/chief/detail")
+            detail_response = client.get("/api/v1/stocks/600001.SH/chief/detail", headers=headers)
         events = []
         for block in body.split("\n\n"):
             if not block.strip():
@@ -144,7 +146,7 @@ class ChiefBoardTest(unittest.TestCase):
         stock = Stock("600001.SH", "600001", "测试股份", "", "")
         message = {"role": "bull", "name": "看多分析师", "points": [{"id": "bull.1", "text": "板块主升。"}]}
         with patch("app.synthesis.api.resolve_stock", return_value=stock), patch("app.synthesis.api._side_events", return_value=message):
-            response = client.get("/api/v1/stocks/600001.SH/bull/stream")
+            response = client.get("/api/v1/stocks/600001.SH/bull/stream", headers={"X-User-Id": "default"})
             body = response.get_data(as_text=True)
         self.assertIn("看多分析师", body)
         self.assertNotIn("看空分析师", body)

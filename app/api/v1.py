@@ -491,6 +491,80 @@ def market_summary():
         return jsonify({"error": text}), 500
 
 
+@bp.route("/market/workbench", methods=["GET"])
+def market_workbench():
+    """今天工作台聚合：结论精简 + 分时。持仓计划由 go-harness 拼。"""
+    from app.services.market_page import build_workbench
+
+    try:
+        return jsonify(build_workbench())
+    except Exception as exc:
+        log.exception("market workbench failed")
+        return jsonify({"error": str(exc)}), 500
+
+
+@bp.route("/market/hot-news", methods=["GET"])
+def market_hot_news():
+    """今日热闻：百度财经热搜 + 财经快讯，按规则加权取 Top N。"""
+    from app.services import market_hot_news as hot_news
+
+    try:
+        limit = int(request.args.get("limit") or 10)
+    except ValueError:
+        return jsonify({"error": "limit 必须是数字"}), 400
+    try:
+        return jsonify(hot_news.build(limit))
+    except Exception as exc:
+        log.exception("market hot-news failed")
+        return jsonify({"error": str(exc)}), 500
+
+
+@bp.route("/market/overseas", methods=["GET"])
+def market_overseas():
+    """外盘：美股隔夜指数 + 韩股 KOSPI / 龙头；?extra=105.TSLA,177.000270 追加自选。"""
+    from app.services import market_overseas as overseas
+
+    try:
+        extra = request.args.get("extra") or ""
+        names_raw = request.args.get("names") or ""
+        names = {}
+        if names_raw:
+            for part in names_raw.split("|"):
+                if ":" in part:
+                    sid, nm = part.split(":", 1)
+                    if sid.strip() and nm.strip():
+                        names[sid.strip().upper()] = nm.strip()[:40]
+        return jsonify(overseas.build(extra=extra, names=names or None))
+    except Exception as exc:
+        log.exception("market overseas failed")
+        return jsonify({"error": str(exc)}), 500
+
+
+@bp.route("/market/overseas/search", methods=["GET"])
+def market_overseas_search():
+    """外盘添加：按代码/名称搜美股、韩股、指数。"""
+    from app.services import market_overseas as overseas
+
+    q = (request.args.get("q") or "").strip()
+    if not q:
+        return jsonify({"status": "ok", "items": []})
+    try:
+        items = overseas.search(q, limit=int(request.args.get("limit") or 8))
+        return jsonify({"status": "ok", "items": items, "q": q})
+    except Exception as exc:
+        log.exception("market overseas search failed")
+        return jsonify({"error": str(exc), "items": []}), 500
+
+
+@bp.route("/market/refresh", methods=["POST"])
+def market_refresh():
+    """让下一次取数重新算。go-harness 的定时任务在盘前/收盘两个点先调这里，再取 summary。"""
+    from app.services.market_page import refresh
+
+    refresh()
+    return jsonify({"status": "ok"})
+
+
 @bp.route("/market/tab/<name>", methods=["GET"])
 def market_tab(name: str):
     from app.services.market_page import TABS, build_tab
@@ -501,6 +575,20 @@ def market_tab(name: str):
         return jsonify(build_tab(name))
     except Exception as exc:
         log.exception("market tab failed: %s", name)
+        return jsonify({"error": str(exc)}), 500
+
+
+@bp.route("/market/card/<name>", methods=["GET"])
+def market_card(name: str):
+    """首屏独立卡：fund（或 money）/ team / sector，可与 summary 并行拉。"""
+    from app.services.market_page import CARDS, build_card
+
+    try:
+        return jsonify(build_card(name))
+    except ValueError:
+        return jsonify({"error": "name 必须是 " + "、".join(CARDS) + "（money 等同 fund）"}), 400
+    except Exception as exc:
+        log.exception("market card failed: %s", name)
         return jsonify({"error": str(exc)}), 500
 
 

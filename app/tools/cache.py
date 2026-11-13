@@ -27,6 +27,19 @@ def set(key: str, value, ttl: float) -> None:
         _store[key] = (time.monotonic() + ttl, value)
 
 
+def delete(key: str) -> None:
+    with _lock:
+        _store.pop(key, None)
+
+
+def delete_prefix(prefix: str) -> int:
+    with _lock:
+        keys = [key for key in _store if key.startswith(prefix)]
+        for key in keys:
+            _store.pop(key, None)
+        return len(keys)
+
+
 def clear() -> None:
     with _lock:
         _store.clear()

@@ -165,6 +165,16 @@ class SummaryTest(unittest.TestCase):
         self.assertIsNone(team["tier"])
         self.assertTrue(out["team"]["pending"])
         self.assertEqual(out["macro"]["score"], 3.30)
+        self.assertEqual(out["time_basis"]["quotes"], "2026-11-04")
+        self.assertEqual(out["time_basis"]["funds"], "2026-11-04")
+        self.assertEqual(out["time_basis"]["macro"], "2026年9月")
+        self.assertIn(out["phase"], ("pre", "live", "post"))
+        self.assertTrue(out["phase_label"])
+        self.assertIn("phase_label", con)
+        self.assertIn("unchanged_since", con)
+        self.assertTrue(out["indexes"][0].get("name"))
+        self.assertIn("close", out["indexes"][0])
+        self.assertIn("pct", out["indexes"][0])
 
     def test_better_and_worse_lists_carry_current_values(self):
         out = summarize(_parts(), date(2026, 11, 4))

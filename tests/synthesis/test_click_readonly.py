@@ -27,6 +27,7 @@ class ClicksAreReadOnlyTest(unittest.TestCase):
 
     def setUp(self):
         self.client = create_app().test_client()
+        self.headers = {"X-User-Id": "default"}
         self.store = Store(":memory:")
         worker.set_store(self.store)
 
@@ -35,7 +36,7 @@ class ClicksAreReadOnlyTest(unittest.TestCase):
 
     def test_chief_detail_with_no_record_says_pending_and_never_computes(self):
         with patch("app.synthesis.api.resolve_stock", return_value=STOCK), patch("app.synthesis.api.compute", side_effect=AssertionError("不应现算")):
-            response = self.client.get("/api/v1/stocks/600036.SH/chief/detail")
+            response = self.client.get("/api/v1/stocks/600036.SH/chief/detail", headers=self.headers)
         self.assertEqual(response.status_code, 202)
         self.assertEqual(response.get_json()["status"], "pending")
 
@@ -45,7 +46,7 @@ class ClicksAreReadOnlyTest(unittest.TestCase):
                              "sides": {"bull": {"points": [{"ref": "bull.1", "claim": "板块强", "cites": [], "weight": 2}], "errors": []}}}}
         self.store.save_run(run_record(data))
         with patch("app.synthesis.api.resolve_stock", return_value=STOCK), patch("app.synthesis.decider.debate.run_side", side_effect=AssertionError("不应调模型")):
-            body = self.client.get("/api/v1/stocks/600036.SH/bull/stream").get_data(as_text=True)
+            body = self.client.get("/api/v1/stocks/600036.SH/bull/stream", headers=self.headers).get_data(as_text=True)
         self.assertIn("板块强", body)
         self.assertNotIn("event: error", body)
 
@@ -57,7 +58,7 @@ class ClicksAreReadOnlyTest(unittest.TestCase):
             raise RuntimeError("stop")
 
         with patch("app.synthesis.api.resolve_stock", return_value=STOCK), patch("app.synthesis.api.compute", fake_compute):
-            self.client.get("/api/v1/stocks/600036.SH/synthesis")
+            self.client.get("/api/v1/stocks/600036.SH/synthesis", headers=self.headers)
         self.assertEqual(seen, {"available": False, "mode": "rule"})
 
     def test_background_triggers_do_nothing(self):

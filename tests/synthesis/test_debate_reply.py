@@ -58,7 +58,7 @@ class DebateReplyTest(unittest.TestCase):
         payload = {"role": "bull", "name": "看多分析师", "kind": "reply", "quote": "还成立吗？", "text": "还成立。", "points": []}
         with patch("app.synthesis.api.resolve_stock", return_value=stock), \
              patch("app.synthesis.api._side_reply", return_value=payload):
-            response = client.post("/api/v1/stocks/600001.SH/bull/reply", json={"question": "还成立吗？"})
+            response = client.post("/api/v1/stocks/600001.SH/bull/reply", json={"question": "还成立吗？"}, headers={"X-User-Id": "default"})
             body = response.get_data(as_text=True)
         message = json.loads([line[6:] for line in body.splitlines() if line.startswith("data: ")][1])
         self.assertEqual(message["kind"], "reply")

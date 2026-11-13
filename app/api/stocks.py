@@ -90,9 +90,6 @@ def bars():
 
 @bp.route("/news", methods=["GET", "POST"])
 def news():
-    stock, _price, err = _parse_request()
-    if err:
-        return err
     raw = request.args.get("limit", "")
     if request.method == "POST" and raw in (None, ""):
         raw = str((request.get_json(silent=True) or {}).get("limit") or "")
@@ -109,6 +106,27 @@ def news():
     if request.method == "POST" and not str(keyword or "").strip():
         keyword = str((request.get_json(silent=True) or {}).get("keyword") or "")
     keyword = str(keyword or "").strip()[:80]
+
+    if request.method == "POST":
+        body = request.get_json(silent=True) or {}
+        query = body.get("q") or body.get("code") or body.get("name") or ""
+    else:
+        query = request.args.get("q") or request.args.get("code") or request.args.get("name") or ""
+    query = str(query).strip()
+
+    # 主题新闻：无股票、有 keyword
+    if not query and keyword:
+        from app.services.news import get_topic_news
+
+        try:
+            data = get_topic_news(keyword, limit)
+        except Exception as exc:
+            return jsonify({"status": "error", "ts_code": "", "stock_name": "", "error": str(exc)}), 500
+        return jsonify({"status": "ok", "ts_code": "", "stock_name": "", "data": data})
+
+    stock, _price, err = _parse_request()
+    if err:
+        return err
     from app.services.news import get_news
 
     return _run(stock, lambda: get_news(stock, limit, keyword=keyword))
