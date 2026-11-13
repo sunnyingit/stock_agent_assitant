@@ -11,7 +11,9 @@ from pathlib import Path
 
 from flask import current_app, g, jsonify, request
 
-_KEY_FILE = Path(__file__).resolve().parents[2] / "data" / "relay.key"
+from app.paths import data_dir
+
+_KEY_FILE = data_dir() / "relay.key"
 
 
 def new_token() -> tuple[str, str]:

@@ -19,7 +19,9 @@ from app.notify import channels as chan
 
 log = logging.getLogger("notify")
 HEALTHY_MS = 10 * 60_000
-_TOKEN_FILE = Path(__file__).resolve().parents[2] / "data" / "relay_token"
+from app.paths import data_dir
+
+_TOKEN_FILE = data_dir() / "relay_token"
 
 
 def default_http(method: str, url: str, headers: dict, body: dict | None, timeout: float = 8):

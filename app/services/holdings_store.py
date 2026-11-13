@@ -17,7 +17,9 @@ from pathlib import Path
 
 from app.auth.migrate import LEGACY_USER, ensure_user_id_column, rebuild_kv, rebuild_reasons
 
-_DEFAULT_PATH = Path(__file__).resolve().parents[2] / "data" / "holdings.db"
+from app.paths import data_dir
+
+_DEFAULT_PATH = Path(os.environ.get("HOLDINGS_DB") or (data_dir() / "holdings.db"))
 _DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 _SCHEMA = """

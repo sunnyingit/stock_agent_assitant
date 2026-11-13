@@ -12,7 +12,9 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Callable
 
-_PATH = Path(__file__).resolve().parents[2] / "data" / "calendar.json"
+from app.paths import data_dir
+
+_PATH = data_dir() / "calendar.json"
 # 上午 09:30–11:30，下午 13:00–15:00（北京时间）
 SESSIONS = {"am": ("09:30", "11:30"), "pm": ("13:00", "15:00")}
 

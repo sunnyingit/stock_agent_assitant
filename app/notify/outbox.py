@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import os
 import sqlite3
 import time
 from pathlib import Path
 
-_PATH = Path(__file__).resolve().parents[2] / "data" / "notify.db"
+from app.paths import data_dir
+
+_PATH = Path(os.environ.get("NOTIFY_DB") or (data_dir() / "notify.db"))
 
 
 class Outbox:

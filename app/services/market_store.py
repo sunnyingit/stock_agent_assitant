@@ -15,7 +15,9 @@ from pathlib import Path
 
 from app.auth.migrate import LEGACY_USER, ensure_user_id_column, rebuild_market_event, rebuild_setting
 
-_DEFAULT_PATH = Path(os.environ.get("MARKET_DB") or Path(__file__).resolve().parents[2] / "data" / "market.db")
+from app.paths import data_dir
+
+_DEFAULT_PATH = Path(os.environ.get("MARKET_DB") or (data_dir() / "market.db"))
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS snapshot (

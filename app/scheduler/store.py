@@ -15,8 +15,10 @@ from pathlib import Path
 
 from app.scheduler.ids import ulid
 
-_DEFAULT_PATH = Path(__file__).resolve().parents[2] / "data" / "scheduler.db"
-_RESULT_DIR = Path(__file__).resolve().parents[2] / "data" / "results"
+from app.paths import data_dir
+
+_DEFAULT_PATH = Path(os.environ.get("SCHED_DB") or (data_dir() / "scheduler.db"))
+_RESULT_DIR = data_dir() / "results"
 INLINE_LIMIT = 8 * 1024
 
 _SCHEMA = """

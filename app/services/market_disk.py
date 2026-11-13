@@ -13,7 +13,9 @@ from pathlib import Path
 from threading import Lock
 from zoneinfo import ZoneInfo
 
-_ROOT = Path(__file__).resolve().parents[2] / "data" / "market_cache"
+from app.paths import data_dir
+
+_ROOT = data_dir() / "market_cache"
 _LOCK = Lock()
 _MEMBER_TTL = 7 * 24 * 3600
 

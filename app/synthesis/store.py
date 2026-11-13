@@ -16,7 +16,9 @@ from pathlib import Path
 
 from app.auth.migrate import LEGACY_USER, ensure_user_id_column, rebuild_jobs, rebuild_watchlist
 
-_DEFAULT_PATH = Path(__file__).resolve().parents[2] / "data" / "synthesis.db"
+from app.paths import data_dir
+
+_DEFAULT_PATH = Path(os.environ.get("SYNTHESIS_DB") or (data_dir() / "synthesis.db"))
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (

@@ -12,7 +12,9 @@ from pathlib import Path
 
 from app.scheduler.ids import ulid
 
-_PATH = Path(__file__).resolve().parents[2] / "data" / "server.db"
+from app.paths import data_dir
+
+_PATH = Path(os.environ.get("SERVER_DB") or (data_dir() / "server.db"))
 DEVICE_TTL_MS = 30 * 86400_000
 
 _SCHEMA = """
